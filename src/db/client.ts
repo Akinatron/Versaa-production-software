@@ -10,9 +10,10 @@ export function createDb(url = process.env.DATABASE_URL) {
   return drizzle(sql, { schema });
 }
 
-let shared: DB | undefined;
+// Kept on globalThis so dev-mode reloads and separate route bundles share one pool.
+const g = globalThis as unknown as { __versaaDb?: DB };
 /** One connection pool per server process. */
 export function db(): DB {
-  shared ??= createDb();
-  return shared;
+  g.__versaaDb ??= createDb();
+  return g.__versaaDb;
 }
