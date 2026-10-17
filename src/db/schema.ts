@@ -452,3 +452,24 @@ export const outflowLines = pgTable("outflow_lines", {
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
 });
+
+// ---------- Team logins ----------
+
+export const users = pgTable("users", {
+  id: id(),
+  /** Stored lower-case. */
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/** A signed-in browser. Only a hash of the cookie token is stored. */
+export const sessions = pgTable("sessions", {
+  id: id(),
+  tokenHash: text("token_hash").notNull().unique(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+});
