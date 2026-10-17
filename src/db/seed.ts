@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { loadSeedCatalog } from "@/domain/seed-catalog";
+import { batchPrefixFor } from "@/domain/codes";
 
 /**
  * Load the starting catalog. Safe to run more than once: anything that
@@ -20,7 +21,7 @@ export async function seedCatalog(db: DB) {
 
     const sauceIds = new Map<string, string>();
     for (const s of c.sauces) {
-      await tx.insert(t.sauces).values({ code: s.code, name: s.name }).onConflictDoNothing({ target: t.sauces.code });
+      await tx.insert(t.sauces).values({ code: s.code, name: s.name, batchPrefix: batchPrefixFor(s.name) }).onConflictDoNothing({ target: t.sauces.code });
       const [row] = await tx.select({ id: t.sauces.id }).from(t.sauces).where(eq(t.sauces.code, s.code));
       sauceIds.set(s.code, row!.id);
       const existing = await tx.select().from(t.recipeVersions).where(eq(t.recipeVersions.sauceId, row!.id));
