@@ -4,6 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import type { PlanInput, PlanItem, PlanProduct, PlanSauce, StockPosition } from "@/domain/planner";
 import type { UnitCode } from "@/domain/quantity";
+import { observedRejects, observedYields } from "./history";
 
 export interface PlanCatalog {
   items: PlanItem[];
@@ -13,7 +14,7 @@ export interface PlanCatalog {
 
 /** The active catalog as the planner needs it. */
 export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
-  const [itemRows, sauceRows, recipeRows, lineRows, productRows, pkgRows, yieldRows, rejectRows] = await Promise.all([
+  const [itemRows, sauceRows, recipeRows, lineRows, productRows, pkgRows, yieldRows, rejectRows, seenYields, seenRejects] = await Promise.all([
     db.select().from(t.items).where(inArray(t.items.kind, ["ingredient", "packaging"])),
     db.select().from(t.sauces).where(eq(t.sauces.active, true)),
     db.select().from(t.recipeVersions).where(eq(t.recipeVersions.status, "active")),
@@ -35,6 +36,8 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
     db.execute<{ product_id: string; rate: string; source: "estimate" | "observed" }>(
       sql`select distinct on (product_id) product_id, rate, source from reject_figures order by product_id, created_at desc`,
     ),
+    observedYields(db),
+    observedRejects(db),
   ]);
 
   const yields = new Map([...yieldRows].map((y) => [y.sauce_id, y]));
@@ -43,6 +46,7 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
   const sauces: PlanSauce[] = sauceRows.map((s) => {
     const v = recipeRows.find((r) => r.sauceId === s.id);
     const y = yields.get(s.id);
+    const seen = seenYields.get(s.id);
     return {
       id: s.id,
       name: s.name,
@@ -57,7 +61,14 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
               .map((l) => ({ itemId: l.itemId, quantity: new Decimal(l.quantity), unit: l.unit as UnitCode })),
           }
         : null,
-      yield: y
+      // Recorded batches beat any estimate.
+      yield: seen
+        ? {
+            litresPerBatch: seen.avgFilledLitres,
+            source: "observed" as const,
+            note: `average of ${seen.batches} closed batch${seen.batches === 1 ? "" : "es"} (${seen.minFilledLitres}–${seen.maxFilledLitres} L filled)`,
+          }
+        : y
         ? { litresPerBatch: new Decimal(y.litres_per_batch), source: y.source, note: y.note ?? undefined }
         : { litresPerBatch: null, source: "missing" },
     };
@@ -67,6 +78,7 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
     .sort((a, b) => a.sauce.name.localeCompare(b.sauce.name) || b.format.capacityMl - a.format.capacityMl)
     .map(({ product, format, sauce }) => {
       const r = rejects.get(product.id);
+      const seen = seenRejects.get(product.id);
       return {
         id: product.id,
         sauceId: sauce.id,
@@ -75,7 +87,11 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
         name: product.name,
         fillMl: format.fillMl,
         packaging: pkgRows.filter((p) => p.productId === product.id).map((p) => ({ itemId: p.itemId, perJar: p.perJar })),
-        reject: r ? { rate: new Decimal(r.rate), source: r.source } : { rate: null, source: "missing" as const },
+        reject: seen
+          ? { rate: seen.rate, source: "observed" as const }
+          : r
+            ? { rate: new Decimal(r.rate), source: r.source }
+            : { rate: null, source: "missing" as const },
       };
     });
 

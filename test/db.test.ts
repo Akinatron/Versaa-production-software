@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { createDb, type DB } from "@/db/client";
-import { seedCatalog } from "@/db/seed";
+import { seedCatalog, seedYieldEstimates } from "@/db/seed";
 import { loadPlanInput } from "@/db/planning";
 import { planProduction } from "@/domain/planner";
 import * as t from "@/db/schema";
@@ -58,5 +58,16 @@ suite("database", () => {
     await expect(
       db.insert(t.movements).values({ ...m!, id: undefined, idempotencyKey: "test-open-onions" }),
     ).rejects.toThrow();
+  });
+
+  it("adds the 30 L estimates once, labelled as estimates, without overriding a figure already entered", async () => {
+    // Tikka already has a 25 L figure from the test above.
+    expect((await seedYieldEstimates(db)).added).toBe(2);
+    expect((await seedYieldEstimates(db)).added).toBe(0);
+    const input = await loadPlanInput(db, {});
+    const bySauce = Object.fromEntries(input.sauces.map((s) => [s.name, s.yield]));
+    expect(bySauce["Indiase Tikka Masala"]!.litresPerBatch!.toString()).toBe("25");
+    expect(bySauce["Italiaanse Bolognese"]!.litresPerBatch!.toString()).toBe("30");
+    expect(bySauce["Liberiaanse Kip"]!.source).toBe("estimate");
   });
 });

@@ -4,6 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { loadPlanCatalog, loadStockPositions } from "./planning";
 import { planProduction, type PlanResult } from "@/domain/planner";
+import { createBatchesForRun } from "./production";
 
 /*
  * Recording actions. Each one:
@@ -13,47 +14,8 @@ import { planProduction, type PlanResult } from "@/domain/planner";
  * - only ever adds stock movements, never edits them.
  */
 
-export class OperationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "OperationError";
-  }
-}
-
-type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-function positive(value: Decimal.Value, what: string): Decimal {
-  let d: Decimal;
-  try {
-    d = new Decimal(value);
-  } catch {
-    throw new OperationError(`${what}: "${value}" is not a number.`);
-  }
-  if (d.isNaN() || d.lte(0)) throw new OperationError(`${what} must be more than 0.`);
-  return d;
-}
-
-async function itemsById(tx: Tx, ids: string[]) {
-  if (ids.length === 0) return new Map<string, typeof t.items.$inferSelect>();
-  const rows = await tx.select().from(t.items).where(inArray(t.items.id, ids));
-  return new Map(rows.map((r) => [r.id, r]));
-}
-
-function checkWholeUnits(item: typeof t.items.$inferSelect, qty: Decimal) {
-  if (item.stockUnit === "unit" && !qty.isInteger()) {
-    throw new OperationError(`${item.name} is counted in whole units.`);
-  }
-}
-
-async function nextLotCode(tx: Tx, prefix: string) {
-  const [row] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(t.lots)
-    .where(sql`${t.lots.code} like ${prefix + "-%"}`);
-  return `${prefix}-${String((row?.n ?? 0) + 1).padStart(3, "0")}`;
-}
+export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode } from "./base";
 
 // ---------------------------------------------------------------- stock count
 
@@ -345,6 +307,7 @@ export async function confirmRun(db: DB, runId: string) {
       .set({ status: "confirmed", confirmedAt: new Date() })
       .where(eq(t.productionRuns.id, runId))
       .returning();
+    await createBatchesForRun(tx, runId);
     return { run: updated!, alreadyConfirmed: false };
   });
 }
@@ -354,6 +317,7 @@ export async function cancelRun(db: DB, runId: string) {
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run) throw new OperationError("Run not found.");
     if (!["draft", "confirmed"].includes(run.status)) throw new OperationError(`A run that is ${run.status} can't be cancelled.`);
+    await tx.update(t.productionBatches).set({ status: "cancelled", closedAt: new Date() }).where(eq(t.productionBatches.runId, runId));
     await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.runId, runId), isNull(t.reservations.releasedAt)));
     await tx.update(t.productionRuns).set({ status: "cancelled" }).where(eq(t.productionRuns.id, runId));
   });

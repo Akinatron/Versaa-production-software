@@ -15,6 +15,27 @@
       "when": 1792251465504,
       "tag": "0001_append_only_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792257724820,
+      "tag": "0002_production_sales_trace",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792258246522,
+      "tag": "0003_team_logins",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792258804502,
+      "tag": "0004_incident_keys",
+      "breakpoints": true
     }
   ]
 }

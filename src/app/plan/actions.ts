@@ -10,7 +10,8 @@ export async function saveRun(form: FormData) {
   for (const [k, v] of form.entries()) {
     if (k.startsWith("t:") && String(v).trim() !== "") targets[k.slice(2)] = Number(v);
   }
-  const back = `/plan?${[...form.entries()].filter(([k]) => k.startsWith("t:")).map(([k, v]) => `${k.slice(2)}=${v}`).join("&")}`;
+  const given = String(form.get("back") ?? "");
+  const back = given.startsWith("/plan?") ? given : `/plan?${[...form.entries()].filter(([k]) => k.startsWith("t:")).map(([k, v]) => `${k.slice(2)}=${v}`).join("&")}`;
   const run = await attempt(back, () =>
     createRun(db(), { idempotencyKey: String(form.get("key")), plannedFor: String(form.get("plannedFor")), targets }),
   );

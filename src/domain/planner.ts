@@ -313,3 +313,48 @@ function mergeContributions(list: { from: string; quantity: Decimal | null }[]) 
   }
   return [...byFrom.entries()].map(([from, quantity]) => ({ from, quantity }));
 }
+
+/**
+ * Second way to plan: number of batches per sauce and how to split each
+ * sauce's volume across sizes (percentages). Turns that into sellable jar
+ * targets, so it leads to exactly the same plan as entering jars.
+ *
+ * Jars to fill per size = floor(litres × share ÷ fill per jar); the sellable
+ * target removes expected rejects when the reject rate is known.
+ */
+export function targetsFromBatches(
+  input: Pick<PlanInput, "sauces" | "products">,
+  bySauce: Record<string, { batches: number; split: Record<string, number> }>,
+): { targets: Record<string, number>; issues: Issue[] } {
+  const targets: Record<string, number> = {};
+  const issues: Issue[] = [];
+  for (const [sauceId, { batches, split }] of Object.entries(bySauce)) {
+    if (!batches) continue;
+    const sauce = input.sauces.find((s) => s.id === sauceId);
+    if (!sauce) continue;
+    if (!Number.isInteger(batches) || batches < 0) {
+      issues.push({ level: "blocker", message: `${sauce.name}: batches must be a whole number.` });
+      continue;
+    }
+    const total = Object.values(split).reduce((a, b) => a + (b || 0), 0);
+    if (Math.abs(total - 100) > 0.001) {
+      issues.push({ level: "blocker", message: `${sauce.name}: the size split adds up to ${total}%, not 100%.` });
+      continue;
+    }
+    const lpb = sauce.yield.litresPerBatch;
+    if (lpb === null || lpb.lte(0)) {
+      issues.push({ level: "blocker", message: `${sauce.name}: no litres-per-batch figure yet, so batches can't be turned into jars.` });
+      continue;
+    }
+    const litres = lpb.mul(batches);
+    for (const product of input.products.filter((p) => p.sauceId === sauceId)) {
+      const share = split[product.id] ?? 0;
+      if (share <= 0) continue;
+      const fill = litres.mul(share).div(100).mul(1000).div(product.fillMl).floor();
+      const rate = product.reject.rate;
+      const sellable = rate === null ? fill : fill.mul(new Decimal(1).minus(rate)).floor();
+      targets[product.id] = sellable.toNumber();
+    }
+  }
+  return { targets, issues };
+}

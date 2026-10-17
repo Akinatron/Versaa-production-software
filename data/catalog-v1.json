@@ -6,8 +6,24 @@
   },
   "yield": {
     "status": "no observed yield yet",
-    "litres_per_batch_estimate": null,
-    "note": "Initial plans may use an explicit, editable estimate, labelled as an estimate. No value agreed yet."
+    "estimates": [
+      {
+        "sauce": "Indiase Tikka Masala",
+        "litres_per_batch": "30",
+        "source": "estimate"
+      },
+      {
+        "sauce": "Italiaanse Bolognese",
+        "litres_per_batch": "30",
+        "source": "estimate"
+      },
+      {
+        "sauce": "Liberiaanse Kip",
+        "litres_per_batch": "30",
+        "source": "estimate"
+      }
+    ],
+    "note": "Rough planning estimate from Pablo (17 Oct 2026): about 30 L per 30 kg batch for each sauce. Not measured; replace with measured volumes."
   },
   "ingredients": [
     {
