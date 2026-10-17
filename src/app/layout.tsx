@@ -12,7 +12,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <nav>
             <span className="brand">Versaa</span>
             <Link href="/">Home</Link>
-            <Link href="/plan">Plan production</Link>
+            <Link href="/plan">Plan</Link>
+            <Link href="/runs">Runs</Link>
+            <Link href="/orders">Orders</Link>
+            <Link href="/deliveries">Deliveries</Link>
+            <Link href="/stock">Stock</Link>
             <Link href="/settings">Settings</Link>
           </nav>
         </header>

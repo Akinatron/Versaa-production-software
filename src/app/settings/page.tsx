@@ -1,12 +1,13 @@
 import { db } from "@/db/client";
 import { loadPlanCatalog } from "@/db/planning";
 import { formatQty } from "@/domain/quantity";
-import { addRejectEstimate, addYieldEstimate } from "./actions";
+import { addRejectEstimate, addSupplierAction, addYieldEstimate } from "./actions";
+import * as t from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const catalog = await loadPlanCatalog(db());
+  const [catalog, suppliers] = await Promise.all([loadPlanCatalog(db()), db().select().from(t.suppliers)]);
   const itemName = new Map(catalog.items.map((i) => [i.id, i]));
 
   return (
@@ -65,6 +66,31 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <h2 id="suppliers">Suppliers</h2>
+      <div className="card">
+        {suppliers.length === 0 ? <p className="muted small">No suppliers yet.</p> : (
+          <ul>
+            {suppliers.map((s) => (
+              <li key={s.id}>
+                {s.name}
+                {s.contact && <span className="muted small"> · {s.contact}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addSupplierAction} className="row">
+          <div style={{ flex: 1 }}>
+            <label htmlFor="sname">Name</label>
+            <input id="sname" name="name" type="text" required />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label htmlFor="scontact">Contact (optional)</label>
+            <input id="scontact" name="contact" type="text" />
+          </div>
+          <button type="submit">Add supplier</button>
+        </form>
       </div>
 
       <h2>Recipes</h2>
