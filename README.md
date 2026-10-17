@@ -5,7 +5,11 @@ Operations app for Versaa: production planning, purchasing, inventory, productio
 ## What works now
 
 - **Plan production** (`/plan`): enter target sellable jars per sauce and size and see the litres needed, batches, expected surplus, jars to fill, ingredients, packaging, stock coverage and what to buy. Planning never changes stock.
-- **Settings** (`/settings`): recipes and packaging per jar (from the starting catalog), yield estimates per sauce and reject allowances per product.
+- **Production runs** (`/runs`): save a plan with a date, then confirm it. Confirming freezes the forecast (for plan-vs-actual later) and reserves the stock it needs, so other runs aren't offered the same stock.
+- **Purchase orders** (`/orders`): pre-filled from a plan's "to buy" list; track ordered / received / pending. Orders never change stock.
+- **Deliveries** (`/deliveries`): record what actually arrived (partial or different from the order), with supplier, delivery note, supplier batch and best-before. Each line becomes a lot.
+- **Stock** (`/stock`): on hand, reserved, free and on order per item; per-item lots with their origin and full history. Opening stock count for items never counted.
+- **Settings** (`/settings`): suppliers, recipes and packaging per jar, yield estimates per sauce and reject allowances per product.
 
 Anything that can't be worked out yet (no yield figure, no stock count) is shown as **unknown**, never as 0.
 

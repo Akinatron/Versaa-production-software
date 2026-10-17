@@ -39,3 +39,11 @@ export async function addRejectEstimate(form: FormData) {
   revalidatePath("/settings");
   revalidatePath("/plan");
 }
+
+export async function addSupplierAction(form: FormData) {
+  const { addSupplier } = await import("@/db/operations");
+  const name = String(form.get("name") ?? "").trim();
+  if (!name) return;
+  await addSupplier(db(), { name, contact: String(form.get("contact") ?? "") });
+  revalidatePath("/settings");
+}
