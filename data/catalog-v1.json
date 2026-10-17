@@ -1,0 +1,505 @@
+{
+  "source": "Pablo, from Notion, project thread 2026-10-17. Quantities exactly as recorded; do not rescale.",
+  "batch_reference": {
+    "finished_mass_kg": 30,
+    "note": "Nominal 30 kg finished sauce. Not 30 L. Ingredient inputs are not meant to sum to 30 kg."
+  },
+  "yield": {
+    "status": "no observed yield yet",
+    "litres_per_batch_estimate": null,
+    "note": "Initial plans may use an explicit, editable estimate, labelled as an estimate. No value agreed yet."
+  },
+  "ingredients": [
+    {
+      "name": "Beans",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Bell peppers",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Black pepper",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Celery powder",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Chicken thighs",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Chilli peppers",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Diced tomatoes",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Dry spaghetti seasoning",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Fresh basil",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Garlic",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Ground cumin",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Kerrie / Surinamese masala",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Leeks",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Lemon juice",
+      "inventory_unit": "L"
+    },
+    {
+      "name": "Minced beef",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Mushrooms",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Olive oil",
+      "inventory_unit": "L"
+    },
+    {
+      "name": "Onions",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Palm sugar",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Potatoes",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Salt",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Sea salt",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Sunflower oil",
+      "inventory_unit": "L"
+    },
+    {
+      "name": "Tomato puree",
+      "inventory_unit": "kg"
+    },
+    {
+      "name": "Tomatoes",
+      "inventory_unit": "kg"
+    }
+  ],
+  "recipes": [
+    {
+      "sauce": "Indiase Tikka Masala",
+      "version": 1,
+      "batch_reference_kg": 30,
+      "lines": [
+        {
+          "ingredient": "Chicken thighs",
+          "quantity": "14.426",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Potatoes",
+          "quantity": "7.213",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Onions",
+          "quantity": "5.854",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Beans",
+          "quantity": "7.213",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Tomatoes",
+          "quantity": "4.183",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Sunflower oil",
+          "quantity": "1.444",
+          "unit": "L"
+        },
+        {
+          "ingredient": "Kerrie / Surinamese masala",
+          "quantity": "467",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Garlic",
+          "quantity": "579",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Palm sugar",
+          "quantity": "360",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Salt",
+          "quantity": "309",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Celery powder",
+          "quantity": "36",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Chilli peppers",
+          "quantity": "360",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Ground cumin",
+          "quantity": "55.7",
+          "unit": "g"
+        }
+      ]
+    },
+    {
+      "sauce": "Italiaanse Bolognese",
+      "version": 1,
+      "batch_reference_kg": 30,
+      "lines": [
+        {
+          "ingredient": "Minced beef",
+          "quantity": "6.506",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Onions",
+          "quantity": "4.337",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Bell peppers",
+          "quantity": "14.07",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Diced tomatoes",
+          "quantity": "5.031",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Mushrooms",
+          "quantity": "5.421",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Olive oil",
+          "quantity": "0.866",
+          "unit": "L"
+        },
+        {
+          "ingredient": "Fresh basil",
+          "quantity": "171",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Black pepper",
+          "quantity": "25.7",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Sea salt",
+          "quantity": "218.6",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Leeks",
+          "quantity": "433",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Tomato puree",
+          "quantity": "609",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Garlic",
+          "quantity": "476",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Chilli peppers",
+          "quantity": "150",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Dry spaghetti seasoning",
+          "quantity": "313",
+          "unit": "g"
+        }
+      ]
+    },
+    {
+      "sauce": "Liberiaanse Kip",
+      "version": 1,
+      "batch_reference_kg": 30,
+      "lines": [
+        {
+          "ingredient": "Chicken thighs",
+          "quantity": "15",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Onions",
+          "quantity": "7",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Tomato puree",
+          "quantity": "3.154",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Diced tomatoes",
+          "quantity": "6.313",
+          "unit": "kg"
+        },
+        {
+          "ingredient": "Lemon juice",
+          "quantity": "1.32",
+          "unit": "L"
+        },
+        {
+          "ingredient": "Olive oil",
+          "quantity": "0.789",
+          "unit": "L"
+        },
+        {
+          "ingredient": "Garlic",
+          "quantity": "420",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Chilli peppers",
+          "quantity": "210",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Sea salt",
+          "quantity": "261.4",
+          "unit": "g"
+        },
+        {
+          "ingredient": "Black pepper",
+          "quantity": "85.7",
+          "unit": "g"
+        }
+      ]
+    }
+  ],
+  "packaging_items": [
+    {
+      "name": "700 ml Container",
+      "unit": "unit"
+    },
+    {
+      "name": "500 ml Container",
+      "unit": "unit"
+    },
+    {
+      "name": "250 ml Container",
+      "unit": "unit"
+    },
+    {
+      "name": "Large Lid",
+      "unit": "unit"
+    },
+    {
+      "name": "Small Lid",
+      "unit": "unit"
+    },
+    {
+      "name": "Tikka Bottle Label 700",
+      "unit": "unit"
+    },
+    {
+      "name": "Tikka Bottle Label 500",
+      "unit": "unit"
+    },
+    {
+      "name": "Tikka Bottle Label 250",
+      "unit": "unit"
+    },
+    {
+      "name": "Tikka Lid Label Large",
+      "unit": "unit"
+    },
+    {
+      "name": "Tikka Lid Label Small",
+      "unit": "unit"
+    },
+    {
+      "name": "Bolognese Bottle Label 700",
+      "unit": "unit"
+    },
+    {
+      "name": "Bolognese Bottle Label 500",
+      "unit": "unit"
+    },
+    {
+      "name": "Bolognese Bottle Label 250",
+      "unit": "unit"
+    },
+    {
+      "name": "Bolognese Lid Label Large",
+      "unit": "unit"
+    },
+    {
+      "name": "Bolognese Lid Label Small",
+      "unit": "unit"
+    },
+    {
+      "name": "Liberian Bottle Label 700",
+      "unit": "unit"
+    },
+    {
+      "name": "Liberian Bottle Label 500",
+      "unit": "unit"
+    },
+    {
+      "name": "Liberian Bottle Label 250",
+      "unit": "unit"
+    },
+    {
+      "name": "Liberian Lid Label Large",
+      "unit": "unit"
+    },
+    {
+      "name": "Liberian Lid Label Small",
+      "unit": "unit"
+    }
+  ],
+  "products": [
+    {
+      "sauce": "Indiase Tikka Masala",
+      "format": "700 ml",
+      "capacity_ml": 700,
+      "packaging_per_jar": {
+        "700 ml Container": 1,
+        "Large Lid": 1,
+        "Tikka Bottle Label 700": 1,
+        "Tikka Lid Label Large": 1
+      }
+    },
+    {
+      "sauce": "Indiase Tikka Masala",
+      "format": "500 ml",
+      "capacity_ml": 500,
+      "packaging_per_jar": {
+        "500 ml Container": 1,
+        "Small Lid": 1,
+        "Tikka Bottle Label 500": 1,
+        "Tikka Lid Label Small": 1
+      }
+    },
+    {
+      "sauce": "Indiase Tikka Masala",
+      "format": "250 ml",
+      "capacity_ml": 250,
+      "packaging_per_jar": {
+        "250 ml Container": 1,
+        "Small Lid": 1,
+        "Tikka Bottle Label 250": 1,
+        "Tikka Lid Label Small": 1
+      }
+    },
+    {
+      "sauce": "Italiaanse Bolognese",
+      "format": "700 ml",
+      "capacity_ml": 700,
+      "packaging_per_jar": {
+        "700 ml Container": 1,
+        "Large Lid": 1,
+        "Bolognese Bottle Label 700": 1,
+        "Bolognese Lid Label Large": 1
+      }
+    },
+    {
+      "sauce": "Italiaanse Bolognese",
+      "format": "500 ml",
+      "capacity_ml": 500,
+      "packaging_per_jar": {
+        "500 ml Container": 1,
+        "Small Lid": 1,
+        "Bolognese Bottle Label 500": 1,
+        "Bolognese Lid Label Small": 1
+      }
+    },
+    {
+      "sauce": "Italiaanse Bolognese",
+      "format": "250 ml",
+      "capacity_ml": 250,
+      "packaging_per_jar": {
+        "250 ml Container": 1,
+        "Small Lid": 1,
+        "Bolognese Bottle Label 250": 1,
+        "Bolognese Lid Label Small": 1
+      }
+    },
+    {
+      "sauce": "Liberiaanse Kip",
+      "format": "700 ml",
+      "capacity_ml": 700,
+      "packaging_per_jar": {
+        "700 ml Container": 1,
+        "Large Lid": 1,
+        "Liberian Bottle Label 700": 1,
+        "Liberian Lid Label Large": 1
+      }
+    },
+    {
+      "sauce": "Liberiaanse Kip",
+      "format": "500 ml",
+      "capacity_ml": 500,
+      "packaging_per_jar": {
+        "500 ml Container": 1,
+        "Small Lid": 1,
+        "Liberian Bottle Label 500": 1,
+        "Liberian Lid Label Small": 1
+      }
+    },
+    {
+      "sauce": "Liberiaanse Kip",
+      "format": "250 ml",
+      "capacity_ml": 250,
+      "packaging_per_jar": {
+        "250 ml Container": 1,
+        "Small Lid": 1,
+        "Liberian Bottle Label 250": 1,
+        "Liberian Lid Label Small": 1
+      }
+    }
+  ]
+}
