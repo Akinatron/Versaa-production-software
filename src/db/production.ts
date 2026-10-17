@@ -116,7 +116,9 @@ export async function ensureBatches(db: DB, runId: string) {
 async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
   const [row] = await tx.execute<{ original: string | null; current: string | null; used: string | null }>(sql`
     select
-      (select sum(quantity) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and quantity > 0) as original,
+      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and quantity > 0)
+        - (select coalesce(sum(c.planned_qty), 0) from batch_consumption c join production_batches b on b.id = c.batch_id
+           where b.run_id = ${runId} and b.status = 'cancelled' and c.item_id = ${itemId}) as original,
       (select sum(quantity) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null) as current,
       (select -sum(m.quantity) from movements m
          where m.item_id = ${itemId} and (
@@ -125,8 +127,8 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
            or (m.doc_type = 'packaging_session' and m.doc_id in (
               select s.id from packaging_sessions s join production_batches b on b.id = s.batch_id where b.run_id = ${runId}))
          )) as used`);
-  const original = new Decimal(row?.original ?? 0);
-  if (original.isZero()) return;
+  const original = Decimal.max(D0, new Decimal(row?.original ?? 0));
+  if (original.isZero() && new Decimal(row?.current ?? 0).isZero()) return;
   const target = Decimal.max(D0, original.minus(row?.used ?? 0));
   const diff = target.minus(row?.current ?? 0);
   if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString() });
@@ -241,7 +243,13 @@ export async function undoConsumption(db: DB, input: { idempotencyKey: string; b
         idempotencyKey: `${input.idempotencyKey}:${i++}`,
       });
     }
-    await tx.update(t.batchConsumption).set({ confirmedAt: null, recordKey: null }).where(eq(t.batchConsumption.id, line.id));
+    if (line.extra) {
+      // An ingredient outside the recipe goes away again once undone. Its
+      // movement and reversal stay in the ledger with the reason.
+      await tx.delete(t.batchConsumption).where(eq(t.batchConsumption.id, line.id));
+    } else {
+      await tx.update(t.batchConsumption).set({ confirmedAt: null, recordKey: null }).where(eq(t.batchConsumption.id, line.id));
+    }
     await syncRunReservation(tx, batch.runId, input.itemId);
     return { alreadyRecorded: false };
   });
@@ -472,15 +480,25 @@ export async function recordPackaging(
 
 export async function recordIncident(
   db: DB,
-  input: { batchId?: string | null; lotId?: string | null; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn?: string },
+  input: { idempotencyKey?: string; batchId?: string | null; lotId?: string | null; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn?: string },
 ) {
   if (!input.note.trim()) throw new OperationError("Describe what happened.");
   if (!input.batchId && !input.lotId) throw new OperationError("Link the incident to a batch or a lot.");
   const [row] = await db
     .insert(t.incidents)
-    .values({ batchId: input.batchId || null, lotId: input.lotId || null, type: input.type, note: input.note.trim(), occurredOn: input.occurredOn || today() })
+    .values({
+      batchId: input.batchId || null,
+      lotId: input.lotId || null,
+      type: input.type,
+      note: input.note.trim(),
+      occurredOn: input.occurredOn || today(),
+      idempotencyKey: input.idempotencyKey || null,
+    })
+    .onConflictDoNothing({ target: t.incidents.idempotencyKey })
     .returning();
-  return row!;
+  if (row) return row;
+  const [existing] = await db.select().from(t.incidents).where(eq(t.incidents.idempotencyKey, input.idempotencyKey!));
+  return existing!;
 }
 
 /**
@@ -506,6 +524,14 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         .update(t.productionBatches)
         .set({ status: "cancelled", closedAt: new Date(), note: input.leftoverReason?.trim() || batch.note })
         .where(eq(t.productionBatches.id, batch.id));
+      // Free the ingredients this batch had reserved.
+      const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
+      for (const l of lines) {
+        const [row] = await tx.execute<{ q: string | null }>(sql`
+          select sum(quantity) as q from reservations where run_id = ${batch.runId} and item_id = ${l.itemId} and released_at is null`);
+        const release = Decimal.min(new Decimal(l.plannedQty), new Decimal(row?.q ?? 0));
+        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString() });
+      }
     } else {
       const pending = await tx
         .select({ name: t.items.name })

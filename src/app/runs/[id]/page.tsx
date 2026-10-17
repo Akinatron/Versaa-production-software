@@ -8,6 +8,7 @@ import { Flash } from "../../components/flash";
 import { PlanView, orderLinkFor } from "../../components/plan-view";
 import { RUN_STATUS } from "../../components/labels";
 import { cancel, confirm } from "../actions";
+import { BatchRunSection } from "../../components/batch-run-section";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,8 @@ export default async function RunPage({ params, searchParams }: { params: Promis
               : null}
         </p>
       </div>
+
+      <BatchRunSection runId={run.id} runStatus={run.status} frozen={frozen} />
 
       {frozen && (
         <>

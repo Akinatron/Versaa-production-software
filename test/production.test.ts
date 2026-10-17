@@ -284,4 +284,30 @@ suite("production, packaging, sales and traceability", () => {
     const bad = targetsFromBatches(catalog, { [kip.id]: { batches: 1, split: { [big]: 60 } } });
     expect(bad.issues[0]!.message).toMatch(/60%/);
   });
+
+  it("an undone extra ingredient goes away, a not-made batch frees its reservation, incidents record once", async () => {
+    await db.insert(t.yieldFigures).values({ sauceId: ids["italiaanse-bolognese"]!, litresPerBatch: "30", source: "estimate" });
+    const run = await createRun(db, { idempotencyKey: "run-b2", plannedFor: "2026-10-27", targets: { [ids["Italiaanse Bolognese 700 ml"]!]: 50 } });
+    await confirmRun(db, run.id);
+    const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id)).orderBy(t.productionBatches.code);
+    expect(batches).toHaveLength(2);
+    const [b1, b2] = batches;
+    const onionsReserved = async () => (await loadStockPositions(db))[ids["ing-onions"]!]!.reservedEarlier.toString();
+    const before = await onionsReserved();
+
+    const bayLeaf = await addItem(db, { kind: "ingredient", name: "Bay leaves", stockUnit: "g" });
+    await recordConsumption(db, { idempotencyKey: "extra-bay", batchId: b1!.id, itemId: bayLeaf.id, quantity: "0" });
+    const [extra] = await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, b1!.id), eq(t.batchConsumption.extra, true)));
+    expect(extra!.itemId).toBe(bayLeaf.id);
+    await undoConsumption(db, { idempotencyKey: "undo-extra", batchId: b1!.id, itemId: bayLeaf.id, reason: "Wrong batch" });
+    expect(await db.select().from(t.batchConsumption).where(eq(t.batchConsumption.id, extra!.id))).toHaveLength(0);
+
+    const bolOnion = (await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, b2!.id), eq(t.batchConsumption.itemId, ids["ing-onions"]!))))[0];
+    await closeBatch(db, { idempotencyKey: "nm-1", batchId: b2!.id, notMade: true, leftoverReason: "Ran out of time" });
+    expect(new Decimal(await onionsReserved()).toString()).toBe(new Decimal(before).minus(bolOnion!.plannedQty).toString());
+
+    const i1 = await recordIncident(db, { idempotencyKey: "inc-1", batchId: b1!.id, type: "quality", note: "Too salty" });
+    const i2 = await recordIncident(db, { idempotencyKey: "inc-1", batchId: b1!.id, type: "quality", note: "Too salty" });
+    expect(i2.id).toBe(i1.id);
+  });
 });

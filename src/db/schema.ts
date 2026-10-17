@@ -379,6 +379,7 @@ export const incidents = pgTable("incidents", {
   type: incidentType("type").notNull(),
   note: text("note").notNull(),
   occurredOn: date("occurred_on").notNull(),
+  idempotencyKey: text("idempotency_key").unique(),
   createdAt: createdAt(),
 });
 
