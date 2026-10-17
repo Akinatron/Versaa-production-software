@@ -78,3 +78,23 @@ export async function seedCatalog(db: DB) {
     }
   });
 }
+
+/**
+ * Add the planning estimates of litres per batch, but only for sauces that
+ * have no yield figure yet, so it never overrides a figure entered later.
+ */
+export async function seedYieldEstimates(db: DB) {
+  const c = loadSeedCatalog();
+  let added = 0;
+  await db.transaction(async (tx) => {
+    for (const e of c.yieldEstimates) {
+      const [sauce] = await tx.select({ id: t.sauces.id }).from(t.sauces).where(eq(t.sauces.code, e.sauceCode));
+      if (!sauce) continue;
+      const existing = await tx.select({ id: t.yieldFigures.id }).from(t.yieldFigures).where(eq(t.yieldFigures.sauceId, sauce.id)).limit(1);
+      if (existing.length > 0) continue;
+      await tx.insert(t.yieldFigures).values({ sauceId: sauce.id, litresPerBatch: e.litresPerBatch.toString(), source: "estimate", note: e.note });
+      added++;
+    }
+  });
+  return { added };
+}

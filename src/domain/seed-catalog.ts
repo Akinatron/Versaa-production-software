@@ -25,6 +25,8 @@ export interface SeedCatalog {
   sauces: { code: string; name: string; batchReferenceKg: Decimal; lines: { itemCode: string; quantity: Decimal; unit: UnitCode }[] }[];
   formats: { code: string; name: string; capacityMl: number }[];
   products: { code: string; name: string; sauceCode: string; formatCode: string; capacityMl: number; packaging: { itemCode: string; perJar: number }[] }[];
+  /** Planning estimates of litres per batch, labelled as estimates. */
+  yieldEstimates: { sauceCode: string; litresPerBatch: Decimal; note: string }[];
 }
 
 export function loadSeedCatalog(): SeedCatalog {
@@ -74,7 +76,12 @@ export function loadSeedCatalog(): SeedCatalog {
     packaging: Object.entries(p.packaging_per_jar).map(([name, n]) => ({ itemCode: pkgCode(name), perJar: n })),
   }));
 
-  return { items, sauces, formats, products };
+  const yieldEstimates = seed.yield.estimates.map((e) => {
+    if (!seed.recipes.some((r) => r.sauce === e.sauce)) throw new Error(`Unknown sauce ${e.sauce}`);
+    return { sauceCode: slug(e.sauce), litresPerBatch: new Decimal(e.litres_per_batch), note: seed.yield.note };
+  });
+
+  return { items, sauces, formats, products, yieldEstimates };
 }
 
 /** Planner inputs from the seed catalog, with yields and rejects unknown. */

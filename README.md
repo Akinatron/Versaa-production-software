@@ -23,7 +23,7 @@ Anything that can't be worked out yet (no yield figure, no stock count) is shown
 
 ## Starting data
 
-`data/catalog-v1.json` holds the recipes, 25 ingredients, 20 packaging items and 9 products exactly as provided by Pablo on 17 Oct 2026. No yield or price data exists yet and none is invented.
+`data/catalog-v1.json` holds the recipes, 25 ingredients, 20 packaging items and 9 products exactly as provided by Pablo on 17 Oct 2026. No measured yields or prices exist yet and none are invented. Litres per batch starts at Pablo's rough estimate of about 30 L per 30 kg batch for each sauce, labelled as an estimate; `pnpm db:seed` adds it only for sauces with no figure yet, and a newer figure entered in Settings replaces it.
 
 ## Running it
 
