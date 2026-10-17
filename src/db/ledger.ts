@@ -66,7 +66,11 @@ export async function allocate(
       if (q.isZero()) continue;
       if (q.lt(0)) throw new OperationError(`${item.name}: quantities can't be negative.`);
       const lot = lots.find((l) => l.id === c.lotId);
-      if (!lot || lot.itemId !== item.id) throw new OperationError(`${item.name}: that lot has no stock left.`);
+      if (!lot) {
+        const [other] = await tx.select().from(t.lots).where(eq(t.lots.id, c.lotId));
+        if (other && other.itemId !== item.id) throw new OperationError(`${item.name}: lot ${other.code} is a different item.`);
+        throw new OperationError(`${item.name}: ${other ? `lot ${other.code}` : "that lot"} has no stock left.`);
+      }
       if (lot.balance.lt(q)) throw new OperationError(`${item.name}: lot ${lot.code} only has ${lot.balance} ${item.stockUnit} left.`);
       out.push({ lotId: lot.id, quantity: q });
     }

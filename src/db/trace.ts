@@ -219,7 +219,7 @@ export async function traceBatch(db: DB, batchId: string) {
   for (const m of moves.filter((m) => sessionIds.has(m.docId ?? "") && m.type === "consumption")) {
     materialsByLot.set(m.lotId, (materialsByLot.get(m.lotId) ?? new Decimal(0)).minus(m.quantity));
   }
-  const materials = [...materialsByLot.entries()].map(([id, q]) => ({ lot: lots.get(id)!, quantity: q })).sort((a, b) => a.lot.itemName.localeCompare(b.lot.itemName));
+  const materials = [...materialsByLot.entries()].map(([id, q]) => ({ lot: lots.get(id)!, quantity: q })).filter((m) => m.lot.itemKind !== "bulk").sort((a, b) => a.lot.itemName.localeCompare(b.lot.itemName));
 
   const jarLots = await finishedLotsOfBatches(db, [batchId]);
   const bulk = row.batch.bulkLotId ? (await lotsByIds(db, [row.batch.bulkLotId]))[0] ?? null : null;
