@@ -14,9 +14,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/">Home</Link>
             <Link href="/plan">Plan</Link>
             <Link href="/runs">Runs</Link>
+            <Link href="/batches">Batches</Link>
             <Link href="/orders">Orders</Link>
             <Link href="/deliveries">Deliveries</Link>
             <Link href="/stock">Stock</Link>
+            <Link href="/sales">Sales</Link>
+            <Link href="/trace">Trace</Link>
+            <Link href="/reports">Reports</Link>
             <Link href="/settings">Settings</Link>
           </nav>
         </header>

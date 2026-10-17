@@ -27,3 +27,32 @@ export const MOVEMENT: Record<string, string> = {
   count_correction: "Count correction",
   reversal: "Reversal",
 };
+
+export const BATCH_STATUS: Record<string, { label: string; cls: string }> = {
+  planned: { label: "Planned", cls: "warn" },
+  in_production: { label: "In production", cls: "warn" },
+  awaiting_packaging: { label: "Awaiting packaging", cls: "warn" },
+  packing: { label: "Packing", cls: "warn" },
+  closed: { label: "Closed", cls: "ok" },
+  cancelled: { label: "Not made", cls: "" },
+};
+
+export const SALES_STATUS: Record<string, { label: string; cls: string }> = {
+  pending: { label: "Pending", cls: "warn" },
+  delivered: { label: "Delivered", cls: "ok" },
+  cancelled: { label: "Cancelled", cls: "" },
+};
+
+export const OUTFLOW: Record<string, string> = {
+  sale: "Sale",
+  sample: "Sample",
+  waste: "Waste",
+  internal_use: "Internal use",
+};
+
+export const INCIDENT: Record<string, string> = {
+  loss: "Loss",
+  spill: "Spill",
+  quality: "Quality",
+  other: "Other",
+};
