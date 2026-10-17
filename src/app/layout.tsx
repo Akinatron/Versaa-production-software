@@ -1,27 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { currentUser } from "@/lib/session";
+import { logout } from "./login/actions";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Versaa Operations" };
+export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+const LINKS = [
+  ["/", "Home"],
+  ["/plan", "Plan"],
+  ["/runs", "Runs"],
+  ["/batches", "Batches"],
+  ["/orders", "Orders"],
+  ["/deliveries", "Deliveries"],
+  ["/stock", "Stock"],
+  ["/sales", "Sales"],
+  ["/trace", "Trace"],
+  ["/reports", "Reports"],
+  ["/settings", "Settings"],
+] as const;
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
   return (
     <html lang="en">
       <body>
         <header>
           <nav>
             <span className="brand">Versaa</span>
-            <Link href="/">Home</Link>
-            <Link href="/plan">Plan</Link>
-            <Link href="/runs">Runs</Link>
-            <Link href="/batches">Batches</Link>
-            <Link href="/orders">Orders</Link>
-            <Link href="/deliveries">Deliveries</Link>
-            <Link href="/stock">Stock</Link>
-            <Link href="/sales">Sales</Link>
-            <Link href="/trace">Trace</Link>
-            <Link href="/reports">Reports</Link>
-            <Link href="/settings">Settings</Link>
+            {user && (
+              <>
+                <div className="links">
+                  {LINKS.map(([href, label]) => (
+                    <Link key={href} href={href}>
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+                <div className="who">
+                  <Link href="/team" className="small">
+                    {user.name}
+                  </Link>
+                  <form action={logout}>
+                    <button type="submit" className="link small">
+                      Sign out
+                    </button>
+                  </form>
+                </div>
+              </>
+            )}
           </nav>
         </header>
         <main>{children}</main>
