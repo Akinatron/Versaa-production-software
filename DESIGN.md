@@ -9,7 +9,7 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 - **Every list has an empty state** that says what will appear and how to start.
 
 ## System (src/app/globals.css)
-- Colour: a dark basil-green side menu on a neutral work surface. Green is the action colour; tomato red only marks the brand, the active menu item and urgent counts. Status uses five tones: neutral, info, ok, warn, bad. Dark mode follows the device.
+- Colour: a dark basil-green side menu on a neutral work surface. Green is the action colour; tomato red only marks the brand, the active menu item and urgent counts. Status uses five tones: neutral, info, ok, warn, bad. Dark mode follows the device and uses plain neutral greys (no colour tint) with softer accents.
 - Type: the system font, one tight scale. Numbers in tables use tabular figures.
 - Components: `PageHeader` (back link, title, status, one-line lead, actions), `Steps`, `Empty`, `.stats`, `.worklist`, `.tabs`, `.choices`, `.linklist`, `.savebar` (sticky save on long forms), `.issues`.
 - Dates read as "22 Oct" (`fmtDate`) or "in 3 days" (`relDate`); stored dates stay ISO.
