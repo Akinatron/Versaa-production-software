@@ -14,6 +14,8 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 - Components: `PageHeader` (back link, title, status, one-line lead, actions), `Steps`, `Empty`, `.stats`, `.worklist`, `.tabs`, `.choices`, `.linklist`, `.savebar` (sticky save on long forms), `.issues`.
 - Dates read as "22 Oct" (`fmtDate`) or "in 3 days" (`relDate`); stored dates stay ISO.
 - The side menu shows counts of waiting work (batches to cook or pack, draft orders, deliveries on the way, orders to deliver).
+- Motion (`components/motion.tsx` + the motion block in globals.css): only to explain. Pages rise in, the step bar and tab pill slide from the previous one, notices drop in, a pressed button shows a spinner until the server answers. 120–300 ms, ease-out, no bounce. Reduced motion keeps fades only.
+- Trace diagram (`TraceFlow`): the lot trace opens with supplier → lot → batch → jar lots → destinations, drawn column by column; pointing at a box lights its path.
 
 ## Avoid
 Coloured side borders on cards, gradients, emoji or arrow characters as icons, kicker labels above headings, modals, and more than one primary button per screen.
