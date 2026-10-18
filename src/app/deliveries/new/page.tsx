@@ -41,7 +41,10 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
   return (
     <>
       <h1>Record a delivery</h1>
-      <p className="lead">Enter what actually arrived, even if it differs from the order. Saving adds it to stock.</p>
+      <p className="lead">
+        Enter what actually arrived, even if it differs from the order. For each item, say how much you accepted and how much you refused (damaged, wrong). Only the accepted
+        quantity goes into stock; refused goods still count as not received on the order.
+      </p>
       <Flash params={params} />
 
       <form method="get" className="card row">
@@ -79,8 +82,16 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
             <input id="receivedOn" name="receivedOn" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
           </div>
           <div>
+            <label htmlFor="receivedTime">Time (optional)</label>
+            <input id="receivedTime" name="receivedTime" type="time" />
+          </div>
+          <div>
             <label htmlFor="deliveryRef">Delivery note number (optional)</label>
             <input id="deliveryRef" name="deliveryRef" type="text" />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label htmlFor="note">Note about the delivery (optional)</label>
+            <textarea id="note" name="note" rows={2} placeholder="e.g. arrived late, pallet damaged" />
           </div>
         </div>
         <div className="card scroll">
@@ -88,7 +99,9 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
             <thead>
               <tr>
                 <th>Item</th>
-                <th>Quantity received</th>
+                <th>Accepted</th>
+                <th>Refused</th>
+                <th>Damage / problem</th>
                 <th>Supplier batch</th>
                 <th>Best before</th>
               </tr>
@@ -105,7 +118,13 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                     <input type="hidden" name={`pol_${i}`} value={l.line.id} />
                   </td>
                   <td>
-                    <input name={`qty_${i}`} type="number" min="0" step="any" defaultValue={l.pending.toString()} aria-label="Quantity received" />
+                    <input name={`qty_${i}`} type="number" min="0" step="any" defaultValue={l.pending.toString()} aria-label="Quantity accepted" />
+                  </td>
+                  <td>
+                    <input name={`rej_${i}`} type="number" min="0" step="any" aria-label="Quantity refused" />
+                  </td>
+                  <td>
+                    <input name={`dmg_${i}`} type="text" aria-label="Damage or problem" style={{ minWidth: 140 }} />
                   </td>
                   <td>
                     <input name={`batch_${i}`} type="text" aria-label="Supplier batch" />
@@ -124,7 +143,13 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                       <input type="hidden" name={`pol_${i}`} value="" />
                     </td>
                     <td>
-                      <input name={`qty_${i}`} type="number" min="0" step="any" aria-label="Quantity received" />
+                      <input name={`qty_${i}`} type="number" min="0" step="any" aria-label="Quantity accepted" />
+                    </td>
+                    <td>
+                      <input name={`rej_${i}`} type="number" min="0" step="any" aria-label="Quantity refused" />
+                    </td>
+                    <td>
+                      <input name={`dmg_${i}`} type="text" aria-label="Damage or problem" style={{ minWidth: 140 }} />
                     </td>
                     <td>
                       <input name={`batch_${i}`} type="text" aria-label="Supplier batch" />
@@ -137,7 +162,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
               })}
             </tbody>
           </table>
-          <p className="small muted">Rows left empty are ignored. Set a quantity to 0 for an ordered item that didn't arrive; it stays pending on the order.</p>
+          <p className="small muted">Rows left empty are ignored. Set accepted to 0 for an ordered item that didn't arrive; it stays pending on the order. If something won't come at all, close the order from its page.</p>
         </div>
         <button type="submit">Save delivery</button>
       </form>

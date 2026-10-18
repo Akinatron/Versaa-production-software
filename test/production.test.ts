@@ -48,7 +48,7 @@ suite("production, packaging, sales and traceability", () => {
       lines: [{ itemId: ids["ing-onions"]!, quantity: "20", supplierBatch: "ON-42", bestBefore: "2026-11-30" }],
     });
     const [lot] = await db.select().from(t.receiptLines).where(eq(t.receiptLines.receiptId, r.receipt.id));
-    onionDelivery = lot!.lotId;
+    onionDelivery = lot!.lotId!;
   });
   afterAll(async () => db?.$client.end());
 

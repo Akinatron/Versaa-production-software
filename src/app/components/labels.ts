@@ -8,9 +8,10 @@ export const RUN_STATUS: Record<string, { label: string; cls: string }> = {
 
 export const PO_STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "warn" },
-  sent: { label: "Ordered", cls: "warn" },
+  sent: { label: "Sent", cls: "warn" },
   partly_received: { label: "Partly received", cls: "warn" },
   received: { label: "Received", cls: "ok" },
+  closed: { label: "Closed (not all arrived)", cls: "" },
   cancelled: { label: "Cancelled", cls: "" },
 };
 

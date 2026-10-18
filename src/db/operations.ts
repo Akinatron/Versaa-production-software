@@ -83,162 +83,19 @@ export async function addSupplier(db: DB, input: { name: string; contact?: strin
   return row!;
 }
 
-// ---------------------------------------------------------------- purchase orders
+// ---------------------------------------------------------------- purchase orders and deliveries
 
-export interface OrderLine {
-  itemId: string;
-  quantity: Decimal.Value;
-  unitPrice?: Decimal.Value | null;
-}
-
-/** An order records intent only; it never changes stock. */
-export async function createPurchaseOrder(
-  db: DB,
-  input: { idempotencyKey: string; supplierId: string; orderedOn?: string | null; expectedOn?: string | null; reference?: string | null; lines: OrderLine[] },
-) {
-  const lines = input.lines.filter((l) => l.itemId && String(l.quantity).trim() !== "");
-  if (lines.length === 0) throw new OperationError("Add at least one item to the order.");
-  return db.transaction(async (tx) => {
-    const code = `PO-${input.idempotencyKey.slice(0, 8).toUpperCase()}`;
-    const [existing] = await tx.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.code, code));
-    if (existing) return existing;
-
-    const items = await itemsById(tx, lines.map((l) => l.itemId));
-    const [po] = await tx
-      .insert(t.purchaseOrders)
-      .values({
-        code,
-        supplierId: input.supplierId,
-        status: "sent",
-        orderedOn: input.orderedOn || today(),
-        expectedOn: input.expectedOn || null,
-        reference: input.reference || null,
-      })
-      .returning();
-    for (const line of lines) {
-      const item = items.get(line.itemId);
-      if (!item) throw new OperationError("Unknown item.");
-      const qty = positive(line.quantity, item.name);
-      checkWholeUnits(item, qty);
-      const price = line.unitPrice != null && String(line.unitPrice).trim() !== "" ? new Decimal(line.unitPrice).toString() : null;
-      await tx.insert(t.purchaseOrderLines).values({ purchaseOrderId: po!.id, itemId: item.id, quantity: qty.toString(), unitPrice: price });
-    }
-    return po!;
-  });
-}
-
-export async function cancelPurchaseOrder(db: DB, purchaseOrderId: string) {
-  return db.transaction(async (tx) => {
-    const [po] = await tx.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.id, purchaseOrderId));
-    if (!po) throw new OperationError("Order not found.");
-    if (po.status === "received") throw new OperationError("A fully received order can't be cancelled.");
-    await tx.update(t.purchaseOrders).set({ status: "cancelled" }).where(eq(t.purchaseOrders.id, purchaseOrderId));
-  });
-}
-
-// ---------------------------------------------------------------- deliveries
-
-export interface ReceiptLineInput {
-  itemId: string;
-  quantity: Decimal.Value;
-  purchaseOrderLineId?: string | null;
-  supplierBatch?: string | null;
-  bestBefore?: string | null;
-}
-
-/**
- * Record what actually arrived. Each line becomes a lot with its origin
- * (supplier, delivery note, supplier batch, best-before) and adds to stock.
- * Partial or unexpected deliveries are fine: the order shows what's pending.
- */
-export async function recordReceipt(
-  db: DB,
-  input: { idempotencyKey: string; supplierId?: string | null; receivedOn: string; deliveryRef?: string | null; lines: ReceiptLineInput[] },
-) {
-  const lines = input.lines.filter((l) => l.itemId && String(l.quantity).trim() !== "" && Number(l.quantity) !== 0);
-  if (lines.length === 0) throw new OperationError("Enter at least one quantity received.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.receivedOn)) throw new OperationError("Enter the delivery date.");
-
-  return db.transaction(async (tx) => {
-    const [existing] = await tx.select().from(t.receipts).where(eq(t.receipts.idempotencyKey, input.idempotencyKey));
-    if (existing) return { receipt: existing, alreadyRecorded: true };
-
-    const items = await itemsById(tx, lines.map((l) => l.itemId));
-    const poLineIds = lines.map((l) => l.purchaseOrderLineId).filter((x): x is string => !!x);
-    const poLines = poLineIds.length
-      ? await tx
-          .select({ line: t.purchaseOrderLines, po: t.purchaseOrders })
-          .from(t.purchaseOrderLines)
-          .innerJoin(t.purchaseOrders, eq(t.purchaseOrderLines.purchaseOrderId, t.purchaseOrders.id))
-          .where(inArray(t.purchaseOrderLines.id, poLineIds))
-      : [];
-
-    const [receipt] = await tx
-      .insert(t.receipts)
-      .values({ supplierId: input.supplierId || null, receivedOn: input.receivedOn, deliveryRef: input.deliveryRef || null, idempotencyKey: input.idempotencyKey })
-      .returning();
-
-    let i = 0;
-    for (const line of lines) {
-      const item = items.get(line.itemId);
-      if (!item) throw new OperationError("Unknown item.");
-      const qty = positive(line.quantity, item.name);
-      checkWholeUnits(item, qty);
-      if (line.purchaseOrderLineId) {
-        const pl = poLines.find((p) => p.line.id === line.purchaseOrderLineId);
-        if (!pl || pl.line.itemId !== item.id) throw new OperationError(`${item.name}: order line doesn't match this item.`);
-        if (pl.po.status === "cancelled") throw new OperationError(`${pl.po.code} is cancelled.`);
-      }
-      const code = await nextLotCode(tx, `RCV-${input.receivedOn.replaceAll("-", "")}`);
-      const [lot] = await tx
-        .insert(t.lots)
-        .values({
-          itemId: item.id,
-          code,
-          supplierId: input.supplierId || null,
-          deliveryRef: input.deliveryRef || null,
-          supplierBatch: line.supplierBatch || null,
-          receivedOn: input.receivedOn,
-          bestBefore: line.bestBefore || null,
-        })
-        .returning();
-      await tx.insert(t.receiptLines).values({
-        receiptId: receipt!.id,
-        purchaseOrderLineId: line.purchaseOrderLineId || null,
-        lotId: lot!.id,
-        itemId: item.id,
-        quantity: qty.toString(),
-      });
-      await tx.insert(t.movements).values({
-        lotId: lot!.id,
-        itemId: item.id,
-        quantity: qty.toString(),
-        type: "receipt",
-        occurredAt: new Date(`${input.receivedOn}T12:00:00Z`),
-        docType: "receipt",
-        docId: receipt!.id,
-        idempotencyKey: `${input.idempotencyKey}:${i++}`,
-      });
-    }
-
-    // Update order status from what has arrived so far.
-    const poIds = [...new Set(poLines.map((p) => p.po.id))];
-    for (const poId of poIds) {
-      const rows = await tx.execute<{ ordered: string; received: string }>(sql`
-        select l.quantity as ordered, coalesce(sum(r.quantity), 0) as received
-        from purchase_order_lines l left join receipt_lines r on r.purchase_order_line_id = l.id
-        where l.purchase_order_id = ${poId} group by l.id, l.quantity`);
-      const all = [...rows];
-      const complete = all.every((r) => new Decimal(r.received).gte(r.ordered));
-      const any = all.some((r) => new Decimal(r.received).gt(0));
-      await tx
-        .update(t.purchaseOrders)
-        .set({ status: complete ? "received" : any ? "partly_received" : "sent" })
-        .where(eq(t.purchaseOrders.id, poId));
-    }
-    return { receipt: receipt!, alreadyRecorded: false };
-  });
-}
+export {
+  createPurchaseOrder,
+  createOrdersFromPlan,
+  updateDraftOrder,
+  markOrderSent,
+  cancelPurchaseOrder,
+  closePurchaseOrder,
+  recordReceipt,
+  type OrderLine,
+  type ReceiptLineInput,
+} from "./purchasing";
 
 // ---------------------------------------------------------------- production runs
 
