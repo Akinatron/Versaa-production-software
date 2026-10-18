@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Decimal from "decimal.js";
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -8,6 +7,7 @@ import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { OrderPlanner, type PlannerLine } from "../../components/order-planner";
 import { createPlannedOrders } from "../actions";
+import { PageHeader, Empty } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +23,22 @@ export default async function PlanOrdersPage({ searchParams }: { searchParams: P
     })
     .filter((w) => /^[0-9a-f-]{36}$/.test(w.itemId));
   const [items, suppliers, offers] = await Promise.all([
-    wanted.length ? db().select().from(t.items).where(inArray(t.items.id, wanted.map((w) => w.itemId))) : Promise.resolve([]),
+    wanted.length
+      ? db()
+          .select()
+          .from(t.items)
+          .where(
+            inArray(
+              t.items.id,
+              wanted.map((w) => w.itemId),
+            ),
+          )
+      : Promise.resolve([]),
     db().select({ id: t.suppliers.id, name: t.suppliers.name }).from(t.suppliers).where(eq(t.suppliers.active, true)).orderBy(asc(t.suppliers.name)),
-    offersByItem(db(), wanted.map((w) => w.itemId)),
+    offersByItem(
+      db(),
+      wanted.map((w) => w.itemId),
+    ),
   ]);
   const lines: PlannerLine[] = wanted
     .map((w) => {
@@ -53,16 +66,14 @@ export default async function PlanOrdersPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <p className="small" style={{ margin: "0 0 8px" }}>
-        <Link href="/orders">← Orders</Link>
-      </p>
-      <h1>Order what's missing</h1>
-      <p className="lead">
-        One draft order per supplier, not linked to a run. To order for a run, save the plan as a run first and use its "Order" step, so the orders show on the run.
-      </p>
+      <PageHeader
+        back={{ href: "/orders", label: "Orders" }}
+        title="Order what's missing"
+        lead={'One draft order per supplier, not linked to a run. To order for a run, save the plan as a run and use its "Order" step.'}
+      />
       <Flash params={params} />
       {lines.length === 0 ? (
-        <p className="card muted">Nothing to order.</p>
+        <Empty title="Nothing to order" />
       ) : (
         <OrderPlanner lines={lines} suppliers={suppliers} runId={null} idempotencyKey={crypto.randomUUID()} action={createPlannedOrders} />
       )}

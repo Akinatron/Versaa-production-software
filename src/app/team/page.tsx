@@ -3,6 +3,7 @@ import * as t from "@/db/schema";
 import { currentUser } from "@/lib/session";
 import { Flash } from "../components/flash";
 import { addMember, resetPassword, toggleMember } from "./actions";
+import { PageHeader } from "../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const [me, users] = await Promise.all([currentUser(), db().select().from(t.users).orderBy(t.users.name)]);
   return (
     <>
-      <h1>Team</h1>
-      <p className="lead">Everyone who can sign in. Everybody has the same access.</p>
+      <PageHeader title="Team" />
       <Flash params={params} />
       <div className="card scroll">
         <table>
@@ -48,7 +48,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                     <form action={toggleMember}>
                       <input type="hidden" name="userId" value={u.id} />
                       <input type="hidden" name="active" value={u.active ? "0" : "1"} />
-                      <button type="submit" style={{ background: "var(--muted)" }}>
+                      <button type="submit" className="secondary">
                         {u.active ? "Switch off" : "Switch on"}
                       </button>
                     </form>

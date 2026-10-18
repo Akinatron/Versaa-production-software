@@ -10,10 +10,19 @@ import { OUTFLOW, SALES_STATUS } from "../../../components/labels";
 import { jars, who } from "../../../components/trace-format";
 import { cancelOrder, deliverOrder } from "../../actions";
 import { fefoPreview, finishedLots, todayIso } from "../../data";
+import { PageHeader } from "../../../components/ui/header";
+import { fmtDate } from "../../../components/ui/format";
+import { ConfirmButton } from "../../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
-export default async function SalesOrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function SalesOrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const [row] = await db()
@@ -32,7 +41,11 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
   const [outflow] = await db().select().from(t.outflows).where(eq(t.outflows.salesOrderId, o.id));
   const outLines = outflow
     ? await db()
-        .select({ l: t.outflowLines, product: t.products.name, lot: t.lots.code })
+        .select({
+          l: t.outflowLines,
+          product: t.products.name,
+          lot: t.lots.code,
+        })
         .from(t.outflowLines)
         .innerJoin(t.products, eq(t.outflowLines.productId, t.products.id))
         .innerJoin(t.lots, eq(t.outflowLines.lotId, t.lots.id))
@@ -42,19 +55,29 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
   const pending = o.status === "pending";
   const [avail, lots] = pending ? await Promise.all([finishedAvailability(db()), finishedLots()]) : [[], []];
   const need = new Map<string, { name: string; jars: number }>();
-  for (const l of lines) need.set(l.l.productId, { name: l.product, jars: (need.get(l.l.productId)?.jars ?? 0) + l.l.jars });
+  for (const l of lines)
+    need.set(l.l.productId, {
+      name: l.product,
+      jars: (need.get(l.l.productId)?.jars ?? 0) + l.l.jars,
+    });
   const priced = lines.filter((l) => l.l.unitPrice !== null);
   const revenue = priced.reduce((s, l) => s.plus(new Decimal(l.l.unitPrice!).mul(l.l.jars)), new Decimal(0));
 
   return (
     <>
-      <h1>
-        {o.code} <span className={`badge ${status.cls}`}>{status.label}</span>
-      </h1>
-      <p className="lead">
-        Sales order for {who(customer, o.destination)}, ordered {o.orderedOn}
-        {o.reference ? `, customer reference ${o.reference}` : ""}.
-      </p>
+      <PageHeader
+        back={{ href: "/outbound", label: "Outbound" }}
+        title={who(customer, o.destination)}
+        status={{ label: status.label, cls: status.cls }}
+        lead={`Sales order ${o.code}, ordered ${fmtDate(o.orderedOn)}${o.reference ? `, customer reference ${o.reference}` : ""}.`}
+        actions={
+          pending ? (
+            <a href="#deliver" className="btn">
+              Deliver
+            </a>
+          ) : null
+        }
+      />
       <Flash params={flash} />
 
       <div className="card scroll">
@@ -84,15 +107,19 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
         )}
       </div>
 
-      {o.status === "cancelled" && <p className="card">This order was cancelled. Its jars were released and stock never changed.</p>}
+      {o.status === "cancelled" && (
+        <ul className="issues">
+          <li className="info">This order was cancelled. Its jars were released and stock never changed.</li>
+        </ul>
+      )}
 
       {outflow && (
         <>
           <h2>Delivered</h2>
           <div className="card scroll">
             <p style={{ marginTop: 0 }}>
-              Delivered on {outflow.occurredOn} as <strong>{outflow.code}</strong> ({OUTFLOW[outflow.type]}). These jars have left stock.{" "}
-              <Link href={`/trace/outflow/${outflow.id}`}>Trace this delivery →</Link>
+              Delivered on {fmtDate(outflow.occurredOn, { weekday: true })} as <strong>{outflow.code}</strong> ({OUTFLOW[outflow.type]}). These jars have left
+              stock. <Link href={`/trace/outflow/${outflow.id}`}>Trace this delivery</Link>
             </p>
             <table>
               <thead>
@@ -144,21 +171,37 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
                   </p>
                   {freeForThis.lt(n.jars) && (
                     <ul className="issues">
-                      <li className="bad">Not enough in stock: {n.jars - freeForThis.toNumber()} jars short. Pack more or change the order before delivering.</li>
+                      <li className="bad">
+                        Not enough in stock: {n.jars - freeForThis.toNumber()} jars short. Pack more or change the order before delivering.
+                      </li>
                     </ul>
                   )}
                   <label>Which lots the jars come from</label>
                   <div style={{ display: "grid", gap: 6, marginBottom: 8 }}>
-                    <label style={{ display: "flex", gap: 8, alignItems: "baseline", color: "var(--text)" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "baseline",
+                        color: "var(--text)",
+                      }}
+                    >
                       <input type="radio" name={`mode_${productId}`} value="fefo" defaultChecked style={{ width: "auto" }} />
                       <span>
                         Earliest best-before first (recommended)
                         {preview.out.length > 0 && (
-                          <span className="small muted"> — will take {preview.out.map((p) => `${p.jars} from ${p.lot.code}`).join(", ")}</span>
+                          <span className="small muted">: takes {preview.out.map((p) => `${p.jars} from ${p.lot.code}`).join(", ")}</span>
                         )}
                       </span>
                     </label>
-                    <label style={{ display: "flex", gap: 8, alignItems: "baseline", color: "var(--text)" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "baseline",
+                        color: "var(--text)",
+                      }}
+                    >
                       <input type="radio" name={`mode_${productId}`} value="choose" style={{ width: "auto" }} />
                       <span>I&apos;ll choose the lots (enter jars per lot below; they must add up to {n.jars})</span>
                     </label>
@@ -166,7 +209,10 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
                   {productLots.length === 0 ? (
                     <p className="small muted">No lots of this product have jars left.</p>
                   ) : (
-                    <div className="scroll">
+                    <details className="scroll">
+                      <summary className="small">
+                        Lots of {n.name} ({productLots.length})
+                      </summary>
                       <table>
                         <thead>
                           <tr>
@@ -182,35 +228,47 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
                               <td>
                                 <Link href={`/trace/lot/${l.id}`}>{l.code}</Link>
                               </td>
-                              <td>{l.bestBefore ?? <span className="muted">not recorded</span>}</td>
+                              <td>{l.bestBefore ? fmtDate(l.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                               <td className="num">{l.balance.toString()}</td>
                               <td>
-                                <input name={`lot_${productId}_${l.id}`} type="number" min="0" max={l.balance.toNumber()} step="1" inputMode="numeric" aria-label={`Jars from ${l.code}`} />
+                                <input
+                                  name={`lot_${productId}_${l.id}`}
+                                  type="number"
+                                  min="0"
+                                  max={l.balance.toNumber()}
+                                  step="1"
+                                  inputMode="numeric"
+                                  aria-label={`Jars from ${l.code}`}
+                                />
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </details>
                   )}
                 </div>
               );
             })}
-            <button type="submit">Deliver now</button>
-            <p className="small muted">Delivering takes the jars out of stock from the lots above, releases the reservation and records it as a sale. It can&apos;t be undone from here.</p>
+            <div className="form-actions">
+              <ConfirmButton message="Deliver this order now? The jars leave stock and it is recorded as a sale.">Deliver now</ConfirmButton>
+              <span className="small muted">Takes the jars out of stock, releases the hold and records the sale. It can&apos;t be undone from here.</span>
+            </div>
           </form>
-          <form action={cancelOrder} className="card row">
-            <input type="hidden" name="orderId" value={o.id} />
-            <button type="submit" style={{ background: "var(--muted)" }}>
-              Cancel order
-            </button>
-            <span className="small muted">Cancelling frees the promised jars. Stock doesn&apos;t change because nothing was taken out.</span>
-          </form>
+          <details className="card" style={{ marginTop: 32 }}>
+            <summary>Cancel this order</summary>
+            <form action={cancelOrder} className="row" style={{ alignItems: "center" }}>
+              <input type="hidden" name="orderId" value={o.id} />
+              <span className="small muted" style={{ flex: 1 }}>
+                Cancelling frees the promised jars. Stock doesn&apos;t change because nothing was taken out.
+              </span>
+              <button type="submit" className="danger">
+                Cancel order
+              </button>
+            </form>
+          </details>
         </>
       )}
-      <p>
-        <Link href="/outbound">← Back to outbound</Link>
-      </p>
     </>
   );
 }

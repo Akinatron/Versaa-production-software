@@ -4,10 +4,14 @@ import { formatQty, type UnitCode } from "@/domain/quantity";
 
 const STATUS: Record<CoverageStatus, { label: string; cls: string }> = {
   covered: { label: "Covered", cls: "ok" },
-  short: { label: "Buy", cls: "bad" },
+  short: { label: "To buy", cls: "bad" },
   unknown: { label: "Unknown", cls: "warn" },
 };
-const SOURCE: Record<Source, string> = { observed: "measured", estimate: "estimate", missing: "missing" };
+const SOURCE: Record<Source, string> = {
+  observed: "measured",
+  estimate: "estimate",
+  missing: "missing",
+};
 
 /** Works with a live plan or one read back from a frozen snapshot (strings). */
 const D = (v: unknown): Decimal | null => (v === null || v === undefined ? null : new Decimal(v as Decimal.Value));
@@ -20,56 +24,40 @@ export function PlanView({ result, only, batchesTitle = "Batches" }: { result: P
   const show = (p: Part) => !only || only.includes(p);
   return (
     <>
-      {show("issues") && result.issues.length > 0 && (
-        <>
-          <h2>Needs attention</h2>
-          <ul className="issues">
-            {result.issues.map((i, n) => (
-              <li key={n} className={i.level === "blocker" ? "bad" : "warn"}>
+      {show("issues") && result.issues.some((i) => i.level === "blocker") && (
+        <ul className="issues">
+          {result.issues
+            .filter((i) => i.level === "blocker")
+            .map((i, n) => (
+              <li key={n} className="bad">
                 {i.message}
               </li>
             ))}
+        </ul>
+      )}
+      {show("issues") && result.issues.some((i) => i.level !== "blocker") && (
+        <details className="card">
+          <summary>
+            {result.issues.filter((i) => i.level !== "blocker").length} planning{" "}
+            {result.issues.filter((i) => i.level !== "blocker").length === 1 ? "note" : "notes"}
+            <span className="small muted" style={{ fontWeight: 400 }}>
+              estimates and unknowns behind these numbers
+            </span>
+          </summary>
+          <ul style={{ margin: 0 }}>
+            {result.issues
+              .filter((i) => i.level !== "blocker")
+              .map((i, n) => (
+                <li key={n} className="small" style={{ marginBottom: 4 }}>
+                  {i.message}
+                </li>
+              ))}
           </ul>
-        </>
+        </details>
       )}
 
       {show("production") && result.sauces.length > 0 && (
         <>
-          <h2>{batchesTitle}</h2>
-          <div className="card scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Sauce</th>
-                  <th className="num">Product needed</th>
-                  <th className="num">Litres per batch</th>
-                  <th className="num">Batches</th>
-                  <th className="num">Expected surplus</th>
-                  <th>Recipe</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.sauces.map((s) => (
-                  <tr key={s.sauceId}>
-                    <td>{s.name}</td>
-                    <td className="num">{q(s.litresNeeded, "L")}</td>
-                    <td className="num">
-                      {s.litresPerBatch ? q(s.litresPerBatch, "L") : "—"}{" "}
-                      <span className={`badge ${s.yieldSource === "observed" ? "ok" : "warn"}`}>{SOURCE[s.yieldSource]}</span>
-                    </td>
-                    <td className="num">{s.batches ?? "unknown"}</td>
-                    <td className="num">{s.surplusLitres ? q(s.surplusLitres, "L") : "unknown"}</td>
-                    <td>{s.recipeVersionNo ? `version ${s.recipeVersionNo}` : "none"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="small muted">
-              Batches and surplus are estimates until real batch results are recorded. The surplus is extra product from
-              making whole batches; you decide which jar sizes to fill with it.
-            </p>
-          </div>
-
           <h2>Jars</h2>
           <div className="card scroll">
             <table>
@@ -93,7 +81,7 @@ export function PlanView({ result, only, batchesTitle = "Batches" }: { result: P
                       {p.packable === null ? (
                         <span className="badge warn">Stock unknown</span>
                       ) : p.packable ? (
-                        <span className="badge ok">All parts in stock</span>
+                        <span className="badge ok">In stock</span>
                       ) : (
                         <span className="badge bad">Parts missing</span>
                       )}
@@ -103,55 +91,104 @@ export function PlanView({ result, only, batchesTitle = "Batches" }: { result: P
               </tbody>
             </table>
           </div>
+          <h2>{batchesTitle}</h2>
+          <div className="card scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sauce</th>
+                  <th className="num">Product needed</th>
+                  <th className="num">Litres per batch</th>
+                  <th className="num">Batches</th>
+                  <th className="num">Expected surplus</th>
+                  <th>Recipe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.sauces.map((s) => (
+                  <tr key={s.sauceId}>
+                    <td>{s.name}</td>
+                    <td className="num">{q(s.litresNeeded, "L")}</td>
+                    <td className="num">
+                      {s.litresPerBatch ? q(s.litresPerBatch, "L") : "—"}{" "}
+                      <span className={`badge ${s.yieldSource === "observed" ? "ok" : "neutral"}`}>{SOURCE[s.yieldSource]}</span>
+                    </td>
+                    <td className="num">{s.batches ?? "unknown"}</td>
+                    <td className="num">{s.surplusLitres ? q(s.surplusLitres, "L") : "unknown"}</td>
+                    <td>{s.recipeVersionNo ? `v${s.recipeVersionNo}` : "none"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="small muted">
+              Batches and surplus are estimates until real batch results are recorded. The surplus is extra product from making whole batches; you decide which
+              jar sizes to fill with it.
+            </p>
+          </div>
         </>
       )}
 
-      {show("requirements") && (["ingredient", "packaging"] as const).map((kind) => {
-        const rows = result.requirements.filter((r) => r.kind === kind);
-        if (rows.length === 0) return null;
-        return (
-          <div key={kind}>
-            <h2>{kind === "ingredient" ? "Ingredients" : "Packaging"}</h2>
-            <div className="card scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th className="num">Required</th>
-                    <th className="num">In stock</th>
-                    <th className="num">Reserved by other runs</th>
-                    <th className="num">On order</th>
-                    <th className="num">To buy</th>
-                    <th></th>
+      {show("requirements") &&
+        (["ingredient", "packaging"] as const).map((kind) => {
+          const rows = result.requirements.filter((r) => r.kind === kind);
+          if (rows.length === 0) return null;
+          const attention = rows.filter((r) => r.status !== "covered");
+          const covered = rows.filter((r) => r.status === "covered");
+          const table = (list: typeof rows) => (
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="num">Needed</th>
+                  <th className="num">In stock</th>
+                  <th className="num">Held by other runs</th>
+                  <th className="num">On order</th>
+                  <th className="num">To buy</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((r) => (
+                  <tr key={r.itemId}>
+                    <td>
+                      {r.name}
+                      {r.contributions.length > 1 && (
+                        <div className="small muted">{r.contributions.map((c) => `${c.from}: ${q(c.quantity, r.unit)}`).join(" · ")}</div>
+                      )}
+                    </td>
+                    <td className="num">{q(r.required, r.unit)}</td>
+                    <td className="num">{r.onHand === null ? <span className="text-warn">not counted</span> : q(r.onHand, r.unit)}</td>
+                    <td className="num">{q(r.reservedEarlier, r.unit)}</td>
+                    <td className="num">{q(r.onOrder, r.unit)}</td>
+                    <td className="num">
+                      <strong>{q(r.toBuy, r.unit)}</strong>
+                    </td>
+                    <td>
+                      <span className={`badge ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.itemId}>
-                      <td>
-                        {r.name}
-                        {r.contributions.length > 1 && (
-                          <div className="small muted">{r.contributions.map((c) => `${c.from}: ${q(c.quantity, r.unit)}`).join(" · ")}</div>
-                        )}
-                      </td>
-                      <td className="num">{q(r.required, r.unit)}</td>
-                      <td className="num">{r.onHand === null ? "not counted" : q(r.onHand, r.unit)}</td>
-                      <td className="num">{q(r.reservedEarlier, r.unit)}</td>
-                      <td className="num">{q(r.onOrder, r.unit)}</td>
-                      <td className="num">
-                        <strong>{q(r.toBuy, r.unit)}</strong>
-                      </td>
-                      <td>
-                        <span className={`badge ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
+                ))}
+              </tbody>
+            </table>
+          );
+          return (
+            <section key={kind}>
+              <h2>{kind === "ingredient" ? "Ingredients" : "Packaging"}</h2>
+              {attention.length > 0 && <div className="card scroll">{table(attention)}</div>}
+              {covered.length > 0 && (
+                <details className="card scroll">
+                  <summary>
+                    {covered.length} {covered.length === 1 ? "item" : "items"} covered
+                    <span className="small muted" style={{ fontWeight: 400 }}>
+                      enough in stock or on order
+                    </span>
+                  </summary>
+                  {table(covered)}
+                </details>
+              )}
+            </section>
+          );
+        })}
     </>
   );
 }

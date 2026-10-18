@@ -11,10 +11,21 @@ import { Flash } from "../../components/flash";
 import { PO_STATUS } from "../../components/labels";
 import { MarkSentForm } from "../../components/order-bits";
 import { cancelOrder, closeOrderAction, updateDraftAction } from "../actions";
+import { PageHeader } from "../../components/ui/header";
+import { fmtDate } from "../../components/ui/format";
+import { documentsFor } from "@/db/documents";
+import { DocList } from "../../components/documents";
+import { DocUpload } from "../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function OrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const [order] = await loadOrders(db(), { ids: [id] });
@@ -31,25 +42,43 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         .where(inArray(t.receiptLines.purchaseOrderLineId, lineIds))
         .orderBy(t.receipts.receivedOn)
     : [];
+  const deliveries = [...new Map(receipts.map(({ r }) => [r.id, r])).values()];
+  const docs = await documentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
+  const invoices = docs.filter((d) => d.kind === "invoice");
   const open = po.status === "sent" || po.status === "partly_received";
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
 
   return (
     <>
-      <p className="small" style={{ margin: "0 0 8px" }}>
-        <Link href="/orders">← Orders</Link>
-      </p>
-      <h1>
-        {po.code} <span className={`badge ${st.cls}`}>{st.label}</span>
-      </h1>
-      <p className="lead">
-        <Link href={`/suppliers/${supplier.id}`}>{supplier.name}</Link> · {run ? <>for run <Link href={`/runs/${run.id}`}>{run.code}</Link></> : "restock (no run)"} · created{" "}
-        {po.createdAt.toISOString().slice(0, 10)}
-        {po.orderedOn && ` · sent ${po.orderedOn}`}
-        {po.expectedOn && ` · expected ${po.expectedOn}`}
-        {po.reference && ` · ref ${po.reference}`}
-      </p>
+      <PageHeader
+        back={{ href: "/orders", label: "Orders" }}
+        title={po.code}
+        status={st}
+        lead={
+          <>
+            <Link href={`/suppliers/${supplier.id}`}>{supplier.name}</Link> ·{" "}
+            {run ? (
+              <>
+                for run <Link href={`/runs/${run.id}`}>{run.code}</Link>
+              </>
+            ) : (
+              "restock (no run)"
+            )}{" "}
+            · created {fmtDate(po.createdAt.toISOString().slice(0, 10))}
+            {po.orderedOn && ` · sent ${fmtDate(po.orderedOn)}`}
+            {po.expectedOn && ` · expected ${fmtDate(po.expectedOn)}`}
+            {po.reference && ` · ref ${po.reference}`}
+          </>
+        }
+        actions={
+          open ? (
+            <Link href={`/deliveries/new?po=${po.id}`} className="btn">
+              Record delivery
+            </Link>
+          ) : undefined
+        }
+      />
       <Flash params={flash} />
 
       {po.status === "draft" && (
@@ -59,11 +88,6 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             Place the order with {supplier.name}, then mark it as sent. Until then it doesn't count as on order.
           </p>
           <MarkSentForm poId={po.id} back={back} expectedOn={po.expectedOn} />
-        </div>
-      )}
-      {open && (
-        <div className="card row" style={{ alignItems: "center" }}>
-          <Link href={`/deliveries/new?po=${po.id}`}>Record delivery →</Link>
         </div>
       )}
 
@@ -94,15 +118,37 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     </td>
                     <td>
                       {l.line.packQty ? (
-                        <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
-                          <input name={`packs_${i}`} type="number" min={0} step={1} defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
+                        <div
+                          className="row"
+                          style={{
+                            gap: 6,
+                            alignItems: "center",
+                            flexWrap: "nowrap",
+                          }}
+                        >
+                          <input
+                            name={`packs_${i}`}
+                            type="number"
+                            min={0}
+                            step={1}
+                            defaultValue={l.line.packs ?? ""}
+                            aria-label="Packs"
+                            style={{ maxWidth: 80 }}
+                          />
                           <span className="small">
                             × {l.line.packQty} {u(l.item.stockUnit)}
                           </span>
                           <input type="hidden" name={`qty_${i}`} value={l.line.quantity} />
                         </div>
                       ) : (
-                        <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                        <div
+                          className="row"
+                          style={{
+                            gap: 6,
+                            alignItems: "center",
+                            flexWrap: "nowrap",
+                          }}
+                        >
                           <input name={`qty_${i}`} type="number" min={0} step="any" defaultValue={l.line.quantity} aria-label="Quantity" />
                           <span className="small">{u(l.item.stockUnit)}</span>
                           <input type="hidden" name={`packs_${i}`} value="" />
@@ -133,9 +179,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <textarea id="note" name="note" rows={2} defaultValue={po.note ?? ""} />
             </div>
           </div>
-          <div className="row">
+          <div className="form-actions">
             <button type="submit">Save draft</button>
-            <button type="submit" formAction={cancelOrder} style={{ background: "var(--muted)" }}>
+            <button type="submit" formAction={cancelOrder} className="danger">
               Cancel order
             </button>
           </div>
@@ -182,7 +228,53 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           </p>
         </div>
       )}
-      {po.note && po.status !== "draft" && <p className="card small" style={{ whiteSpace: "pre-wrap" }}>{po.note}</p>}
+      {po.note && po.status !== "draft" && (
+        <p className="card small" style={{ whiteSpace: "pre-wrap" }}>
+          {po.note}
+        </p>
+      )}
+
+      {(po.status !== "draft" || docs.length > 0) && (
+        <>
+          <h2>Paperwork</h2>
+          <div className="card">
+            <div className="paperwork">
+              <div className="head">
+                <strong>Invoice</strong>
+                <DocUpload kind="invoice" poId={po.id} back={back} label={invoices.length ? "Add another file" : "Add invoice"} />
+              </div>
+              {invoices.length === 0 && <span className="small muted">No invoice yet. One invoice can cover several deliveries.</span>}
+              <DocList docs={invoices} back={back} />
+            </div>
+            {deliveries.map((r) => {
+              const notes = docs.filter((d) => d.receiptId === r.id);
+              return (
+                <div key={r.id} className="paperwork">
+                  <div className="head">
+                    <strong>
+                      Delivery note, {fmtDate(r.receivedOn)}
+                      {r.deliveryRef && (
+                        <span className="muted small" style={{ fontWeight: 400 }}>
+                          {" "}
+                          · no. {r.deliveryRef}
+                        </span>
+                      )}
+                    </strong>
+                    <DocUpload kind="delivery_note" receiptId={r.id} back={back} label={notes.length ? "Add another file" : "Add delivery note"} />
+                  </div>
+                  {notes.length === 0 && <span className="small muted">No photo or PDF of this delivery note yet.</span>}
+                  <DocList docs={notes} back={back} />
+                </div>
+              );
+            })}
+            {deliveries.length === 0 && po.status !== "draft" && (
+              <p className="small muted" style={{ margin: "14px 0 0" }}>
+                Delivery notes are added with each delivery.
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {receipts.length > 0 && (
         <>
@@ -206,7 +298,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                   return (
                     <tr key={rl.id}>
                       <td>
-                        {r.receivedOn}
+                        {fmtDate(r.receivedOn)}
                         {r.receivedTime && ` ${r.receivedTime}`}
                         {r.note && <div className="small muted">{r.note}</div>}
                       </td>
@@ -226,8 +318,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
       {open && (
         <>
-          <h2>Close or cancel</h2>
-          <div className="card">
+          <details className="card" style={{ marginTop: 32 }}>
+            <summary>{po.status === "partly_received" ? "Close this order" : "Cancel this order"}</summary>
             {po.status === "partly_received" ? (
               <form action={closeOrderAction} className="row">
                 <input type="hidden" name="poId" value={po.id} />
@@ -235,7 +327,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                   <label htmlFor="cnote">Why (optional)</label>
                   <input id="cnote" name="note" type="text" placeholder="e.g. refused sack won't be replaced" />
                 </div>
-                <button type="submit" style={{ background: "var(--muted)" }}>
+                <button type="submit" className="secondary">
                   Close order
                 </button>
                 <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
@@ -246,13 +338,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <form action={cancelOrder} className="row">
                 <input type="hidden" name="poId" value={po.id} />
                 <input type="hidden" name="back" value={back} />
-                <button type="submit" style={{ background: "var(--muted)" }}>
+                <button type="submit" className="danger">
                   Cancel order
                 </button>
                 <span className="small muted">Nothing has arrived yet, so the order can be cancelled.</span>
               </form>
             )}
-          </div>
+          </details>
         </>
       )}
     </>

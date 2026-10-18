@@ -40,7 +40,7 @@ const TITLE = { ingredient: "Ingredients", packaging: "Packaging" } as const;
 export function BudgetTable({ data, note }: { data: BudgetTableData; note?: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
-  const parent = { background: "var(--bg)", fontWeight: 600 } as const;
+  const parent = { background: "var(--surface-2)", fontWeight: 600 } as const;
 
   return (
     <div className="card scroll">
@@ -67,10 +67,14 @@ export function BudgetTable({ data, note }: { data: BudgetTableData; note?: stri
                     className="link"
                     onClick={() => toggle(g.kind)}
                     aria-expanded={!!open[g.kind]}
-                    style={{ color: "var(--text)", textDecoration: "none", fontWeight: 600 }}
+                    style={{
+                      color: "var(--text)",
+                      textDecoration: "none",
+                      fontWeight: 600,
+                    }}
                     disabled={g.rows.length === 0}
                   >
-                    {g.rows.length ? (open[g.kind] ? "▾ " : "▸ ") : ""}
+                    {g.rows.length ? <span className={`chev${open[g.kind] ? " open" : ""}`} /> : null}
                     {TITLE[g.kind]} <span className="muted small">({g.rows.length})</span>
                   </button>
                 </td>

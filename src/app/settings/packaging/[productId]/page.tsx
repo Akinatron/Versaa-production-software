@@ -4,8 +4,9 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { Flash } from "../../../components/flash";
-import { DefaultSubmit, SettingsBack, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
+import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
 import { activatePackaging, discardPackaging, savePackaging, startPackaging } from "../../actions";
+import { PageHeader } from "../../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +31,21 @@ export default async function PackagingPage({
   if (!row) notFound();
   const { p: product, f: format } = row;
 
-  const versions = await db().select().from(t.packagingVersions).where(eq(t.packagingVersions.productId, productId)).orderBy(desc(t.packagingVersions.versionNo));
+  const versions = await db()
+    .select()
+    .from(t.packagingVersions)
+    .where(eq(t.packagingVersions.productId, productId))
+    .orderBy(desc(t.packagingVersions.versionNo));
   const ids = versions.map((v) => v.id);
   const [lines, items, used] = await Promise.all([
     ids.length ? db().select().from(t.packagingLines).where(inArray(t.packagingLines.packagingVersionId, ids)) : Promise.resolve([] as Line[]),
     db().select().from(t.items).where(eq(t.items.kind, "packaging")),
     ids.length
       ? db()
-          .select({ v: t.packagingSessionLines.packagingVersionId, n: sql<number>`count(*)::int` })
+          .select({
+            v: t.packagingSessionLines.packagingVersionId,
+            n: sql<number>`count(*)::int`,
+          })
           .from(t.packagingSessionLines)
           .where(inArray(t.packagingSessionLines.packagingVersionId, ids))
           .groupBy(t.packagingSessionLines.packagingVersionId)
@@ -54,11 +62,16 @@ export default async function PackagingPage({
 
   return (
     <>
-      <SettingsBack href="/settings/packaging" label="Packaging per product" />
-      <h1>Packaging: {product.name}</h1>
-      <p className="lead">
-        Items used for each filled jar of {format.name} (fill {format.fillMl} ml). A change is made as a new version: jars already packed keep the list they used.
-      </p>
+      <PageHeader
+        back={{ href: "/settings/packaging", label: "Packaging" }}
+        title={<>Packaging: {product.name}</>}
+        lead={
+          <>
+            Items used for each filled jar of {format.name} (fill {format.fillMl} ml). A change is made as a new version: jars already packed keep the list they
+            used.
+          </>
+        }
+      />
       <Flash params={sp} />
 
       {!draft && (
@@ -79,7 +92,15 @@ export default async function PackagingPage({
             Draft v{draft.versionNo} <span className={`badge ${VERSION_STATUS.draft!.cls}`}>{VERSION_STATUS.draft!.label}</span>
           </h2>
           {sp.confirm === "1" ? (
-            <Confirm draft={draft} draftLines={linesOf(draft.id)} activeLines={active ? linesOf(active.id) : []} activeNo={active?.versionNo} name={name} productId={product.id} back={back} />
+            <Confirm
+              draft={draft}
+              draftLines={linesOf(draft.id)}
+              activeLines={active ? linesOf(active.id) : []}
+              activeNo={active?.versionNo}
+              name={name}
+              productId={product.id}
+              back={back}
+            />
           ) : (
             <>
               <form action={savePackaging} className="card">
@@ -118,11 +139,19 @@ export default async function PackagingPage({
                             </select>
                           </td>
                           <td>
-                            <input name={`perJar_${i}`} type="number" min="1" step="1" inputMode="numeric" defaultValue={l?.perJar ?? ""} aria-label={`Per jar, row ${i + 1}`} />
+                            <input
+                              name={`perJar_${i}`}
+                              type="number"
+                              min="1"
+                              step="1"
+                              inputMode="numeric"
+                              defaultValue={l?.perJar ?? ""}
+                              aria-label={`Per jar, row ${i + 1}`}
+                            />
                           </td>
                           <td>
                             {l && (
-                              <button type="submit" name="intent" value={`remove:${i}`} style={{ background: "var(--muted)", padding: "6px 12px" }}>
+                              <button type="submit" name="intent" value={`remove:${i}`} className="secondary sm">
                                 Remove
                               </button>
                             )}
@@ -133,7 +162,7 @@ export default async function PackagingPage({
                   </table>
                 </div>
                 <div className="row" style={{ marginTop: 8 }}>
-                  <button type="submit" name="intent" value="addrow" style={{ background: "var(--muted)" }}>
+                  <button type="submit" name="intent" value="addrow" className="secondary">
                     + Add row
                   </button>
                   <span className="small muted">Saves the draft and adds an empty row.</span>
@@ -142,18 +171,19 @@ export default async function PackagingPage({
                   <button type="submit" name="intent" value="save">
                     Save draft
                   </button>
-                  <button type="submit" name="intent" value="activate" style={{ background: "var(--ok)" }}>
+                  <button type="submit" name="intent" value="activate">
                     Save and activate…
                   </button>
                 </div>
                 <p className="small muted" style={{ marginBottom: 0 }}>
-                  Saving keeps the draft for later; plans and packaging still use {active ? `v${active.versionNo}` : "no list"}. Activating asks you to confirm first.
+                  Saving keeps the draft for later; plans and packaging still use {active ? `v${active.versionNo}` : "no list"}. Activating asks you to confirm
+                  first.
                 </p>
               </form>
               <form action={discardPackaging} className="row" style={{ alignItems: "center", marginBottom: 16 }}>
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="versionId" value={draft.id} />
-                <button type="submit" style={{ background: "var(--bad)", padding: "6px 12px" }}>
+                <button type="submit" className="danger sm">
                   Discard draft
                 </button>
                 <span className="small muted">Throws this draft away. The active list stays as it is.</span>
@@ -189,7 +219,11 @@ export default async function PackagingPage({
         <p className="card muted">No versions yet.</p>
       ) : (
         <VersionHistory
-          versions={versions.map((v) => ({ ...v, lines: linesOf(v.id).length, used: used.find((u) => u.v === v.id)?.n ?? 0 }))}
+          versions={versions.map((v) => ({
+            ...v,
+            lines: linesOf(v.id).length,
+            used: used.find((u) => u.v === v.id)?.n ?? 0,
+          }))}
           viewHref={(id) => (id === draft?.id ? `${back}#editor` : id === active?.id ? back : `${back}?v=${id}`)}
           usedLabel="Times packed"
           current={viewing?.id}
@@ -279,9 +313,7 @@ function Confirm({
         <form action={activatePackaging}>
           <input type="hidden" name="productId" value={productId} />
           <input type="hidden" name="versionId" value={draft.id} />
-          <button type="submit" style={{ background: "var(--ok)" }}>
-            Activate v{draft.versionNo}
-          </button>
+          <button type="submit">Activate v{draft.versionNo}</button>
         </form>
         <Link href={`${back}#editor`}>Back to editing</Link>
       </div>

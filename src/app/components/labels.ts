@@ -1,15 +1,15 @@
 export const RUN_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "warn" },
-  confirmed: { label: "Confirmed", cls: "ok" },
-  in_progress: { label: "In production", cls: "ok" },
-  closed: { label: "Closed", cls: "" },
+  draft: { label: "Draft", cls: "neutral" },
+  confirmed: { label: "Confirmed", cls: "info" },
+  in_progress: { label: "In production", cls: "info" },
+  closed: { label: "Done", cls: "ok" },
   cancelled: { label: "Cancelled", cls: "" },
 };
 
 export const PO_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "warn" },
-  sent: { label: "Sent", cls: "warn" },
-  partly_received: { label: "Partly received", cls: "warn" },
+  draft: { label: "Draft, not sent", cls: "warn" },
+  sent: { label: "Sent", cls: "info" },
+  partly_received: { label: "Partly received", cls: "info" },
   received: { label: "Received", cls: "ok" },
   closed: { label: "Closed (not all arrived)", cls: "" },
   cancelled: { label: "Cancelled", cls: "" },
@@ -31,16 +31,16 @@ export const MOVEMENT: Record<string, string> = {
 };
 
 export const BATCH_STATUS: Record<string, { label: string; cls: string }> = {
-  planned: { label: "Planned", cls: "warn" },
-  in_production: { label: "In production", cls: "warn" },
-  awaiting_packaging: { label: "Awaiting packaging", cls: "warn" },
-  packing: { label: "Packing", cls: "warn" },
+  planned: { label: "To cook", cls: "neutral" },
+  in_production: { label: "Cooking", cls: "info" },
+  awaiting_packaging: { label: "To pack", cls: "info" },
+  packing: { label: "Packing", cls: "info" },
   closed: { label: "Closed", cls: "ok" },
   cancelled: { label: "Not made", cls: "" },
 };
 
 export const SALES_STATUS: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Pending", cls: "warn" },
+  pending: { label: "To deliver", cls: "info" },
   delivered: { label: "Delivered", cls: "ok" },
   cancelled: { label: "Cancelled", cls: "" },
 };
@@ -66,7 +66,7 @@ export const OUTFLOW_EXPLAIN: Record<OutflowReason, string> = {
 };
 
 /** Badge colour for an outbound reason. */
-export const outflowBadge = (type: string) => (type === "sale" ? "ok" : type === "waste" ? "bad" : "warn");
+export const outflowBadge = (type: string) => (type === "sale" ? "ok" : type === "waste" ? "bad" : "neutral");
 
 export const INCIDENT: Record<string, string> = {
   loss: "Loss",

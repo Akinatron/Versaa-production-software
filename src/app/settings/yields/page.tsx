@@ -6,8 +6,9 @@ import { loadPlanCatalog } from "@/db/planning";
 import { observedRejects, observedYields } from "@/db/history";
 import { formatQty } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
-import { SettingsBack, fmtDate } from "../../components/settings-versions";
+import { fmtDate } from "../../components/settings-versions";
 import { addRejectEstimate, addYieldEstimate } from "../actions";
+import { PageHeader } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,16 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <SettingsBack />
-      <h1>Yields & rejects</h1>
-      <p className="lead">
-        The figures the planner uses to turn jars into batches. As soon as a batch is closed with its packaging recorded, the measured average replaces any
-        estimate automatically. Estimates are only used until then, and are always labelled as estimates.
-      </p>
+      <PageHeader
+        back={{ href: "/settings", label: "Settings" }}
+        title="Yields & rejects"
+        lead={
+          <>
+            The figures the planner uses to turn jars into batches. As soon as a batch is closed with its packaging recorded, the measured average replaces any
+            estimate automatically. Estimates are only used until then, and are always labelled as estimates.
+          </>
+        }
+      />
       <Flash params={sp} />
 
       <h2>Litres per batch</h2>
@@ -56,7 +61,11 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                 )}
               </span>
             </div>
-            {s.yield.note && <p className="small muted" style={{ margin: "4px 0 0" }}>{s.yield.source === "estimate" ? `Estimate note: ${s.yield.note}` : s.yield.note}</p>}
+            {s.yield.note && (
+              <p className="small muted" style={{ margin: "4px 0 0" }}>
+                {s.yield.source === "estimate" ? `Estimate note: ${s.yield.note}` : s.yield.note}
+              </p>
+            )}
             {s.yield.source === "missing" && (
               <p className="small" style={{ margin: "4px 0 0" }}>
                 No batch recorded and no estimate: plans for {s.name} can't calculate batches. Enter an estimate below.
@@ -126,7 +135,11 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                 <div style={{ marginTop: 8 }}>
                   <button type="submit">Save estimate</button>
                 </div>
-                {seen && <p className="small muted">Measured batches exist, so the planner keeps using the measured average; an estimate is kept for reference only.</p>}
+                {seen && (
+                  <p className="small muted">
+                    Measured batches exist, so the planner keeps using the measured average; an estimate is kept for reference only.
+                  </p>
+                )}
               </form>
             </div>
           </div>
@@ -162,11 +175,23 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                     </span>
                   </td>
                   <td className="small">
-                    {seen ? `${seen.rejected} rejected of ${seen.filled} filled (${seen.sessions} session${seen.sessions === 1 ? "" : "s"})` : <span className="muted">none yet</span>}
+                    {seen ? (
+                      `${seen.rejected} rejected of ${seen.filled} filled (${seen.sessions} session${seen.sessions === 1 ? "" : "s"})`
+                    ) : (
+                      <span className="muted">none yet</span>
+                    )}
                   </td>
                   <td className="small">{est ? `${pct(new Decimal(est.rate))} · ${fmtDate(est.createdAt)}` : <span className="muted">—</span>}</td>
                   <td>
-                    <form action={addRejectEstimate} className="row" style={{ alignItems: "center", flexWrap: "nowrap", gap: 6 }}>
+                    <form
+                      action={addRejectEstimate}
+                      className="row"
+                      style={{
+                        alignItems: "center",
+                        flexWrap: "nowrap",
+                        gap: 6,
+                      }}
+                    >
                       <input type="hidden" name="productId" value={p.id} />
                       <input type="hidden" name="back" value="/settings/yields" />
                       <input name="percent" type="number" min="0" max="99" step="0.1" required aria-label={`Reject % for ${p.name}`} />

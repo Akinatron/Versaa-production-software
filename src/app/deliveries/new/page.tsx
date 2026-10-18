@@ -7,6 +7,9 @@ import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
 import { saveDelivery } from "../actions";
+import { PageHeader } from "../../components/ui/header";
+import { GuardedForm } from "../../components/unsaved-guard";
+import { DocFileInput } from "../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -34,22 +37,25 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
         .where(eq(t.purchaseOrderLines.purchaseOrderId, po.id))
     : [];
   const pending = poLines
-    .map((l) => ({ ...l, pending: Decimal.max(0, new Decimal(l.line.quantity).minus(l.received)) }))
+    .map((l) => ({
+      ...l,
+      pending: Decimal.max(0, new Decimal(l.line.quantity).minus(l.received)),
+    }))
     .filter((l) => l.pending.gt(0));
   const blanks = po ? 3 : 8;
 
   return (
     <>
-      <h1>Record a delivery</h1>
-      <p className="lead">
-        Enter what actually arrived, even if it differs from the order. For each item, say how much you accepted and how much you refused (damaged, wrong). Only the accepted
-        quantity goes into stock; refused goods still count as not received on the order.
-      </p>
+      <PageHeader
+        back={{ href: "/deliveries", label: "Deliveries" }}
+        title="Record a delivery"
+        lead="Only the accepted quantity goes into stock."
+      />
       <Flash params={params} />
 
-      <form method="get" className="card row">
+      <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <div style={{ flex: 1 }}>
-          <label htmlFor="po">For an order (optional)</label>
+          <label htmlFor="po">Which order is it for?</label>
           <select id="po" name="po" defaultValue={po?.id ?? ""}>
             <option value="">No order / not listed</option>
             {openOrders.map((o) => (
@@ -59,10 +65,12 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
             ))}
           </select>
         </div>
-        <button type="submit">Load order</button>
+        <button type="submit" className="secondary">
+          {po ? "Change order" : "Load order lines"}
+        </button>
       </form>
 
-      <form action={saveDelivery}>
+      <GuardedForm action={saveDelivery}>
         <input type="hidden" name="key" value={crypto.randomUUID()} />
         <input type="hidden" name="po" value={po?.id ?? ""} />
         <div className="card grid">
@@ -88,6 +96,10 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
           <div>
             <label htmlFor="deliveryRef">Delivery note number (optional)</label>
             <input id="deliveryRef" name="deliveryRef" type="text" />
+          </div>
+          <div>
+            <label htmlFor="docs">Delivery note, photo or PDF (optional)</label>
+            <DocFileInput id="docs" name="docs" />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <label htmlFor="note">Note about the delivery (optional)</label>
@@ -162,10 +174,15 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
               })}
             </tbody>
           </table>
-          <p className="small muted">Rows left empty are ignored. Set accepted to 0 for an ordered item that didn't arrive; it stays pending on the order. If something won't come at all, close the order from its page.</p>
+          <p className="small muted">
+            Rows left empty are ignored. Set accepted to 0 for an ordered item that didn't arrive; it stays pending on the order. If something won't come at
+            all, close the order from its page.
+          </p>
         </div>
-        <button type="submit">Save delivery</button>
-      </form>
+        <div className="savebar">
+          <button type="submit">Save delivery</button>
+        </div>
+      </GuardedForm>
     </>
   );
 }

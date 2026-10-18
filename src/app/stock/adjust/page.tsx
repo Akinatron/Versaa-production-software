@@ -7,6 +7,9 @@ import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { LotOrigin, lotQty } from "../../components/trace-format";
 import { saveStockCount, saveWriteOff } from "../actions";
+import { PageHeader } from "../../components/ui/header";
+import { fmtDate } from "../../components/ui/format";
+import { GuardedForm } from "../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +24,7 @@ type Item = typeof t.items.$inferSelect;
 function AnyItemSelect({ items, value, kinds }: { items: Item[]; value?: string; kinds: readonly string[] }) {
   return (
     <select id="item" name="item" defaultValue={value ?? ""}>
-      <option value="">— choose an item —</option>
+      <option value="">Choose an item…</option>
       {KINDS.filter(([k]) => kinds.includes(k)).map(([k, label]) => (
         <optgroup key={k} label={label}>
           {items
@@ -62,27 +65,23 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
   const item = items.find((i) => i.id === params.item) ?? null;
   const today = new Date().toISOString().slice(0, 10);
   const tab = (m: string, label: string) => (
-    <Link
-      href={`/stock/adjust?mode=${m}${item ? `&item=${item.id}` : ""}`}
-      className={`badge ${m === mode ? "ok" : ""}`}
-      style={{ padding: "6px 14px", border: "1px solid var(--border)", textDecoration: "none", color: m === mode ? undefined : "var(--text)" }}
-    >
+    <Link href={`/stock/adjust?mode=${m}${item ? `&item=${item.id}` : ""}`} aria-current={m === mode ? "page" : undefined}>
       {label}
     </Link>
   );
 
   return (
     <>
-      <h1>Correct stock</h1>
-      <p className="lead">
-        Stock numbers are never overwritten. A correction or write-off is recorded as its own line with your reason, so the history always
-        explains the number.
-      </p>
+      <PageHeader
+        back={item ? { href: `/stock/${item.id}`, label: item.name } : { href: "/stock", label: "Stock" }}
+        title="Correct stock"
+        lead="Each correction is kept in the history with its reason."
+      />
       <Flash params={params} />
-      <div className="card row" style={{ gap: 8 }}>
-        {tab("count", "Stock count correction")}
-        {tab("writeoff", "Write-off (waste, internal use, sample)")}
-      </div>
+      <nav className="tabs" aria-label="Kind of correction">
+        {tab("count", "Count correction")}
+        {tab("writeoff", "Write-off")}
+      </nav>
       {mode === "count" ? <CountForm items={items} item={item} today={today} /> : <WriteOffForm items={items} item={item} today={today} />}
       <p className="small muted">
         For items that have never been counted, use the <Link href="/stock/count">opening count</Link> instead.
@@ -97,23 +96,25 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
   const unitWord = item?.kind === "finished" ? "jars" : UNITS[unit].label;
   return (
     <>
-      <form method="get" className="card row">
+      <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <input type="hidden" name="mode" value="count" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Item you counted</label>
           <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "finished"]} />
         </div>
-        <button type="submit">Show its lots</button>
+        <button type="submit" className="secondary">
+          Show its lots
+        </button>
       </form>
       {item && (
-        <form action={saveStockCount}>
+        <GuardedForm action={saveStockCount}>
           <input type="hidden" name="key" value={crypto.randomUUID()} />
           <input type="hidden" name="itemId" value={item.id} />
           <div className="card scroll">
             <h3 style={{ marginTop: 0 }}>{item.name}</h3>
             <p className="small muted">
-              Enter what you actually counted for each lot, in {unitWord}. Leave a lot blank if you didn&apos;t count it (it stays as it is);
-              enter 0 if it&apos;s gone. The difference with what the system expects is recorded as a correction.
+              Enter what you actually counted for each lot, in {unitWord}. Leave a lot blank if you didn&apos;t count it (it stays as it is); enter 0 if
+              it&apos;s gone. The difference with what the system expects is recorded as a correction.
             </p>
             {lots.length === 0 ? (
               <p className="muted">No lots of this item have stock. If you found some, enter it under “found stock without a lot”.</p>
@@ -135,10 +136,17 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
                       <td className="small">
                         <LotOrigin lot={{ ...lot, supplierName: supplier }} batchCode={batchCode} />
                       </td>
-                      <td>{lot.bestBefore ?? <span className="muted">not recorded</span>}</td>
+                      <td>{lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                       <td className="num">{lotQty(balance, unit, item.kind)}</td>
                       <td>
-                        <input name={`count:${lot.id}`} type="number" min="0" step={unit === "unit" ? 1 : "any"} inputMode="decimal" aria-label={`Counted in ${lot.code}`} />
+                        <input
+                          name={`count:${lot.id}`}
+                          type="number"
+                          min="0"
+                          step={unit === "unit" ? 1 : "any"}
+                          inputMode="decimal"
+                          aria-label={`Counted in ${lot.code}`}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -170,9 +178,11 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
               <input id="reason" name="reason" type="text" required placeholder="e.g. monthly count, breakage found" />
             </div>
           </div>
-          <button type="submit">Save count</button>
-          <p className="small muted">Saving records only the differences. Nothing is deleted: the original numbers and this correction both stay in the history.</p>
-        </form>
+          <div className="savebar">
+            <button type="submit">Save count</button>
+            <span className="small muted">Only the differences are recorded. The original numbers and this correction both stay in the history.</span>
+          </div>
+        </GuardedForm>
       )}
     </>
   );
@@ -184,17 +194,19 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
     <>
       <p className="small muted">
         Take stock out of a specific lot: thrown away, used by the team, or given as a sample. For finished jars, use{" "}
-        <Link href="/outbound/new">Outbound → record a stock exit</Link> instead, so it shows up where the jars went.
+        <Link href="/outbound/new">Outbound: record a stock exit</Link> instead, so it shows up where the jars went.
       </p>
-      <form method="get" className="card row">
+      <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <input type="hidden" name="mode" value="writeoff" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Show lots of (optional)</label>
           <AnyItemSelect items={items} value={item?.kind !== "finished" ? item?.id : undefined} kinds={["ingredient", "packaging"]} />
         </div>
-        <button type="submit">Filter</button>
+        <button type="submit" className="secondary">
+          Filter
+        </button>
       </form>
-      <form action={saveWriteOff}>
+      <GuardedForm action={saveWriteOff}>
         <input type="hidden" name="key" value={crypto.randomUUID()} />
         <input type="hidden" name="itemId" value={item?.id ?? ""} />
         <div className="card grid">
@@ -204,14 +216,15 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
               <p className="muted">No lots with stock{item ? ` for ${item.name}` : ""}.</p>
             ) : (
               <select id="lotId" name="lotId" required defaultValue={lots.length === 1 ? lots[0]!.lot.id : ""}>
-                <option value="">— choose a lot —</option>
+                <option value="">Choose a lot…</option>
                 {[...new Set(lots.map((l) => l.item.id))].map((iid) => {
                   const its = lots.filter((l) => l.item.id === iid);
                   return (
                     <optgroup key={iid} label={its[0]!.item.name}>
                       {its.map(({ lot, item: it, balance }) => (
                         <option key={lot.id} value={lot.id}>
-                          {lot.code} · {lotQty(balance, it.stockUnit, it.kind)} left{lot.bestBefore ? ` · best before ${lot.bestBefore}` : ""}
+                          {lot.code} · {lotQty(balance, it.stockUnit, it.kind)} left
+                          {lot.bestBefore ? ` · best before ${fmtDate(lot.bestBefore, { year: true })}` : ""}
                         </option>
                       ))}
                     </optgroup>
@@ -241,9 +254,11 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
             <input id="reason" name="reason" type="text" required placeholder="e.g. bag torn, mould found" />
           </div>
         </div>
-        <button type="submit">Write off</button>
-        <p className="small muted">You can&apos;t write off more than the lot has left. The write-off is added to the history with your reason.</p>
-      </form>
+        <div className="form-actions">
+          <button type="submit">Write off</button>
+          <span className="small muted">You can&apos;t write off more than the lot has left.</span>
+        </div>
+      </GuardedForm>
     </>
   );
 }

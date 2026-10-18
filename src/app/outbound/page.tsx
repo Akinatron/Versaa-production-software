@@ -5,7 +5,10 @@ import * as t from "@/db/schema";
 import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../components/flash";
 import { OUTFLOW, OUTFLOW_REASONS, outflowBadge } from "../components/labels";
-import { buttonLink, jars, who } from "../components/trace-format";
+import { jars, who } from "../components/trace-format";
+import { PageHeader, Empty } from "../components/ui/header";
+import { fmtDate, relDate } from "../components/ui/format";
+import { ConfirmButton } from "../components/unsaved-guard";
 import { cancelOrder } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -38,169 +41,214 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
         .select({ l: t.salesOrderLines, product: t.products.name })
         .from(t.salesOrderLines)
         .innerJoin(t.products, eq(t.salesOrderLines.productId, t.products.id))
-        .where(inArray(t.salesOrderLines.salesOrderId, pending.map((p) => p.o.id)))
+        .where(
+          inArray(
+            t.salesOrderLines.salesOrderId,
+            pending.map((p) => p.o.id),
+          ),
+        )
     : [];
   const byProduct = new Map(avail.map((a) => [a.productId, a]));
-  // Show products that have stock or are promised; others in a collapsed note.
+  // Show products that have stock or are promised; others in a short note.
   const shown = avail.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
   const empty = avail.filter((a) => !(a.onHand.gt(0) || a.reserved.gt(0)));
+  const show = params.show === "stock" || params.show === "history" ? params.show : reason ? "history" : "orders";
+  const tab = (key: string, label: string, href: string) => (
+    <Link href={href} aria-current={show === key ? "page" : undefined}>
+      {label}
+    </Link>
+  );
 
   return (
     <>
-      <h1>Outbound</h1>
-      <p className="lead">
-        Every jar that leaves stock, for any reason: sales, own use, tests, samples and gifts, waste. A pending sales order only promises jars;
-        stock goes down when you deliver it.
-      </p>
+      <PageHeader
+        title="Outbound"
+        actions={
+          <>
+            <Link href="/outbound/orders/new" className="btn secondary">
+              New sales order
+            </Link>
+            <Link href="/outbound/new" className="btn">
+              Record a stock exit
+            </Link>
+          </>
+        }
+      />
       <Flash params={params} />
-      <div className="card row">
-        <Link href="/outbound/new" style={buttonLink}>
-          Record a stock exit
+
+      <div
+        className="row"
+        style={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 0,
+        }}
+      >
+        <nav className="tabs" aria-label="Show">
+          {tab("orders", `To deliver${pending.length ? ` (${pending.length})` : ""}`, "/outbound")}
+          {tab("stock", "Jars available", "/outbound?show=stock")}
+          {tab("history", "History", "/outbound?show=history")}
+        </nav>
+        <Link href="/outbound/customers" className="small" style={{ marginBottom: 16 }}>
+          Customers
         </Link>
-        <Link href="/outbound/orders/new">New sales order</Link>
-        <Link href="/outbound/customers">Customers</Link>
       </div>
 
-      <h2>Jars available now</h2>
-      <p className="small muted">In stock = jars counted from packaging minus everything already sent out. Promised = held for pending orders. Free = what you can still promise or send.</p>
-      <div className="card scroll">
-        {shown.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No finished jars in stock yet. Jars appear here after packaging is recorded on a batch.</p>
+      {show === "orders" &&
+        (pending.length === 0 ? (
+          <Empty title="Nothing to deliver">
+            <p>Sales orders you take appear here until they are delivered. The jars they need are held for them.</p>
+            <p>
+              <Link href="/outbound/orders/new" className="btn secondary sm">
+                New sales order
+              </Link>
+            </p>
+          </Empty>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th className="num">In stock</th>
-                <th className="num">Promised to orders</th>
-                <th className="num">Free</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((a) => (
-                <tr key={a.productId}>
-                  <td>{a.name}</td>
-                  <td className="num">{jars(a.onHand)}</td>
-                  <td className="num">{jars(a.reserved)}</td>
-                  <td className="num">
-                    <strong>{jars(a.available)}</strong>
-                    {a.reserved.gt(a.onHand) && <div className="badge bad">promised more than in stock</div>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {empty.length > 0 && shown.length > 0 && <p className="small muted">No jars in stock or promised: {empty.map((e) => e.name).join(", ")}.</p>}
-      </div>
-
-      <h2>Pending orders</h2>
-      <div className="card scroll">
-        {pending.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No pending orders.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Customer / destination</th>
-                <th>Ordered</th>
-                <th>Products</th>
-                <th>Stock</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
+            <ul className="worklist">
               {pending.map(({ o, customer }) => {
                 const own = lines.filter((l) => l.l.salesOrderId === o.id);
                 const need = new Map<string, number>();
                 for (const l of own) need.set(l.l.productId, (need.get(l.l.productId) ?? 0) + l.l.jars);
-                // Free for this order = in stock − promised to *other* orders.
+                // Free for this order = in stock minus what is promised to *other* orders.
                 const short = [...need].filter(([pid, n]) => {
                   const a = byProduct.get(pid);
                   const free = a ? a.onHand.minus(a.reserved).plus(n) : 0;
                   return Number(free) < n;
                 });
                 return (
-                  <tr key={o.id}>
-                    <td>
-                      <Link href={`/outbound/orders/${o.id}`}>{o.code}</Link>
-                      {o.reference && <div className="small muted">Ref {o.reference}</div>}
-                    </td>
-                    <td>{who(customer, o.destination)}</td>
-                    <td>{o.orderedOn}</td>
-                    <td>
-                      {own.map((l) => (
-                        <div key={l.l.id}>
-                          {l.product} × {l.l.jars}
-                        </div>
-                      ))}
-                    </td>
-                    <td>{short.length ? <span className="badge bad">not enough in stock</span> : <span className="badge ok">enough in stock</span>}</td>
-                    <td>
-                      <div className="row" style={{ flexWrap: "nowrap" }}>
-                        <Link href={`/outbound/orders/${o.id}#deliver`}>Deliver</Link>
-                        <form action={cancelOrder}>
-                          <input type="hidden" name="orderId" value={o.id} />
-                          <button type="submit" style={{ background: "var(--muted)", padding: "4px 10px" }}>
-                            Cancel
-                          </button>
-                        </form>
+                  <li key={o.id}>
+                    <span className={`dot ${short.length ? "bad" : "ok"}`} aria-hidden />
+                    <div className="what">
+                      <Link href={`/outbound/orders/${o.id}`}>
+                        <strong>{who(customer, o.destination)}</strong>
+                      </Link>
+                      <div className="small muted">{own.map((l) => `${l.product} × ${l.l.jars}`).join(", ")}</div>
+                      <div className="small muted">
+                        {o.code} · ordered {relDate(o.orderedOn)}
+                        {o.reference && ` · ref ${o.reference}`}
+                        {short.length > 0 && <span className="text-bad"> · not enough jars in stock</span>}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                    <div
+                      className="row"
+                      style={{
+                        flexWrap: "nowrap",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <form action={cancelOrder}>
+                        <input type="hidden" name="orderId" value={o.id} />
+                        <ConfirmButton message={`Cancel order ${o.code}? The jars held for it are freed.`} className="ghost sm">
+                          Cancel
+                        </ConfirmButton>
+                      </form>
+                      <Link href={`/outbound/orders/${o.id}#deliver`} className="btn sm">
+                        Deliver
+                      </Link>
+                    </div>
+                  </li>
                 );
               })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <h2>Recent stock exits</h2>
-      <p className="small muted">Every jar that left stock, with its reason. Only “Sale” counts as sales.</p>
-      <div className="row small" style={{ gap: 6, marginBottom: 8 }}>
-        <span className="muted">Show:</span>
-        {[["", "All"], ...OUTFLOW_REASONS.map((r) => [r, OUTFLOW[r]!])].map(([r, label]) => (
-          <Link key={r} href={r ? `/outbound?reason=${r}` : "/outbound"} aria-current={r === reason ? "page" : undefined} style={{ fontWeight: r === reason ? 700 : undefined }}>
-            {label}
-          </Link>
+            </ul>
+          </div>
         ))}
-      </div>
-      <div className="card scroll">
-        {outflows.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>{reason ? `No stock exits for “${OUTFLOW[reason]}” yet.` : "No jars have left stock yet."}</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Reason</th>
-                <th>Date</th>
-                <th>Customer / destination</th>
-                <th className="num">Jars</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {outflows.map(({ o, customer, jars: n }) => (
-                <tr key={o.id}>
-                  <td>{o.code}</td>
-                  <td>
-                    <span className={`badge ${outflowBadge(o.type)}`}>{OUTFLOW[o.type] ?? o.type}</span>
-                    {o.note && <div className="small muted">{o.note}</div>}
-                  </td>
-                  <td>{o.occurredOn}</td>
-                  <td>{who(customer, o.destination)}</td>
-                  <td className="num">{n}</td>
-                  <td>
-                    <Link href={`/trace/outflow/${o.id}`}>Trace</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+
+      {show === "stock" && (
+        <>
+          <div className="card scroll">
+            {shown.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                No finished jars in stock yet. Jars appear here after packaging is recorded on a batch.
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="num">In stock</th>
+                    <th className="num">Promised</th>
+                    <th className="num">Free</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((a) => (
+                    <tr key={a.productId}>
+                      <td>{a.name}</td>
+                      <td className="num">{jars(a.onHand)}</td>
+                      <td className="num">{jars(a.reserved)}</td>
+                      <td className="num">
+                        <strong>{jars(a.available)}</strong>
+                        {a.reserved.gt(a.onHand) && <div className="small text-bad">promised more than in stock</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <p className="small muted">
+            Promised means held for orders to deliver. Free is what you can still promise or send.
+            {empty.length > 0 && shown.length > 0 && <> None in stock: {empty.map((e) => e.name).join(", ")}.</>}
+          </p>
+        </>
+      )}
+
+      {show === "history" && (
+        <>
+          <nav className="tabs" aria-label="Reason">
+            {[["", "All"], ...OUTFLOW_REASONS.map((r) => [r, OUTFLOW[r]!])].map(([r, label]) => (
+              <Link
+                key={r}
+                href={r ? `/outbound?show=history&reason=${r}` : "/outbound?show=history"}
+                aria-current={(r || null) === reason ? "page" : undefined}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="card scroll">
+            {outflows.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                {reason ? `No stock exits for “${OUTFLOW[reason]}” yet.` : "No jars have left stock yet."}
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Customer / destination</th>
+                    <th>Reason</th>
+                    <th className="num">Jars</th>
+                    <th>Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outflows.map(({ o, customer, jars: n }) => (
+                    <tr key={o.id}>
+                      <td>{fmtDate(o.occurredOn)}</td>
+                      <td>
+                        {who(customer, o.destination)}
+                        {o.note && <div className="small muted">{o.note}</div>}
+                      </td>
+                      <td>
+                        <span className={`badge ${outflowBadge(o.type)}`}>{OUTFLOW[o.type] ?? o.type}</span>
+                      </td>
+                      <td className="num">{n}</td>
+                      <td>
+                        <Link href={`/trace/outflow/${o.id}`}>{o.code}</Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <p className="small muted">Only “Sale” counts as sales. Open a code to see which batch and ingredient lots the jars came from.</p>
+        </>
+      )}
     </>
   );
 }

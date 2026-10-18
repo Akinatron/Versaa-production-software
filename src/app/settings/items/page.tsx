@@ -5,15 +5,18 @@ import * as t from "@/db/schema";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { loadOffers } from "@/db/suppliers";
 import { Flash } from "../../components/flash";
-import { SettingsBack } from "../../components/settings-versions";
 import { addItemAction, renameItemAction, setItemActiveAction } from "../actions";
+import { PageHeader } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
 export default async function ItemsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const [items, usedRows] = await Promise.all([
-    db().select().from(t.items).where(inArray(t.items.kind, ["ingredient", "packaging"])),
+    db()
+      .select()
+      .from(t.items)
+      .where(inArray(t.items.kind, ["ingredient", "packaging"])),
     db().execute<{ item_id: string; name: string }>(sql`
       select l.item_id, s.name from recipe_lines l join recipe_versions v on v.id = l.recipe_version_id join sauces s on s.id = v.sauce_id
       where v.status = 'active'
@@ -33,12 +36,16 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <SettingsBack />
-      <h1>Ingredients & packaging items</h1>
-      <p className="lead">
-        Everything you buy and keep in stock. Nothing is deleted: a retired item disappears from lists and new recipes, but its stock and history stay. The stock unit
-        can't be changed after adding, so stock numbers stay comparable.
-      </p>
+      <PageHeader
+        back={{ href: "/settings", label: "Settings" }}
+        title="Ingredients & packaging items"
+        lead={
+          <>
+            Everything you buy and keep in stock. Nothing is deleted: a retired item disappears from lists and new recipes, but its stock and history stay. The
+            stock unit can't be changed after adding, so stock numbers stay comparable.
+          </>
+        }
+      />
       <Flash params={sp} />
 
       <h2>Add an item</h2>
@@ -117,7 +124,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                           <form action={renameItemAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
                             <input type="hidden" name="itemId" value={i.id} />
                             <input name="name" type="text" defaultValue={i.name} required aria-label={`New name for ${i.name}`} style={{ minWidth: 140 }} />
-                            <button type="submit" style={{ padding: "6px 12px", background: "var(--muted)" }}>
+                            <button type="submit" className="secondary sm">
                               Rename
                             </button>
                           </form>
@@ -126,7 +133,14 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                           <form action={setItemActiveAction}>
                             <input type="hidden" name="itemId" value={i.id} />
                             <input type="hidden" name="active" value={i.active ? "0" : "1"} />
-                            <button type="submit" style={{ padding: "6px 12px", background: i.active ? "var(--bad)" : "var(--ok)" }} title={i.active && used.length ? "Remove it from the recipes/lists above first" : undefined}>
+                            <button
+                              type="submit"
+                              style={{
+                                padding: "6px 12px",
+                                background: i.active ? "var(--bad)" : "var(--ok)",
+                              }}
+                              title={i.active && used.length ? "Remove it from the recipes/lists above first" : undefined}
+                            >
                               {i.active ? "Retire" : "Bring back"}
                             </button>
                           </form>

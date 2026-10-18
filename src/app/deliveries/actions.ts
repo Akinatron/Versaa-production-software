@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { recordReceipt } from "@/db/operations";
+import { attachDocuments, checkUploads } from "@/db/documents";
+import { currentUser } from "@/lib/session";
+import { filesFrom } from "../documents/files-from";
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 
@@ -18,7 +21,11 @@ export async function saveDelivery(form: FormData) {
     supplierBatch: r.batch || null,
     bestBefore: r.bb || null,
   }));
-  const r = await attempt(`/deliveries/new${po ? `?po=${po}` : ""}`, () =>
+  const files = await filesFrom(form, "docs");
+  const retry = `/deliveries/new${po ? `?po=${po}` : ""}`;
+  // A bad file is refused before anything is recorded.
+  await attempt(retry, async () => checkUploads(files));
+  const r = await attempt(retry, () =>
     recordReceipt(db(), {
       idempotencyKey: String(form.get("key")),
       supplierId: String(form.get("supplierId") ?? "") || null,
@@ -29,6 +36,10 @@ export async function saveDelivery(form: FormData) {
       lines,
     }),
   );
+  if (files.length > 0 && !r.alreadyRecorded) {
+    const me = await currentUser();
+    await attachDocuments(db(), { kind: "delivery_note", receiptId: r.receipt.id, files, userId: me?.id });
+  }
   revalidatePath("/deliveries");
   revalidatePath("/stock");
   revalidatePath("/orders", "layout");

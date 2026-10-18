@@ -4,6 +4,8 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import type { PlanResult } from "@/domain/planner";
 import { OUTFLOW } from "../components/labels";
+import { PageHeader } from "../components/ui/header";
+import { fmtDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const d = db();
 
   const [sales, other, batches, bySize, runs] = await Promise.all([
-    d.execute<{ sauce: string; size: string; jars: number; priced: number; unpriced: number; revenue: string | null }>(sql`
+    d.execute<{
+      sauce: string;
+      size: string;
+      jars: number;
+      priced: number;
+      unpriced: number;
+      revenue: string | null;
+    }>(sql`
       select s.name as sauce, f.name as size, sum(ol.jars)::int as jars,
         sum(case when ol.unit_price is not null then ol.jars else 0 end)::int as priced,
         sum(case when ol.unit_price is null then ol.jars else 0 end)::int as unpriced,
@@ -38,7 +47,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where o.type = 'sale' and o.occurred_on between ${from} and ${to}
       group by s.name, f.name, f.capacity_ml
       order by s.name, f.capacity_ml desc`),
-    d.execute<{ type: string; product: string; jars: number; times: number }>(sql`
+    d.execute<{
+      type: string;
+      product: string;
+      jars: number;
+      times: number;
+    }>(sql`
       select o.type::text as type, p.name as product, sum(ol.jars)::int as jars, count(distinct o.id)::int as times
       from outflow_lines ol
       join outflows o on o.id = ol.outflow_id
@@ -46,7 +60,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where o.type <> 'sale' and o.occurred_on between ${from} and ${to}
       group by o.type, p.name
       order by o.type, p.name`),
-    d.execute<{ id: string; code: string; sauce: string; closed_on: string; litres: string | null; version_no: number; filled: number; rejected: number; accepted: number }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      sauce: string;
+      closed_on: string;
+      litres: string | null;
+      version_no: number;
+      filled: number;
+      rejected: number;
+      accepted: number;
+    }>(sql`
       select b.id, b.code, s.name as sauce, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, (sum(l.filled * l.fill_ml) / 1000.0)::text as litres, v.version_no,
         coalesce(sum(l.filled), 0)::int as filled, coalesce(sum(l.rejected), 0)::int as rejected, coalesce(sum(l.accepted), 0)::int as accepted
       from production_batches b
@@ -57,7 +81,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
       group by b.id, s.name, v.version_no
       order by b.closed_at`),
-    d.execute<{ size: string; filled: number; rejected: number; accepted: number }>(sql`
+    d.execute<{
+      size: string;
+      filled: number;
+      rejected: number;
+      accepted: number;
+    }>(sql`
       select f.name as size, sum(l.filled)::int as filled, sum(l.rejected)::int as rejected, sum(l.accepted)::int as accepted
       from production_batches b
       join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
@@ -67,7 +96,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
       group by f.name, f.capacity_ml
       order by f.capacity_ml desc`),
-    d.execute<{ id: string; code: string; planned_for: string; closed_on: string; data: PlanResult | null }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      planned_for: string;
+      closed_on: string;
+      data: PlanResult | null;
+    }>(sql`
       select r.id, r.code, r.planned_for::text, to_char(max(b.closed_at), 'YYYY-MM-DD') as closed_on, fs.data
       from production_runs r
       join production_batches b on b.run_id = r.id
@@ -81,11 +116,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const runIds = [...runs].map((r) => r.id);
   const [actualBatches, actualJars] = runIds.length
     ? await Promise.all([
-        d.execute<{ run_id: string; sauce_id: string; made: number; not_made: number }>(sql`
+        d.execute<{
+          run_id: string;
+          sauce_id: string;
+          made: number;
+          not_made: number;
+        }>(sql`
           select run_id, sauce_id, count(*) filter (where status = 'closed')::int as made, count(*) filter (where status = 'cancelled')::int as not_made
           from production_batches where run_id::text = any(string_to_array(${runIds.join(",")}, ','))
           group by run_id, sauce_id`),
-        d.execute<{ run_id: string; product_id: string; filled: number; accepted: number }>(sql`
+        d.execute<{
+          run_id: string;
+          product_id: string;
+          filled: number;
+          accepted: number;
+        }>(sql`
           select b.run_id, l.product_id, sum(l.filled)::int as filled, sum(l.accepted)::int as accepted
           from production_batches b
           join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
@@ -100,17 +145,28 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const totalUnpriced = saleRows.reduce((a, r) => a + r.unpriced, 0);
   const totalRevenue = saleRows.reduce((a, r) => a.plus(r.revenue ?? 0), new Decimal(0));
   const sizeRows = [...bySize];
-  const tot = sizeRows.reduce((a, r) => ({ filled: a.filled + r.filled, rejected: a.rejected + r.rejected, accepted: a.accepted + r.accepted }), { filled: 0, rejected: 0, accepted: 0 });
+  const tot = sizeRows.reduce(
+    (a, r) => ({
+      filled: a.filled + r.filled,
+      rejected: a.rejected + r.rejected,
+      accepted: a.accepted + r.accepted,
+    }),
+    { filled: 0, rejected: 0, accepted: 0 },
+  );
   const period = `from=${from}&to=${to}`;
 
   return (
     <>
-      <h1>Reports</h1>
-      <p className="lead">
-        What was sold, given away and produced in a period, and how production compared with the plan. Everything comes from what was recorded.
-      </p>
+      <PageHeader
+        title="Reports"
+        actions={
+          <a href="#downloads" className="btn secondary">
+            Download CSV
+          </a>
+        }
+      />
 
-      <form method="get" className="card row">
+      <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <div>
           <label htmlFor="from">From</label>
           <input id="from" name="from" type="date" defaultValue={from} required />
@@ -119,16 +175,42 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <label htmlFor="to">To (inclusive)</label>
           <input id="to" name="to" type="date" defaultValue={to} required />
         </div>
-        <button type="submit">Show</button>
-        <Link href="/reports" className="small">
+        <button type="submit" className="secondary">
+          Show period
+        </button>
+        <Link href="/reports" className="small" style={{ alignSelf: "center" }}>
           This month
         </Link>
       </form>
 
+      <div className="stats">
+        <div>
+          <div className="v">{totalJars}</div>
+          <div className="l">jars sold</div>
+        </div>
+        <div>
+          <div className="v">{money(totalRevenue)}</div>
+          <div className="l">
+            revenue recorded
+            {totalUnpriced > 0 ? ` (${totalUnpriced} jars without price)` : ""}
+          </div>
+        </div>
+        <div>
+          <div className="v">{[...batches].length}</div>
+          <div className="l">batches closed</div>
+        </div>
+        <div>
+          <div className="v">{tot.accepted}</div>
+          <div className="l">jars packed</div>
+        </div>
+      </div>
+
       <h2>Sales</h2>
       <div className="card scroll">
         {saleRows.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No sales delivered between {from} and {to}.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            No sales delivered between {fmtDate(from)} and {fmtDate(to)}.
+          </p>
         ) : (
           <>
             <table>
@@ -178,7 +260,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <h2>Other stock exits (not sales)</h2>
       <div className="card scroll">
         {[...other].length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No own use, tests, samples or waste in this period.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            No own use, tests, samples or waste in this period.
+          </p>
         ) : (
           <table>
             <thead>
@@ -201,13 +285,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         )}
-        <p className="small muted" style={{ marginBottom: 0 }}>These jars left stock but are not sales.</p>
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          These jars left stock but are not sales.
+        </p>
       </div>
 
       <h2>Production</h2>
       <div className="card scroll">
         {[...batches].length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No batches closed in this period.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            No batches closed in this period.
+          </p>
         ) : (
           <>
             <table>
@@ -231,7 +319,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td>{b.sauce}</td>
                     <td>v{b.version_no}</td>
-                    <td>{b.closed_on}</td>
+                    <td>{fmtDate(b.closed_on)}</td>
                     <td className="num">{b.litres ? `${new Decimal(b.litres).toDecimalPlaces(3).toString()} L` : "—"}</td>
                     <td className="num">{b.filled}</td>
                     <td className="num">{b.rejected}</td>
@@ -299,7 +387,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 <Link href={`/runs/${r.id}`}>{r.code}</Link>
               </strong>{" "}
               <span className="small muted">
-                planned for {r.planned_for} · closed {r.closed_on}
+                planned for {fmtDate(r.planned_for)} · closed {fmtDate(r.closed_on)}
               </span>
               {!plan ? (
                 <p className="small">No forecast was saved for this run.</p>
@@ -378,15 +466,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         })
       )}
 
-      <h2>Stock now</h2>
-      <p className="card">
-        Current stock per item and lot, with what is reserved: <Link href="/stock">open Stock →</Link>
-      </p>
-
-      <h2>Downloads (CSV)</h2>
+      <h2 id="downloads">Downloads (CSV)</h2>
       <div className="card">
         <p className="small muted" style={{ marginTop: 0 }}>
-          Spreadsheet files (open with Excel, Numbers or Google Sheets). "Everything" includes all history; "this period" only {from} to {to}.
+          Spreadsheet files (open with Excel, Numbers or Google Sheets). "Everything" includes all history; "this period" only {fmtDate(from)} to {fmtDate(to)}.
         </p>
         <table>
           <tbody>

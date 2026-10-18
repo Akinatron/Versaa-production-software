@@ -5,10 +5,17 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { findByCode, searchLots } from "@/db/trace";
 import { LotOrigin, batchCodes, lotQty } from "../components/trace-format";
+import { PageHeader } from "../components/ui/header";
+import { fmtDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
-const KIND: Record<string, string> = { ingredient: "Ingredient", packaging: "Packaging", finished: "Finished jars", bulk: "Bulk sauce" };
+const KIND: Record<string, string> = {
+  ingredient: "Ingredient",
+  packaging: "Packaging",
+  finished: "Finished jars",
+  bulk: "Bulk sauce",
+};
 
 export default async function TracePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
@@ -18,7 +25,10 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
     if (hit?.kind === "lot") redirect(`/trace/lot/${hit.id}`);
     if (hit?.kind === "batch") redirect(`/batches/${hit.id}`);
     if (hit?.kind === "outflow") redirect(`/trace/outflow/${hit.id}`);
-    const [so] = await db().select({ id: t.salesOrders.id }).from(t.salesOrders).where(sql`upper(${t.salesOrders.code}) = upper(${q})`);
+    const [so] = await db()
+      .select({ id: t.salesOrders.id })
+      .from(t.salesOrders)
+      .where(sql`upper(${t.salesOrders.code}) = upper(${q})`);
     if (so) redirect(`/outbound/orders/${so.id}`);
   }
   const lots = q ? await searchLots(db(), q) : [];
@@ -26,21 +36,18 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <h1>Trace</h1>
-      <p className="lead">
-        Forward: start from an ingredient or packaging lot to see which batches used it and where those jars went (for a recall). Backward:
-        start from jars or a delivery to a customer to see which batch they came from and which ingredient lots and suppliers went into it.
-      </p>
-      <form method="get" className="card row">
+      <PageHeader
+        title="Trace"
+      />
+      <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="q">Code or search text</label>
-          <input id="q" name="q" type="search" defaultValue={q} placeholder="e.g. RCV-20261010-001, KIP-20261012-01, OUT-20261017-001, ON-42, onions" autoFocus />
-          <div className="small muted">
-            An exact code (lot, batch, delivery out, sales order) opens it directly. Anything else searches lots by code, supplier batch, delivery
-            note number or item name.
-          </div>
+          <input id="q" name="q" type="search" defaultValue={q} placeholder="A lot, batch or order code, a supplier batch number, or an item name" autoFocus />
         </div>
         <button type="submit">Search</button>
+        <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
+          An exact code opens it directly, for example RCV-20261010-001 or OUT-20261017-001.
+        </p>
       </form>
 
       {q && (
@@ -48,7 +55,9 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
           <h2>Lots matching “{q}”</h2>
           <div className="card scroll">
             {lots.length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>Nothing found. Check the code, or try part of it (e.g. the supplier batch number).</p>
+              <p className="muted" style={{ margin: 0 }}>
+                Nothing found. Check the code, or try part of it (e.g. the supplier batch number).
+              </p>
             ) : (
               <table>
                 <thead>
@@ -74,8 +83,8 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
                       <td className="small">
                         <LotOrigin lot={l} batchCode={l.batchId ? codes.get(l.batchId) : null} />
                       </td>
-                      <td>{l.receivedOn ?? "—"}</td>
-                      <td>{l.bestBefore ?? <span className="muted">not recorded</span>}</td>
+                      <td>{l.receivedOn ? fmtDate(l.receivedOn, { year: true }) : "—"}</td>
+                      <td>{l.bestBefore ? fmtDate(l.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                       <td className="num">{lotQty(l.balance, l.unit, l.itemKind)}</td>
                     </tr>
                   ))}

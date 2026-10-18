@@ -14,7 +14,13 @@ import { createPlannedOrders } from "../../../orders/actions";
 export const dynamic = "force-dynamic";
 
 /** Step 3: plan the order. Only what's missing, split by supplier. */
-export default async function RunOrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function RunOrderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const run = await loadRun(id);
@@ -54,26 +60,28 @@ export default async function RunOrderPage({ params, searchParams }: { params: P
         <p className="card muted">This run is {run.status}; nothing more to order.</p>
       ) : lines.length === 0 ? (
         <p className="card">
-          Nothing left to order for this run{orders.some((o) => o.po.status === "draft") ? ": what's missing is already in draft orders below. Mark them as sent once placed." : "."}
+          Nothing left to order for this run
+          {orders.some((o) => o.po.status === "draft") ? ": what's missing is already in draft orders below. Mark them as sent once placed." : "."}
         </p>
       ) : (
         <>
           <p className="small muted">
-            Only what's missing after stock, other runs' reservations and orders already sent{orders.some((o) => o.po.status === "draft") ? " and this run's drafts" : ""}. The favourite supplier is preselected; change it per item if needed. Prices
-            and pack sizes come from each <Link href="/suppliers">supplier</Link>.
+            Only what's missing after stock, other runs' reservations and orders already sent
+            {orders.some((o) => o.po.status === "draft") ? " and this run's drafts" : ""}. The favourite supplier is preselected; change it per item if needed.
+            Prices and pack sizes come from each <Link href="/suppliers">supplier</Link>.
           </p>
           <OrderPlanner lines={lines} suppliers={suppliers} runId={id} idempotencyKey={crypto.randomUUID()} action={createPlannedOrders} />
         </>
       )}
       {unknown.length > 0 && (
         <p className="small muted">
-          Not listed because their stock or need is unknown: {unknown.map((r) => r.name).join(", ")}. <Link href="/stock/count">Count them</Link> first, or order them by hand from{" "}
-          <Link href={`/orders/new?run=${id}`}>a new order</Link>.
+          Not listed because their stock or need is unknown: {unknown.map((r) => r.name).join(", ")}. <Link href="/stock/count">Count them</Link> first, or
+          order them by hand from <Link href={`/orders/new?run=${id}`}>a new order</Link>.
         </p>
       )}
       <h2>Orders for this run</h2>
       <RunOrdersTable orders={orders} back={`/runs/${id}/order`} />
-      {orders.some((o) => o.po.status === "sent" || o.po.status === "partly_received") && <NextStep href={`/runs/${id}/receive`}>Next: receive deliveries</NextStep>}
+      {orders.some((o) => o.po.status === "sent" || o.po.status === "partly_received") && <NextStep href={`/runs/${id}/receive`}>Receive deliveries</NextStep>}
     </>
   );
 }

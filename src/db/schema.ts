@@ -558,3 +558,34 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: createdAt(),
 });
+
+// ---------- Paperwork ----------
+
+/** "delivery_note": the albarán that came with a delivery. "invoice": the supplier's invoice for an order (may cover several deliveries). */
+export const documentKind = pgEnum("document_kind", ["delivery_note", "invoice"]);
+
+/**
+ * A photo or PDF kept with a delivery or an order. The file itself sits in
+ * file storage under `storageKey`; this row says what it is and where it
+ * belongs. Removing one only marks it removed, so the record stays.
+ */
+export const documents = pgTable(
+  "documents",
+  {
+    id: id(),
+    kind: documentKind("kind").notNull(),
+    receiptId: uuid("receipt_id").references(() => receipts.id),
+    purchaseOrderId: uuid("purchase_order_id").references(() => purchaseOrders.id),
+    /** Copied from the delivery or order at upload, so the supplier card can list its paperwork. */
+    supplierId: uuid("supplier_id").references(() => suppliers.id),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    uploadedBy: uuid("uploaded_by").references(() => users.id),
+    createdAt: createdAt(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id),
+  },
+  (t) => [index("documents_receipt").on(t.receiptId), index("documents_po").on(t.purchaseOrderId), index("documents_supplier").on(t.supplierId)],
+);
