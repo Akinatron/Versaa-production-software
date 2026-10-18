@@ -499,6 +499,8 @@ export const salesOrders = pgTable("sales_orders", {
   destination: text("destination"),
   reference: text("reference"),
   orderedOn: date("ordered_on").notNull(),
+  /** When the customer wants it. Optional; used to plan production from orders. */
+  deliverBy: date("deliver_by"),
   status: salesStatus("status").notNull().default("pending"),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   createdAt: createdAt(),

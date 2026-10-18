@@ -23,7 +23,7 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
       .from(t.salesOrders)
       .leftJoin(t.customers, eq(t.salesOrders.customerId, t.customers.id))
       .where(eq(t.salesOrders.status, "pending"))
-      .orderBy(t.salesOrders.orderedOn, t.salesOrders.createdAt),
+      .orderBy(sql`${t.salesOrders.deliverBy} asc nulls last`, t.salesOrders.orderedOn, t.salesOrders.createdAt),
     db()
       .select({
         o: t.outflows,
@@ -105,55 +105,61 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
             </p>
           </Empty>
         ) : (
-          <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            <ul className="worklist">
-              {pending.map(({ o, customer }) => {
-                const own = lines.filter((l) => l.l.salesOrderId === o.id);
-                const need = new Map<string, number>();
-                for (const l of own) need.set(l.l.productId, (need.get(l.l.productId) ?? 0) + l.l.jars);
-                // Free for this order = in stock minus what is promised to *other* orders.
-                const short = [...need].filter(([pid, n]) => {
-                  const a = byProduct.get(pid);
-                  const free = a ? a.onHand.minus(a.reserved).plus(n) : 0;
-                  return Number(free) < n;
-                });
-                return (
-                  <li key={o.id}>
-                    <span className={`dot ${short.length ? "bad" : "ok"}`} aria-hidden />
-                    <div className="what">
-                      <Link href={`/outbound/orders/${o.id}`}>
-                        <strong>{who(customer, o.destination)}</strong>
-                      </Link>
-                      <div className="small muted">{own.map((l) => `${l.product} × ${l.l.jars}`).join(", ")}</div>
-                      <div className="small muted">
-                        {o.code} · ordered {relDate(o.orderedOn)}
-                        {o.reference && ` · ref ${o.reference}`}
-                        {short.length > 0 && <span className="text-bad"> · not enough jars in stock</span>}
+          <>
+            <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
+              <ul className="worklist">
+                {pending.map(({ o, customer }) => {
+                  const own = lines.filter((l) => l.l.salesOrderId === o.id);
+                  const need = new Map<string, number>();
+                  for (const l of own) need.set(l.l.productId, (need.get(l.l.productId) ?? 0) + l.l.jars);
+                  // Free for this order = in stock minus what is promised to *other* orders.
+                  const short = [...need].filter(([pid, n]) => {
+                    const a = byProduct.get(pid);
+                    const free = a ? a.onHand.minus(a.reserved).plus(n) : 0;
+                    return Number(free) < n;
+                  });
+                  return (
+                    <li key={o.id}>
+                      <span className={`dot ${short.length ? "bad" : "ok"}`} aria-hidden />
+                      <div className="what">
+                        <Link href={`/outbound/orders/${o.id}`}>
+                          <strong>{who(customer, o.destination)}</strong>
+                        </Link>
+                        <div className="small muted">{own.map((l) => `${l.product} × ${l.l.jars}`).join(", ")}</div>
+                        <div className="small muted">
+                          {o.code} · ordered {relDate(o.orderedOn)}
+                          {o.deliverBy && ` · deliver by ${fmtDate(o.deliverBy)}`}
+                          {o.reference && ` · ref ${o.reference}`}
+                          {short.length > 0 && <span className="text-bad"> · not enough jars in stock</span>}
+                        </div>
                       </div>
-                    </div>
-                    <div
-                      className="row"
-                      style={{
-                        flexWrap: "nowrap",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <form action={cancelOrder}>
-                        <input type="hidden" name="orderId" value={o.id} />
-                        <ConfirmButton message={`Cancel order ${o.code}? The jars held for it are freed.`} className="ghost sm">
-                          Cancel
-                        </ConfirmButton>
-                      </form>
-                      <Link href={`/outbound/orders/${o.id}#deliver`} className="btn sm">
-                        Deliver
-                      </Link>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+                      <div
+                        className="row"
+                        style={{
+                          flexWrap: "nowrap",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <form action={cancelOrder}>
+                          <input type="hidden" name="orderId" value={o.id} />
+                          <ConfirmButton message={`Cancel order ${o.code}? The jars held for it are freed.`} className="ghost sm">
+                            Cancel
+                          </ConfirmButton>
+                        </form>
+                        <Link href={`/outbound/orders/${o.id}#deliver`} className="btn sm">
+                          Deliver
+                        </Link>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <p className="small">
+              <Link href="/plan?mode=orders">Plan production for these orders</Link>
+            </p>
+          </>
         ))}
 
       {show === "stock" && (

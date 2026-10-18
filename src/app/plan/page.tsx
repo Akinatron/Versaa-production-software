@@ -1,11 +1,14 @@
 import { db } from "@/db/client";
+import * as t from "@/db/schema";
 import { loadPlanInput } from "@/db/planning";
 import { planProduction, targetsFromBatches, type Source } from "@/domain/planner";
 import Link from "next/link";
 import { Flash } from "../components/flash";
 import { PlanView, orderLinkFor } from "../components/plan-view";
 import { saveRun } from "./actions";
-import { PageHeader } from "../components/ui/header";
+import { PageHeader, Empty } from "../components/ui/header";
+import { fmtDate } from "../components/ui/format";
+import { loadOrderDemand } from "@/db/demand";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
   const params = await searchParams;
   const base = await loadPlanInput(db(), {});
   if (params.mode === "batches") return <BatchMode params={params} base={base} />;
+  if (params.mode === "orders") return <OrdersMode params={params} base={base} />;
 
   const targets: Record<string, number> = {};
   for (const p of base.products) {
@@ -76,7 +80,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
 
 type Base = Awaited<ReturnType<typeof loadPlanInput>>;
 
-function ModeTabs({ mode }: { mode: "jars" | "batches" }) {
+function ModeTabs({ mode }: { mode: "jars" | "batches" | "orders" }) {
   return (
     <nav className="tabs" aria-label="Plan by">
       <Link href="/plan" aria-current={mode === "jars" ? "page" : undefined}>
@@ -84,6 +88,9 @@ function ModeTabs({ mode }: { mode: "jars" | "batches" }) {
       </Link>
       <Link href="/plan?mode=batches" aria-current={mode === "batches" ? "page" : undefined}>
         By batches
+      </Link>
+      <Link href="/plan?mode=orders" aria-current={mode === "orders" ? "page" : undefined}>
+        From sales orders
       </Link>
     </nav>
   );
@@ -289,6 +296,148 @@ function BatchMode({ params, base }: { params: Record<string, string | undefined
       {result && (
         <>
           <SaveRun result={result} targets={targets} back={`/plan?${query}`} orderLink={orderLink} />
+          <PlanView result={result} />
+        </>
+      )}
+    </>
+  );
+}
+
+/** Third way to plan: targets proposed from pending sales orders, minus stock and runs already under way. */
+async function OrdersMode({ params, base }: { params: Record<string, string | undefined>; base: Base }) {
+  const until = /^\d{4}-\d{2}-\d{2}$/.test(params.until ?? "") ? params.until! : null;
+  const demand = await loadOrderDemand(db(), until);
+  const product = new Map(base.catalog.products.map((p) => [p.id, p]));
+  // Only active products can be planned; anything else is listed as a warning.
+  const targets = Object.fromEntries(Object.entries(demand.targets).filter(([id]) => product.has(id)));
+  const notPlannable = demand.lines.filter((l) => l.toMake > 0 && !product.has(l.productId));
+  const hasTargets = Object.keys(targets).length > 0;
+  const result = hasTargets ? planProduction({ ...base, targets }) : null;
+  const orderLink = result ? orderLinkFor(result) : null;
+  const order = base.catalog.products.map((p) => p.id);
+  const lines = [...demand.lines].sort((a, b) => order.indexOf(a.productId) - order.indexOf(b.productId));
+  const back = `/plan?mode=orders${until ? `&until=${until}` : ""}`;
+  const names = new Map((await db().select({ id: t.products.id, name: t.products.name }).from(t.products)).map((p) => [p.id, p.name]));
+
+  return (
+    <>
+      <PageHeader title="Plan production" lead="What pending sales orders still need, minus jars in stock and jars confirmed runs will pack." />
+      <Flash params={params} />
+      <ModeTabs mode="orders" />
+
+      <form className="card row" method="get" style={{ alignItems: "flex-end" }}>
+        <input type="hidden" name="mode" value="orders" />
+        <div>
+          <label htmlFor="until">Orders to deliver by</label>
+          <input id="until" name="until" type="date" defaultValue={until ?? ""} />
+        </div>
+        <button type="submit" className="secondary">
+          Update
+        </button>
+        {until && (
+          <Link href="/plan?mode=orders" className="small">
+            All pending orders
+          </Link>
+        )}
+        <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
+          {until ? `Orders due by ${fmtDate(until)}, plus orders with no delivery date.` : "Every pending order."}
+        </p>
+      </form>
+
+      {demand.pendingOrders === 0 ? (
+        <Empty title="No pending sales orders">
+          <p>Orders you take in Outbound appear here until they are delivered, and the jars they still need become a proposed run.</p>
+          <p>
+            <Link href="/outbound/orders/new" className="btn secondary sm">
+              New sales order
+            </Link>
+          </p>
+        </Empty>
+      ) : (
+        <>
+          <div className="stats">
+            <span>
+              <span className="v">{demand.ordersCounted}</span>
+              <span className="l">{demand.ordersCounted === 1 ? "order counted" : "orders counted"}</span>
+            </span>
+            {demand.ordersLater > 0 && (
+              <span>
+                <span className="v">{demand.ordersLater}</span>
+                <span className="l">due later</span>
+              </span>
+            )}
+            <span>
+              <span className="v">{Object.values(targets).reduce((a, n) => a + n, 0)}</span>
+              <span className="l">jars to make</span>
+            </span>
+          </div>
+          <div className="card scroll">
+            {lines.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                No orders are due by this date.
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="num">Ordered</th>
+                    <th className="num">In stock</th>
+                    <th className="num">Coming from runs</th>
+                    <th className="num">To make</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.productId}>
+                      <td>{product.get(l.productId)?.name ?? names.get(l.productId) ?? "Unknown product"}</td>
+                      <td className="num">{l.ordered}</td>
+                      <td className="num">{l.inStock}</td>
+                      <td className="num">{l.inRuns}</td>
+                      <td className="num">{l.toMake > 0 ? <strong>{l.toMake}</strong> : <span className="text-ok">0</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="small muted" style={{ marginBottom: 0 }}>
+              {demand.draftRuns > 0 && `${demand.draftRuns} draft ${demand.draftRuns === 1 ? "run is" : "runs are"} not counted until confirmed.`}
+              {hasTargets && (
+                <>
+                  {" "}
+                  <Link
+                    href={`/plan?${Object.entries(targets)
+                      .map(([id, n]) => `${id}=${n}`)
+                      .join("&")}`}
+                  >
+                    Adjust these numbers
+                  </Link>
+                </>
+              )}
+            </p>
+          </div>
+
+          {notPlannable.length > 0 && (
+            <ul className="issues">
+              {notPlannable.map((l) => (
+                <li key={l.productId} className="warn">
+                  {names.get(l.productId) ?? "A product"} is no longer active, so its {l.toMake} jars can&apos;t be planned here.
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {lines.length > 0 && !hasTargets && notPlannable.length === 0 && (
+            <ul className="issues">
+              <li className="ok">Stock and confirmed runs already cover these orders. Nothing to make.</li>
+            </ul>
+          )}
+        </>
+      )}
+
+      {result && (
+        <>
+          <SaveRun result={result} targets={targets} back={back} orderLink={orderLink} />
           <PlanView result={result} />
         </>
       )}
