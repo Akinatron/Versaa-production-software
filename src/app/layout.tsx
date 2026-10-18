@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { currentUser } from "@/lib/session";
 import { logout } from "./login/actions";
 import { Sidebar, type NavCounts } from "./components/ui/sidebar";
+import { Motion } from "./components/motion";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -65,6 +67,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
           <div className="content">
             <main>{children}</main>
+            <Suspense fallback={null}>
+              <Motion />
+            </Suspense>
           </div>
         </div>
       </body>

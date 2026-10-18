@@ -12,6 +12,8 @@ import { fmtDate } from "../../../components/ui/format";
 import { lotPaperwork } from "@/db/documents";
 import { DocList } from "../../../components/documents";
 import { DocUpload } from "../../../components/doc-upload";
+import { TraceFlow } from "../../../components/trace-flow";
+import { lotFlow } from "../../../components/trace-flow-data";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +65,7 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
     });
   }
   const paperwork = await lotPaperwork(db(), lot.id);
+  const flow = await lotFlow(lot.id);
   const back = `/trace/lot/${lot.id}`;
   const sorted = [...destinations].sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.code.localeCompare(b.code)));
 
@@ -77,6 +80,8 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           </>
         }
       />
+
+      {flow && <TraceFlow columns={flow.columns} edges={flow.edges} />}
 
       <div className="card grid">
         <div>
