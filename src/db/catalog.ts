@@ -2,7 +2,8 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError } from "./base";
+import { OperationError, type Tx } from "./base";
+import { diff, logChange, type FieldChange } from "./changes";
 import { batchPrefixFor } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
@@ -83,8 +84,30 @@ export async function activateRecipeDraft(db: DB, versionId: string) {
     if (!v || v.status !== "draft") throw new OperationError("Only a draft can be activated.");
     const [{ n } = { n: 0 }] = await tx.select({ n: sql<number>`count(*)::int` }).from(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, v.id));
     if (n === 0) throw new OperationError("A recipe needs at least one ingredient.");
+    const [prev] = await tx.select().from(t.recipeVersions).where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
     await tx.update(t.recipeVersions).set({ status: "retired" }).where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
     await tx.update(t.recipeVersions).set({ status: "active", activatedAt: new Date() }).where(eq(t.recipeVersions.id, v.id));
+    const [sauce] = await tx.select().from(t.sauces).where(eq(t.sauces.id, v.sauceId));
+    const lineText = async (versionId: string | undefined) => {
+      if (!versionId) return new Map<string, string>();
+      const rows = await tx
+        .select({ name: t.items.name, quantity: t.recipeLines.quantity, unit: t.recipeLines.unit })
+        .from(t.recipeLines)
+        .innerJoin(t.items, eq(t.recipeLines.itemId, t.items.id))
+        .where(eq(t.recipeLines.recipeVersionId, versionId));
+      return new Map(rows.map((r) => [r.name, `${new Decimal(r.quantity)} ${r.unit}`]));
+    };
+    const changes = versionChanges(await lineText(prev?.id), await lineText(v.id));
+    if (prev && !new Decimal(prev.batchReferenceKg).eq(v.batchReferenceKg)) changes.unshift({ label: "Batch size", before: `${new Decimal(prev.batchReferenceKg)} kg`, after: `${new Decimal(v.batchReferenceKg)} kg` });
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "recipe", id: v.sauceId, code: sauce?.name },
+      summary: `Recipe v${v.versionNo} of ${sauce?.name ?? "sauce"} made active${prev ? ` (was v${prev.versionNo})` : ""}`,
+      changes,
+      reason: v.note,
+      links: [{ type: "sauce", id: v.sauceId, code: sauce?.name }],
+    });
   });
 }
 
@@ -144,8 +167,27 @@ export async function activatePackagingDraft(db: DB, versionId: string) {
     if (!v || v.status !== "draft") throw new OperationError("Only a draft can be activated.");
     const [{ n } = { n: 0 }] = await tx.select({ n: sql<number>`count(*)::int` }).from(t.packagingLines).where(eq(t.packagingLines.packagingVersionId, v.id));
     if (n === 0) throw new OperationError("A packaging list needs at least one item.");
+    const [prev] = await tx.select().from(t.packagingVersions).where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
     await tx.update(t.packagingVersions).set({ status: "retired" }).where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
     await tx.update(t.packagingVersions).set({ status: "active", activatedAt: new Date() }).where(eq(t.packagingVersions.id, v.id));
+    const [product] = await tx.select().from(t.products).where(eq(t.products.id, v.productId));
+    const lineText = async (versionId: string | undefined) => {
+      if (!versionId) return new Map<string, string>();
+      const rows = await tx
+        .select({ name: t.items.name, perJar: t.packagingLines.perJar })
+        .from(t.packagingLines)
+        .innerJoin(t.items, eq(t.packagingLines.itemId, t.items.id))
+        .where(eq(t.packagingLines.packagingVersionId, versionId));
+      return new Map(rows.map((r) => [r.name, `${r.perJar} per jar`]));
+    };
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "packaging_list", id: v.productId, code: product?.name },
+      summary: `Packaging list v${v.versionNo} of ${product?.name ?? "product"} made active${prev ? ` (was v${prev.versionNo})` : ""}`,
+      changes: versionChanges(await lineText(prev?.id), await lineText(v.id)),
+      links: [{ type: "product", id: v.productId, code: product?.name }],
+    });
   });
 }
 
@@ -156,6 +198,12 @@ export async function discardPackagingDraft(db: DB, versionId: string) {
     await tx.delete(t.packagingLines).where(eq(t.packagingLines.packagingVersionId, v.id));
     await tx.delete(t.packagingVersions).where(eq(t.packagingVersions.id, v.id));
   });
+}
+
+/** Lines added, removed or changed between two versions, by name. */
+function versionChanges(before: Map<string, string>, after: Map<string, string>): FieldChange[] {
+  const names = [...new Set([...before.keys(), ...after.keys()])].sort();
+  return names.map((n) => ({ label: n, before: before.get(n) ?? null, after: after.get(n) ?? null })).filter((c) => c.before !== c.after);
 }
 
 // ---------------------------------------------------------------- items, sauces, sizes, products
@@ -177,12 +225,17 @@ export async function addItem(db: DB, input: { kind: "ingredient" | "packaging";
   if (dup) throw new OperationError(`${name} already exists.`);
   const code = await uniqueCode(db, `${input.kind === "ingredient" ? "ing" : "pkg"}-${slug(name)}`, t.items);
   const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit }).returning();
+  await logChange(db, { action: "create", area: "settings", entity: { type: "item", id: row!.id, code: name }, summary: `Added ${input.kind} ${name} (${input.stockUnit})` });
   return row!;
 }
 
 export async function renameItem(db: DB, itemId: string, name: string) {
   if (!name.trim()) throw new OperationError("Name is required.");
+  const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
+  if (!item) throw new OperationError("Item not found.");
+  if (item.name === name.trim()) return;
   await db.update(t.items).set({ name: name.trim() }).where(eq(t.items.id, itemId));
+  await logChange(db, { action: "update", area: "settings", entity: { type: "item", id: itemId, code: name.trim() }, summary: `Renamed ${item.name} to ${name.trim()}`, changes: diff([["Name", item.name, name.trim()]]) });
 }
 
 /** Retire or bring back an item. Its stock and history stay. */
@@ -197,7 +250,8 @@ export async function setItemActive(db: DB, itemId: string, active: boolean) {
     const names = [...used].map((u) => u.name);
     if (names.length) throw new OperationError(`Still used by: ${names.join(", ")}. Remove it from those first (as a new version).`);
   }
-  await db.update(t.items).set({ active }).where(eq(t.items.id, itemId));
+  const [item] = await db.update(t.items).set({ active }).where(eq(t.items.id, itemId)).returning();
+  if (item) await logActive(db, { type: "item", id: item.id, code: item.name }, active);
 }
 
 export async function addSauce(db: DB, input: { name: string; batchPrefix?: string | null }) {
@@ -207,16 +261,21 @@ export async function addSauce(db: DB, input: { name: string; batchPrefix?: stri
   const prefix = (input.batchPrefix?.trim() || batchPrefixFor(name)).toUpperCase().slice(0, 5);
   const used = (await db.select({ color: t.sauces.color }).from(t.sauces)).map((r) => r.color);
   const [row] = await db.insert(t.sauces).values({ code, name, batchPrefix: prefix, color: nextSauceColor(used) }).returning();
+  await logChange(db, { action: "create", area: "settings", entity: { type: "sauce", id: row!.id, code: name }, summary: `Added sauce ${name} (batch codes ${prefix}-…)` });
   return row!;
 }
 
 export async function setSauceColor(db: DB, sauceId: string, color: string) {
   if (!isSauceColor(color)) throw new OperationError("Choose one of the listed colours.");
+  const [s] = await db.select().from(t.sauces).where(eq(t.sauces.id, sauceId));
+  if (!s || s.color === color) return;
   await db.update(t.sauces).set({ color }).where(eq(t.sauces.id, sauceId));
+  await logChange(db, { action: "update", area: "settings", entity: { type: "sauce", id: s.id, code: s.name }, summary: `Colour of ${s.name} changed`, changes: diff([["Colour", s.color, color]]) });
 }
 
 export async function setSauceActive(db: DB, sauceId: string, active: boolean) {
-  await db.update(t.sauces).set({ active }).where(eq(t.sauces.id, sauceId));
+  const [s] = await db.update(t.sauces).set({ active }).where(eq(t.sauces.id, sauceId)).returning();
+  if (s) await logActive(db, { type: "sauce", id: s.id, code: s.name }, active);
 }
 
 export async function addFormat(db: DB, input: { name: string; capacityMl: number; fillMl?: number | null }) {
@@ -227,6 +286,7 @@ export async function addFormat(db: DB, input: { name: string; capacityMl: numbe
   if (!Number.isInteger(fill) || fill <= 0 || fill > input.capacityMl) throw new OperationError("Fill must be between 1 ml and the capacity.");
   const code = await uniqueCode(db, `f${input.capacityMl}`, t.formats);
   const [row] = await db.insert(t.formats).values({ code, name, capacityMl: input.capacityMl, fillMl: fill }).returning();
+  await logChange(db, { action: "create", area: "settings", entity: { type: "format", id: row!.id, code: name }, summary: `Added size ${name} (${input.capacityMl} ml, filled to ${fill} ml)` });
   return row!;
 }
 
@@ -235,11 +295,14 @@ export async function setFormatFill(db: DB, formatId: string, fillMl: number) {
   const [f] = await db.select().from(t.formats).where(eq(t.formats.id, formatId));
   if (!f) throw new OperationError("Size not found.");
   if (!Number.isInteger(fillMl) || fillMl <= 0 || fillMl > f.capacityMl) throw new OperationError(`Fill must be between 1 and ${f.capacityMl} ml.`);
+  if (f.fillMl === fillMl) return;
   await db.update(t.formats).set({ fillMl }).where(eq(t.formats.id, formatId));
+  await logChange(db, { action: "update", area: "settings", entity: { type: "format", id: f.id, code: f.name }, summary: `Fill of ${f.name} changed`, changes: diff([["Fill", `${f.fillMl} ml`, `${fillMl} ml`]]) });
 }
 
 export async function setFormatActive(db: DB, formatId: string, active: boolean) {
-  await db.update(t.formats).set({ active }).where(eq(t.formats.id, formatId));
+  const [f] = await db.update(t.formats).set({ active }).where(eq(t.formats.id, formatId)).returning();
+  if (f) await logActive(db, { type: "format", id: f.id, code: f.name }, active);
 }
 
 /** A new sellable product (sauce × size). Give it a packaging list before planning it. */
@@ -250,7 +313,10 @@ export async function addProduct(db: DB, input: { sauceId: string; formatId: str
     if (!s || !f) throw new OperationError("Choose a sauce and a size.");
     const [dup] = await tx.select().from(t.products).where(and(eq(t.products.sauceId, s.id), eq(t.products.formatId, f.id)));
     if (dup) {
-      if (!dup.active) await tx.update(t.products).set({ active: true }).where(eq(t.products.id, dup.id));
+      if (!dup.active) {
+        await tx.update(t.products).set({ active: true }).where(eq(t.products.id, dup.id));
+        await logActive(tx, { type: "product", id: dup.id, code: dup.name }, true);
+      }
       return dup;
     }
     const name = `${s.name} ${f.name}`;
@@ -258,12 +324,64 @@ export async function addProduct(db: DB, input: { sauceId: string; formatId: str
     await tx.insert(t.items).values({ code, name, kind: "finished", stockUnit: "unit" }).onConflictDoNothing({ target: t.items.code });
     const [item] = await tx.select().from(t.items).where(eq(t.items.code, code));
     const [p] = await tx.insert(t.products).values({ sauceId: s.id, formatId: f.id, itemId: item!.id, name }).returning();
+    await logChange(tx, { action: "create", area: "settings", entity: { type: "product", id: p!.id, code: name }, summary: `Added product ${name}` });
     return p!;
   });
 }
 
 export async function setProductActive(db: DB, productId: string, active: boolean) {
-  await db.update(t.products).set({ active }).where(eq(t.products.id, productId));
+  const [p] = await db.update(t.products).set({ active }).where(eq(t.products.id, productId)).returning();
+  if (p) await logActive(db, { type: "product", id: p.id, code: p.name }, active);
+}
+
+async function logActive(db: DB | Tx, entity: { type: "item" | "sauce" | "format" | "product"; id: string; code: string }, active: boolean) {
+  await logChange(db, {
+    action: "status",
+    area: "settings",
+    entity,
+    summary: active ? `${entity.code} back in use` : `${entity.code} marked as not in use`,
+    changes: diff([["In use", active ? "No" : "Yes", active ? "Yes" : "No"]]),
+  });
+}
+
+// ---------------------------------------------------------------- yields and reject rates
+
+/** A new estimate of litres per batch. Earlier figures stay; the newest one is used. */
+export async function addYieldFigure(db: DB, input: { sauceId: string; litresPerBatch: number; note?: string | null }) {
+  return db.transaction(async (tx) => {
+    const [s] = await tx.select().from(t.sauces).where(eq(t.sauces.id, input.sauceId));
+    if (!s) throw new OperationError("Sauce not found.");
+    const [prev] = await tx.select().from(t.yieldFigures).where(eq(t.yieldFigures.sauceId, s.id)).orderBy(sql`${t.yieldFigures.createdAt} desc`).limit(1);
+    await tx.insert(t.yieldFigures).values({ sauceId: s.id, litresPerBatch: String(input.litresPerBatch), source: "estimate", note: input.note || null });
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "yield", id: s.id, code: s.name },
+      summary: `Litres per batch of ${s.name} estimated`,
+      changes: diff([["Litres per batch", prev ? `${new Decimal(prev.litresPerBatch)} L` : null, `${input.litresPerBatch} L`]]),
+      reason: input.note,
+      links: [{ type: "sauce", id: s.id, code: s.name }],
+    });
+  });
+}
+
+/** A new estimate of the reject rate for a product. */
+export async function addRejectFigure(db: DB, input: { productId: string; percent: number; note?: string | null }) {
+  return db.transaction(async (tx) => {
+    const [p] = await tx.select().from(t.products).where(eq(t.products.id, input.productId));
+    if (!p) throw new OperationError("Product not found.");
+    const [prev] = await tx.select().from(t.rejectFigures).where(eq(t.rejectFigures.productId, p.id)).orderBy(sql`${t.rejectFigures.createdAt} desc`).limit(1);
+    await tx.insert(t.rejectFigures).values({ productId: p.id, rate: String(input.percent / 100), source: "estimate", note: input.note || null });
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "yield", id: p.id, code: p.name },
+      summary: `Reject rate of ${p.name} estimated`,
+      changes: diff([["Rejects", prev ? `${new Decimal(prev.rate).mul(100)}%` : null, `${input.percent}%`]]),
+      reason: input.note,
+      links: [{ type: "product", id: p.id, code: p.name }],
+    });
+  });
 }
 
 /** Colour of every sauce, by sauce id and by product id, for showing the sauce dot next to names. */

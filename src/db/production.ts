@@ -8,6 +8,7 @@ import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal,
 import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor } from "@/domain/codes";
 import type { PlanResult } from "@/domain/planner";
+import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
  * Recording production and packaging.
@@ -37,6 +38,18 @@ async function getBatch(tx: Tx, batchId: string) {
     .where(eq(t.productionBatches.id, batchId));
   if (!row) throw new OperationError("Batch not found.");
   return row;
+}
+
+/** The batch and its run, for linking a change to both pages. */
+const batchRefs = (batch: { id: string; code: string; runId: string }, run?: { code: string } | null): Ref[] => [
+  { type: "batch", id: batch.id, code: batch.code },
+  { type: "run", id: batch.runId, code: run?.code ?? null },
+];
+
+async function lotCodes(tx: Tx, ids: string[]) {
+  if (!ids.length) return new Map<string, string>();
+  const rows = await tx.select({ id: t.lots.id, code: t.lots.code }).from(t.lots).where(inArray(t.lots.id, ids));
+  return new Map(rows.map((r) => [r.id, r.code]));
 }
 
 function assertOpen(batch: typeof t.productionBatches.$inferSelect) {
@@ -176,13 +189,17 @@ async function advance(tx: Tx, batchId: string, next: (typeof t.batchStatus.enum
  * - A line not in the recipe is added as an extra.
  * When no line is left pending the batch is cooked and waits for packaging.
  */
-export async function recordIngredients(db: DB, input: { idempotencyKey: string; batchId: string; producedOn?: string | null; lines: IngredientLineInput[] }) {
+export async function recordIngredients(
+  db: DB,
+  input: { idempotencyKey: string; batchId: string; producedOn?: string | null; lines: IngredientLineInput[]; reason?: string | null },
+) {
   if (input.producedOn && !isDate(input.producedOn)) throw new OperationError("Enter the production date.");
   return db.transaction(async (tx) => {
-    const { batch } = await getBatch(tx, input.batchId);
+    const { batch, run } = await getBatch(tx, input.batchId);
     const existing = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
     if (existing.some((l) => l.recordKey === input.idempotencyKey)) return { alreadyRecorded: true, changed: 0, pending: null };
-    assertOpen(batch);
+    // A closed batch can still be corrected, with a reason; a batch that wasn't made can't.
+    if (batch.status === "cancelled") throw new OperationError(`${batch.code} is cancelled.`);
 
     const seen = new Set<string>();
     for (const l of input.lines) {
@@ -232,6 +249,41 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
     }
     if (errors.length) throw new OperationError(errors.join(" "));
 
+    // What changes, in words, for the history. A line recorded before and now different is a correction.
+    const codes = await lotCodes(tx, [...new Set(plans.flatMap((p) => [...p.current.keys(), ...p.target.keys()]))]);
+    const splitText = (split: LotSplit, unit: string) => {
+      const total = splitTotal(split);
+      const lots = [...split].filter(([, q]) => !q.isZero()).map(([id]) => codes.get(id) ?? "lot");
+      return `${total} ${unit}${lots.length ? ` (${lots.join(", ")})` : ""}`;
+    };
+    const changes: FieldChange[] = [];
+    let corrections = 0;
+    for (const p of plans) {
+      const first = !p.line?.confirmedAt;
+      if (first) changes.push({ label: p.item.name, before: null, after: splitText(p.target, p.item.stockUnit) });
+      else if (!sameSplit(p.current, p.target)) {
+        corrections++;
+        changes.push({ label: p.item.name, before: splitText(p.current, p.item.stockUnit), after: splitText(p.target, p.item.stockUnit) });
+      }
+    }
+    if (input.producedOn && batch.producedOn && input.producedOn !== batch.producedOn) {
+      corrections++;
+      changes.push(...diff([["Production date", batch.producedOn, input.producedOn]]));
+    }
+    const correcting = corrections > 0 || (batch.status === "closed" && changes.length > 0);
+    const reason = correcting ? needReason(input.reason, "Say why the ingredients are corrected") : input.reason?.trim() || null;
+    const changeId = changes.length
+      ? await logChange(tx, {
+          action: correcting ? "update" : "create",
+          area: "production",
+          entity: { type: "batch", id: batch.id, code: batch.code },
+          summary: correcting ? `Ingredients of ${batch.code} corrected` : `Ingredients of ${batch.code} recorded`,
+          changes,
+          reason,
+          links: [...batchRefs(batch, run), ...[...codes].map(([id, code]) => ({ type: "lot" as const, id, code }))],
+        })
+      : null;
+
     const on = input.producedOn || batch.producedOn || today();
     const at = new Date(`${on}T12:00:00Z`);
     let changed = 0;
@@ -252,6 +304,7 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
         takeReason: first ? `Used in ${batch.code}` : `Corrected in ${batch.code}: ${before} → ${p.qty} ${p.item.stockUnit}`,
         giveReason: `Corrected in ${batch.code}: ${before} → ${p.qty} ${p.item.stockUnit}`,
         keyPrefix: `${input.idempotencyKey}:${p.item.id}`,
+        changeId: first ? null : changeId,
       });
       if (posted || first) changed++;
       // A confirmed zero has no movements; confirmedAt is what tells it apart from pending.
@@ -264,12 +317,12 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
     if (input.producedOn && input.producedOn !== batch.producedOn) {
       await tx.update(t.productionBatches).set({ producedOn: input.producedOn }).where(eq(t.productionBatches.id, batch.id));
     }
-    await markStarted(tx, batch, "in_production");
+    if (batch.status !== "closed") await markStarted(tx, batch, "in_production");
     const [{ pending } = { pending: 0 }] = await tx
       .select({ pending: sql<number>`count(*)::int` })
       .from(t.batchConsumption)
       .where(and(eq(t.batchConsumption.batchId, batch.id), isNull(t.batchConsumption.confirmedAt)));
-    if (pending === 0) await advance(tx, batch.id, "awaiting_packaging");
+    if (pending === 0 && batch.status !== "closed") await advance(tx, batch.id, "awaiting_packaging");
     return { alreadyRecorded: false, changed, pending };
   });
 }
@@ -277,12 +330,21 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
 /** Record (or correct) one ingredient line. Same rules as `recordIngredients`. */
 export async function recordConsumption(
   db: DB,
-  input: { idempotencyKey: string; batchId: string; itemId: string; quantity: Decimal.Value; lots?: { lotId: string; quantity: Decimal.Value }[]; occurredOn?: string },
+  input: {
+    idempotencyKey: string;
+    batchId: string;
+    itemId: string;
+    quantity: Decimal.Value;
+    lots?: { lotId: string; quantity: Decimal.Value }[];
+    occurredOn?: string;
+    reason?: string | null;
+  },
 ) {
   return recordIngredients(db, {
     idempotencyKey: input.idempotencyKey,
     batchId: input.batchId,
     producedOn: input.occurredOn,
+    reason: input.reason,
     lines: [{ itemId: input.itemId, quantity: input.quantity, lots: input.lots }],
   });
 }
@@ -387,7 +449,7 @@ export async function recordPackaging(
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.packagingSessions).where(eq(t.packagingSessions.idempotencyKey, input.idempotencyKey));
     if (existing) return { session: existing, alreadyRecorded: true };
-    const { batch, sauce } = await getBatch(tx, input.batchId);
+    const { batch, sauce, run } = await getBatch(tx, input.batchId);
     assertOpen(batch);
 
     const { productRows, versionOf, need } = await packagingNeeds(tx, sauce, lines);
@@ -444,11 +506,22 @@ export async function recordPackaging(
 
     await markStarted(tx, batch, "packing");
     for (const itemId of need.keys()) await syncRunReservation(tx, batch.runId, itemId);
+    const finished = await tx.select({ id: t.lots.id, code: t.lots.code }).from(t.lots).where(eq(t.lots.batchId, batch.id));
+    await logChange(tx, {
+      action: "create",
+      area: "packaging",
+      entity: { type: "packaging_session", id: session!.id, code: `${batch.code} · ${input.packedOn}` },
+      summary: `Packaging of ${input.packedOn} recorded for ${batch.code}`,
+      changes: lines.map((l) => ({ label: productRows.find((r) => r.product.id === l.productId)!.product.name, before: null, after: jarsText(l) })),
+      links: [...batchRefs(batch, run), ...finished.map((f) => ({ type: "lot" as const, id: f.id, code: f.code }))],
+    });
     return { session: session!, alreadyRecorded: false };
   });
 }
 
 type SessionLine = typeof t.packagingSessionLines.$inferSelect;
+
+const jarsText = (l: { filled: number; rejected: number }) => (l.filled || l.rejected ? `${l.filled} filled${l.rejected ? `, ${l.rejected} rejected` : ""}` : null);
 
 /** One line per size with the sum of a session's lines (the original plus any corrections). */
 export function netLines(lines: SessionLine[]): SessionLine[] {
@@ -480,6 +553,8 @@ export async function changePackaging(
     sessionId: string;
     /** Delete the whole session. */
     delete?: boolean;
+    /** Bring a deleted session back with the figures it had. */
+    restore?: boolean;
     reason?: string | null;
     packedOn?: string;
     bestBefore?: string | null;
@@ -487,7 +562,7 @@ export async function changePackaging(
     lines?: PackagingLineInput[];
   },
 ) {
-  if (!input.delete) {
+  if (!input.delete && !input.restore) {
     if (!input.packedOn || !isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
     if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
     checkJarNumbers(input.lines ?? []);
@@ -496,18 +571,28 @@ export async function changePackaging(
     const [session] = await tx.select().from(t.packagingSessions).where(eq(t.packagingSessions.id, input.sessionId));
     if (!session) throw new OperationError("Packaging session not found.");
     if (session.changeKey === input.idempotencyKey) return { alreadyRecorded: true, deleted: !!session.deletedAt };
-    if (session.deletedAt) throw new OperationError("This packaging session has already been deleted.");
-    const { batch, sauce } = await getBatch(tx, session.batchId);
+    if (input.restore && !session.deletedAt) throw new OperationError("This packaging session isn't deleted.");
+    if (!input.restore && session.deletedAt) throw new OperationError("This packaging session has already been deleted.");
+    const { batch, sauce, run } = await getBatch(tx, session.batchId);
     if (batch.status === "cancelled") throw new OperationError(`${batch.code} was marked as not made.`);
+    const reason = needReason(input.reason, input.delete ? "Say why the session is deleted" : input.restore ? "Say why the session is restored" : "Say why the packaging is corrected");
 
     // The session's current figures per size: original lines plus earlier corrections.
-    const old = netLines(await tx.select().from(t.packagingSessionLines).where(eq(t.packagingSessionLines.sessionId, session.id)));
-    const wanted = new Map((input.delete ? [] : (input.lines ?? [])).map((l) => [l.productId, l]));
+    const allLines = await tx.select().from(t.packagingSessionLines).where(eq(t.packagingSessionLines.sessionId, session.id));
+    const old = netLines(allLines);
+    // Restoring brings back the figures from before the delete (the delete's own correction lines left out).
+    const requested = input.restore
+      ? netLines(allLines.filter((l) => l.changeKey !== session.changeKey)).map((l) => ({ productId: l.productId, filled: l.filled, rejected: l.rejected }))
+      : input.delete
+        ? []
+        : (input.lines ?? []);
+    const wanted = new Map(requested.map((l) => [l.productId, l]));
+    const packedOn = input.restore ? session.packedOn : input.packedOn;
     const lines = [
       ...old.map((o) => ({ productId: o.productId, filled: wanted.get(o.productId)?.filled ?? 0, rejected: wanted.get(o.productId)?.rejected ?? 0, packagingVersionId: o.packagingVersionId, old: o })),
       ...[...wanted.values()].filter((w) => !old.some((o) => o.productId === w.productId) && (w.filled > 0 || w.rejected > 0)).map((w) => ({ ...w, packagingVersionId: null, old: null })),
     ];
-    if (!input.delete && !lines.some((l) => l.filled > 0 || l.rejected > 0)) {
+    if (!input.delete && !input.restore && !lines.some((l) => l.filled > 0 || l.rejected > 0)) {
       throw new OperationError("Enter the jars filled for at least one size, or delete the session.");
     }
 
@@ -541,8 +626,34 @@ export async function changePackaging(
     if (errors.length) throw new OperationError(errors.join(" "));
 
     const when = session.packedOn;
-    const what = input.delete ? `Packaging of ${when} for ${batch.code} deleted` : `Packaging of ${when} for ${batch.code} corrected`;
+    const what = input.delete
+      ? `Packaging of ${when} for ${batch.code} deleted`
+      : input.restore
+        ? `Packaging of ${when} for ${batch.code} restored`
+        : `Packaging of ${when} for ${batch.code} corrected`;
     const at = new Date();
+    const names = new Map(productRows.map((r) => [r.product.id, r.product.name]));
+    const changes: FieldChange[] = [
+      ...lines
+        .map((l) => ({ label: names.get(l.productId) ?? "Jars", before: l.old ? jarsText(l.old) : null, after: jarsText(l) }))
+        .filter((c) => c.before !== c.after),
+      ...(input.delete || input.restore
+        ? []
+        : diff([
+            ["Date", session.packedOn, packedOn],
+            ["Note", session.note, input.note?.trim() || null],
+          ])),
+    ];
+    const finishedLots = await tx.select({ id: t.lots.id, code: t.lots.code }).from(t.lots).where(eq(t.lots.batchId, batch.id));
+    const changeId = await logChange(tx, {
+      action: input.delete ? "delete" : input.restore ? "restore" : "update",
+      area: "packaging",
+      entity: { type: "packaging_session", id: session.id, code: `${batch.code} · ${session.packedOn}` },
+      summary: what,
+      changes,
+      reason,
+      links: [...batchRefs(batch, run), ...finishedLots.map((f) => ({ type: "lot" as const, id: f.id, code: f.code }))],
+    });
     for (const p of plans) {
       await applySplit(tx, {
         ...p,
@@ -552,6 +663,7 @@ export async function changePackaging(
         takeReason: what,
         giveReason: what,
         keyPrefix: `${input.idempotencyKey}:${p.itemId}`,
+        changeId,
       });
     }
 
@@ -560,7 +672,7 @@ export async function changePackaging(
       const p = productRows.find((r) => r.product.id === l.productId)!;
       const accepted = l.filled - l.rejected;
       let lotId = l.old?.finishedLotId ?? null;
-      if (!lotId && (l.filled > 0 || l.rejected > 0)) lotId = (await finishedLot(tx, batch, p, input.packedOn ?? when, input.bestBefore || null)).id;
+      if (!lotId && (l.filled > 0 || l.rejected > 0)) lotId = (await finishedLot(tx, batch, p, packedOn ?? when, input.bestBefore || null)).id;
       const move = jarMoves.find((m) => m.itemId === p.product.itemId);
       if (move && lotId) {
         await tx.insert(t.movements).values({
@@ -573,6 +685,7 @@ export async function changePackaging(
           docId: session.id,
           reason: what,
           idempotencyKey: `${input.idempotencyKey}:jars:${i++}`,
+          changeId,
         });
       }
       const dFilled = l.filled - (l.old?.filled ?? 0);
@@ -590,15 +703,17 @@ export async function changePackaging(
           changeKey: input.idempotencyKey,
         });
       }
-      if (!input.delete && input.bestBefore && lotId && l.filled > 0) await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
+      if (!input.delete && !input.restore && input.bestBefore && lotId && l.filled > 0) await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
     }
 
     await tx
       .update(t.packagingSessions)
       .set(
         input.delete
-          ? { deletedAt: at, deletedReason: input.reason?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey }
-          : { packedOn: input.packedOn!, note: input.note?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey },
+          ? { deletedAt: at, deletedReason: reason, deletedBy: currentActor()?.id ?? null, updatedAt: at, changeKey: input.idempotencyKey }
+          : input.restore
+            ? { deletedAt: null, deletedReason: null, deletedBy: null, updatedAt: at, changeKey: input.idempotencyKey }
+            : { packedOn: input.packedOn!, note: input.note?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey },
       )
       .where(eq(t.packagingSessions.id, session.id));
     for (const itemId of new Set([...need.keys(), ...used.keys()])) await syncRunReservation(tx, batch.runId, itemId);
@@ -614,21 +729,144 @@ export async function recordIncident(
 ) {
   if (!input.note.trim()) throw new OperationError("Describe what happened.");
   if (!input.batchId && !input.lotId) throw new OperationError("Link the incident to a batch or a lot.");
-  const [row] = await db
-    .insert(t.incidents)
-    .values({
-      batchId: input.batchId || null,
-      lotId: input.lotId || null,
-      type: input.type,
-      note: input.note.trim(),
-      occurredOn: input.occurredOn || today(),
-      idempotencyKey: input.idempotencyKey || null,
-    })
-    .onConflictDoNothing({ target: t.incidents.idempotencyKey })
-    .returning();
-  if (row) return row;
-  const [existing] = await db.select().from(t.incidents).where(eq(t.incidents.idempotencyKey, input.idempotencyKey!));
-  return existing!;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(t.incidents)
+      .values({
+        batchId: input.batchId || null,
+        lotId: input.lotId || null,
+        type: input.type,
+        note: input.note.trim(),
+        occurredOn: input.occurredOn || today(),
+        idempotencyKey: input.idempotencyKey || null,
+      })
+      .onConflictDoNothing({ target: t.incidents.idempotencyKey })
+      .returning();
+    if (!row) {
+      const [existing] = await tx.select().from(t.incidents).where(eq(t.incidents.idempotencyKey, input.idempotencyKey!));
+      return existing!;
+    }
+    await logChange(tx, {
+      action: "create",
+      area: "production",
+      entity: { type: "incident", id: row.id, code: INCIDENT[row.type] },
+      summary: `Incident recorded: ${INCIDENT[row.type].toLowerCase()}`,
+      changes: [{ label: "What happened", after: row.note }],
+      links: await incidentRefs(tx, row),
+    });
+    return row;
+  });
+}
+
+const INCIDENT: Record<(typeof t.incidentType.enumValues)[number], string> = { loss: "Loss", spill: "Spill", quality: "Quality", other: "Other" };
+
+async function incidentRefs(tx: Tx, row: typeof t.incidents.$inferSelect): Promise<Ref[]> {
+  const refs: Ref[] = [];
+  if (row.batchId) {
+    const { batch, run } = await getBatch(tx, row.batchId);
+    refs.push(...batchRefs(batch, run));
+  }
+  if (row.lotId) {
+    const [lot] = await tx.select({ id: t.lots.id, code: t.lots.code }).from(t.lots).where(eq(t.lots.id, row.lotId));
+    if (lot) refs.push({ type: "lot", id: lot.id, code: lot.code });
+  }
+  return refs;
+}
+
+/** Correct an incident's kind, date or description. It never moved stock. */
+export async function updateIncident(db: DB, input: { incidentId: string; reason: string; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn: string }) {
+  const reason = needReason(input.reason, "Say why the incident is corrected");
+  if (!input.note.trim()) throw new OperationError("Describe what happened.");
+  if (!isDate(input.occurredOn)) throw new OperationError("Enter the date.");
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(t.incidents).where(eq(t.incidents.id, input.incidentId));
+    if (!row) throw new OperationError("Incident not found.");
+    if (row.deletedAt) throw new OperationError("This incident was deleted. Restore it first.");
+    const changes = diff([
+      ["Kind", INCIDENT[row.type], INCIDENT[input.type]],
+      ["Date", row.occurredOn, input.occurredOn],
+      ["What happened", row.note, input.note.trim()],
+    ]);
+    if (!changes.length) return;
+    await tx.update(t.incidents).set({ type: input.type, note: input.note.trim(), occurredOn: input.occurredOn }).where(eq(t.incidents.id, row.id));
+    await logChange(tx, {
+      action: "update",
+      area: "production",
+      entity: { type: "incident", id: row.id, code: INCIDENT[input.type] },
+      summary: "Incident corrected",
+      changes,
+      reason,
+      links: await incidentRefs(tx, row),
+    });
+  });
+}
+
+/** Delete or restore an incident. Deleted ones stay on record, marked. */
+export async function setIncidentDeleted(db: DB, input: { incidentId: string; deleted: boolean; reason: string }) {
+  const reason = needReason(input.reason, input.deleted ? "Say why the incident is deleted" : "Say why the incident is restored");
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(t.incidents).where(eq(t.incidents.id, input.incidentId));
+    if (!row) throw new OperationError("Incident not found.");
+    if (!!row.deletedAt === input.deleted) return;
+    await tx
+      .update(t.incidents)
+      .set(input.deleted ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .where(eq(t.incidents.id, row.id));
+    await logChange(tx, {
+      action: input.deleted ? "delete" : "restore",
+      area: "production",
+      entity: { type: "incident", id: row.id, code: INCIDENT[row.type] },
+      summary: input.deleted ? "Incident deleted" : "Incident restored",
+      changes: [{ label: "What happened", before: input.deleted ? row.note : null, after: input.deleted ? null : row.note }],
+      reason,
+      links: await incidentRefs(tx, row),
+    });
+  });
+}
+
+/** Correct a batch's production date or note. */
+export async function updateBatch(db: DB, input: { batchId: string; reason: string; producedOn?: string | null; note?: string | null }) {
+  const reason = needReason(input.reason, "Say why the batch is corrected");
+  if (input.producedOn && !isDate(input.producedOn)) throw new OperationError("Enter the production date.");
+  return db.transaction(async (tx) => {
+    const { batch, run } = await getBatch(tx, input.batchId);
+    const upd = {
+      ...(input.producedOn !== undefined ? { producedOn: input.producedOn || null } : {}),
+      ...(input.note !== undefined ? { note: input.note?.trim() || null } : {}),
+    };
+    const changes = diff([
+      ["Production date", batch.producedOn, upd.producedOn === undefined ? batch.producedOn : upd.producedOn],
+      ["Note", batch.note, upd.note === undefined ? batch.note : upd.note],
+    ]);
+    if (!changes.length) return;
+    await tx.update(t.productionBatches).set(upd).where(eq(t.productionBatches.id, batch.id));
+    await logChange(tx, { action: "update", area: "production", entity: { type: "batch", id: batch.id, code: batch.code }, summary: `${batch.code} corrected`, changes, reason, links: batchRefs(batch, run) });
+  });
+}
+
+/**
+ * Bring back a batch marked as not made, so it can be cooked after all. Its
+ * ingredients are reserved again. Not possible once its run is closed.
+ */
+export async function restoreBatch(db: DB, input: { batchId: string; reason: string }) {
+  const reason = needReason(input.reason, "Say why the batch is restored");
+  return db.transaction(async (tx) => {
+    const { batch, run } = await getBatch(tx, input.batchId);
+    if (batch.status !== "cancelled") throw new OperationError(`${batch.code} isn't marked as not made.`);
+    if (run.status === "closed" || run.status === "cancelled") throw new OperationError(`Run ${run.code} is ${run.status}, so its batches can't come back. Plan a new run instead.`);
+    await tx.update(t.productionBatches).set({ status: "planned", closedAt: null }).where(eq(t.productionBatches.id, batch.id));
+    const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
+    for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);
+    await logChange(tx, {
+      action: "restore",
+      area: "production",
+      entity: { type: "batch", id: batch.id, code: batch.code },
+      summary: `${batch.code} back on the plan: its ingredients are reserved again`,
+      changes: diff([["Status", "Not made", "To cook"]]),
+      reason,
+      links: batchRefs(batch, run),
+    });
+  });
 }
 
 /**
@@ -638,7 +876,7 @@ export async function recordIncident(
  */
 export async function closeBatch(db: DB, input: { idempotencyKey: string; batchId: string; leftoverReason?: string | null; notMade?: boolean }) {
   return db.transaction(async (tx) => {
-    const { batch } = await getBatch(tx, input.batchId);
+    const { batch, run } = await getBatch(tx, input.batchId);
     if (batch.status === "closed") return { alreadyClosed: true };
     assertOpen(batch);
 
@@ -682,6 +920,15 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
       await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.runId, batch.runId), isNull(t.reservations.releasedAt)));
       await tx.update(t.productionRuns).set({ status: "closed" }).where(eq(t.productionRuns.id, batch.runId));
     }
+    await logChange(tx, {
+      action: input.notMade ? "cancel" : "status",
+      area: "production",
+      entity: { type: "batch", id: batch.id, code: batch.code },
+      summary: input.notMade ? `${batch.code} marked as not made` : `${batch.code} closed`,
+      changes: diff([["Status", "Open", input.notMade ? "Not made" : "Closed"], ...(open.length === 0 ? [["Run", null, `${run.code} closed`] as [string, unknown, unknown]] : [])]),
+      reason: input.notMade ? input.leftoverReason : null,
+      links: batchRefs(batch, run),
+    });
     return { alreadyClosed: false, runClosed: open.length === 0 };
   });
 }

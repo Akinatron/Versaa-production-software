@@ -43,7 +43,7 @@ export async function uploadDocumentsAction(form: FormData) {
 export async function removeDocumentAction(form: FormData) {
   const back = safeBack(form.get("back"));
   const me = await currentUser();
-  await removeDocument(db(), String(form.get("id") ?? ""), me?.id);
+  await attempt(back, () => removeDocument(db(), String(form.get("id") ?? ""), me?.id, String(form.get("reason") ?? "")));
   revalidatePaperwork();
   redirect(withOk(back, "File removed."));
 }

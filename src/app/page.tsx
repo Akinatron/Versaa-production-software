@@ -89,7 +89,7 @@ export default async function Home() {
     finishedAvailability(d),
     d.execute<{ product: string; jars: number }>(sql`
       select p.name as product, sum(ol.jars)::int as jars
-      from outflow_lines ol join outflows o on o.id = ol.outflow_id join products p on p.id = ol.product_id
+      from outflow_lines ol join outflows o on o.id = ol.outflow_id and o.deleted_at is null join products p on p.id = ol.product_id
       where o.type = 'sale' and o.occurred_on between ${monthStart} and ${today}
       group by p.name order by p.name`),
   ]);

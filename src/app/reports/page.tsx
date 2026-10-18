@@ -42,7 +42,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         sum(case when ol.unit_price is null then ol.jars else 0 end)::int as unpriced,
         sum(ol.jars * ol.unit_price) as revenue
       from outflow_lines ol
-      join outflows o on o.id = ol.outflow_id
+      join outflows o on o.id = ol.outflow_id and o.deleted_at is null
       join products p on p.id = ol.product_id
       join sauces s on s.id = p.sauce_id
       join formats f on f.id = p.format_id
@@ -57,7 +57,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     }>(sql`
       select o.type::text as type, p.name as product, sum(ol.jars)::int as jars, count(distinct o.id)::int as times
       from outflow_lines ol
-      join outflows o on o.id = ol.outflow_id
+      join outflows o on o.id = ol.outflow_id and o.deleted_at is null
       join products p on p.id = ol.product_id
       where o.type <> 'sale' and o.occurred_on between ${from} and ${to}
       group by o.type, p.name

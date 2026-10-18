@@ -118,7 +118,7 @@ export async function loadStockPositions(db: DB): Promise<Record<string, StockPo
       select l.item_id, sum(greatest(l.quantity - coalesce(r.received, 0), 0)) as qty
       from purchase_order_lines l
       join purchase_orders o on o.id = l.purchase_order_id and o.status in ('sent', 'partly_received')
-      left join (select purchase_order_line_id, sum(quantity) as received from receipt_lines group by 1) r
+      left join (select r.purchase_order_line_id, sum(r.quantity) as received from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null group by 1) r
         on r.purchase_order_line_id = l.id
       group by l.item_id`),
   ]);

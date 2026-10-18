@@ -92,7 +92,7 @@ async function destinationsOfLots(db: DB, lotIds: string[]): Promise<Destination
     .innerJoin(t.lots, eq(t.outflowLines.lotId, t.lots.id))
     .innerJoin(t.products, eq(t.outflowLines.productId, t.products.id))
     .leftJoin(t.customers, eq(t.outflows.customerId, t.customers.id))
-    .where(inArray(t.outflowLines.lotId, lotIds));
+    .where(and(inArray(t.outflowLines.lotId, lotIds), isNull(t.outflows.deletedAt)));
   return rows.map((r) => ({
     outflowId: r.out.id,
     code: r.out.code,
@@ -230,7 +230,11 @@ export async function traceBatch(db: DB, batchId: string) {
   const jarLots = await finishedLotsOfBatches(db, [batchId]);
   const bulk = row.batch.bulkLotId ? (await lotsByIds(db, [row.batch.bulkLotId]))[0] ?? null : null;
   const destinations = await destinationsOfLots(db, jarLots.map((l) => l.id));
-  const incidents = await db.select().from(t.incidents).where(eq(t.incidents.batchId, batchId)).orderBy(t.incidents.occurredOn);
+  const incidents = await db
+    .select()
+    .from(t.incidents)
+    .where(and(eq(t.incidents.batchId, batchId), isNull(t.incidents.deletedAt)))
+    .orderBy(t.incidents.occurredOn);
 
   const bySize = new Map<string, { productId: string; itemId: string; name: string; filled: number; rejected: number; accepted: number }>();
   for (const { line, product } of sessionLines) {

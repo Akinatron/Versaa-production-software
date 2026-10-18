@@ -21,7 +21,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     }>(sql`
       select c.id, c.name, c.contact, c.notes,
         (select count(*)::int from sales_orders o where o.customer_id = c.id and o.status <> 'cancelled') as orders,
-        (select max(f.occurred_on)::text from outflows f where f.customer_id = c.id) as last
+        (select max(f.occurred_on)::text from outflows f where f.customer_id = c.id and f.deleted_at is null) as last
       from customers c order by c.name`)),
   ];
 

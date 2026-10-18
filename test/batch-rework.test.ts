@@ -123,19 +123,19 @@ suite("batch: record, correct, edit packaging, cost", () => {
   it("recording again corrects by the difference, from the same lot", async () => {
     const before = await onHand("ing-garlic");
     // Typed 2 kg but it was 3: 1 kg more.
-    await recordIngredients(db, { idempotencyKey: "fix-1", batchId, lines: [{ itemId: ids["ing-garlic"]!, quantity: "3" }] });
+    await recordIngredients(db, { idempotencyKey: "fix-1", batchId, reason: "Weighed again", lines: [{ itemId: ids["ing-garlic"]!, quantity: "3" }] });
     expect(await onHand("ing-garlic")).toBe(String(Number(before) - 1));
     const garlic = await useOf("ing-garlic");
     expect(garlic.actual!.toString()).toBe("3");
     expect(garlic.sources).toHaveLength(1);
 
     // Less onion (automatic): given back to the latest-expiring lot first.
-    await recordIngredients(db, { idempotencyKey: "fix-2", batchId, lines: [{ itemId: ids["ing-onions"]!, quantity: "5" }] });
+    await recordIngredients(db, { idempotencyKey: "fix-2", batchId, reason: "Weighed again", lines: [{ itemId: ids["ing-onions"]!, quantity: "5" }] });
     const onion = await useOf("ing-onions");
     expect(onion.sources.map((s) => [s.lot.supplierBatch, s.quantity.toString()]).sort()).toEqual([["NEW", "1"], ["OLD", "4"]]);
 
     // Manual: move it all to the new lot.
-    await recordIngredients(db, { idempotencyKey: "fix-3", batchId, lines: [{ itemId: ids["ing-onions"]!, quantity: "5", lots: [{ lotId: newOnion, quantity: "5" }] }] });
+    await recordIngredients(db, { idempotencyKey: "fix-3", batchId, reason: "Other lot", lines: [{ itemId: ids["ing-onions"]!, quantity: "5", lots: [{ lotId: newOnion, quantity: "5" }] }] });
     const moved = await useOf("ing-onions");
     expect(moved.sources.map((s) => [s.lot.supplierBatch, s.quantity.toString()])).toEqual([["NEW", "5"]]);
     expect(await onHand("ing-onions")).toBe("19");
@@ -147,8 +147,8 @@ suite("batch: record, correct, edit packaging, cost", () => {
     expect(await onHand("pkg-700-ml-container")).toBe("470");
 
     // It was 25 filled, 1 rejected.
-    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
-    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
+    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
+    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
     expect(await onHand("pkg-700-ml-container")).toBe("475");
     const tr = await traceBatch(db, batchId);
     expect(tr!.jarsBySize.find((j) => j.productId === big)).toMatchObject({ filled: 25, rejected: 1, accepted: 24 });
@@ -167,7 +167,8 @@ suite("batch: record, correct, edit packaging, cost", () => {
     expect(budget.packaging.lines.length).toBeGreaterThan(0);
     expect(budget.total.complete).toBe(false);
     // Closed: ingredients are locked.
-    await expect(recordIngredients(db, { idempotencyKey: "late", batchId, lines: [{ itemId: ids["ing-garlic"]!, quantity: "1" }] })).rejects.toThrow(/closed/);
+    // A closed batch can still be corrected, but only with a reason.
+    await expect(recordIngredients(db, { idempotencyKey: "late", batchId, lines: [{ itemId: ids["ing-garlic"]!, quantity: "1" }] })).rejects.toThrow(/reason/);
     expect((await observedYields(db)).get(ids["liberiaanse-kip"]!)!.avgFilledLitres.toString()).toBe("17.5");
   });
 
@@ -175,15 +176,15 @@ suite("batch: record, correct, edit packaging, cost", () => {
     const big = ids["Liberiaanse Kip 700 ml"]!;
     const [session] = await db.select().from(t.packagingSessions).where(eq(t.packagingSessions.batchId, batchId));
     await recordOutflow(db, { idempotencyKey: "sample", type: "sample", destination: "Market", lines: [{ productId: big, jars: 20 }] });
-    await expect(changePackaging(db, { idempotencyKey: "del-1", sessionId: session!.id, delete: true })).rejects.toThrow(/only has 4 left.*already left stock/);
+    await expect(changePackaging(db, { idempotencyKey: "del-1", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(/only has 4 left.*already left stock/);
     await expect(
-      changePackaging(db, { idempotencyKey: "edit-2", sessionId: session!.id, packedOn: "2026-10-21", lines: [{ productId: big, filled: 10, rejected: 0 }] }),
+      changePackaging(db, { idempotencyKey: "edit-2", sessionId: session!.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 10, rejected: 0 }] }),
     ).rejects.toThrow(/already left stock/);
 
     // A second session on the same (closed) batch can't be recorded, but an existing one can be deleted.
     await expect(recordPackaging(db, { idempotencyKey: "pack-2", batchId, packedOn: "2026-10-22", lines: [{ productId: big, filled: 1, rejected: 0 }] })).rejects.toThrow(/closed/);
     const lidsBefore = await onHand("pkg-large-lid");
-    await changePackaging(db, { idempotencyKey: "edit-3", sessionId: session!.id, packedOn: "2026-10-21", lines: [{ productId: big, filled: 22, rejected: 0 }] });
+    await changePackaging(db, { idempotencyKey: "edit-3", sessionId: session!.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 22, rejected: 0 }] });
     expect(await onHand("pkg-large-lid")).toBe(String(Number(lidsBefore) + 3));
     // 22 accepted, 20 out: 2 left. Now lower the jars back to 20 accepted and delete is still refused (20 out).
     await expect(changePackaging(db, { idempotencyKey: "del-2", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(/only has 2 left/);
@@ -206,7 +207,7 @@ suite("batch: record, correct, edit packaging, cost", () => {
     const [kept] = await db.select().from(t.packagingSessions).where(and(eq(t.packagingSessions.id, session.id)));
     expect(kept!.deletedAt).not.toBeNull();
     expect(kept!.deletedReason).toBe("Recorded on the wrong batch");
-    await expect(changePackaging(db, { idempotencyKey: "del-4", sessionId: session.id, delete: true })).rejects.toThrow(/already been deleted/);
+    await expect(changePackaging(db, { idempotencyKey: "del-4", sessionId: session.id, delete: true, reason: "test" })).rejects.toThrow(/already been deleted/);
     // Nothing recorded any more, so it can still be marked as not made.
     await closeBatch(db, { idempotencyKey: "nm", batchId: b!.id, notMade: true, leftoverReason: "Moved to next week" });
   });

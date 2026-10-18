@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError } from "./base";
+import { OperationError, type Tx } from "./base";
+import { logChange, needReason, type Ref } from "./changes";
 import { dropFile, putFile } from "@/lib/files";
 
 /*
@@ -105,17 +106,66 @@ export async function attachDocuments(
       throw e;
     }
   }
+  for (const row of saved) await logDocument(db, row, "create");
   return saved;
 }
 
+/** The delivery or order a document belongs to, for the history. */
+async function ownerRefs(db: DB | Tx, row: DocumentRow): Promise<Ref[]> {
+  const refs: Ref[] = [];
+  if (row.receiptId) {
+    const [r] = await db.select().from(t.receipts).where(eq(t.receipts.id, row.receiptId));
+    if (r) refs.push({ type: "receipt", id: r.id, code: r.deliveryRef || `Delivery ${r.receivedOn}` });
+    const lots = await db.select({ id: t.lots.id, code: t.lots.code }).from(t.receiptLines).innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id)).where(eq(t.receiptLines.receiptId, row.receiptId));
+    refs.push(...lots.map((l) => ({ type: "lot" as const, id: l.id, code: l.code })));
+  }
+  if (row.purchaseOrderId) {
+    const [po] = await db.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.id, row.purchaseOrderId));
+    if (po) refs.push({ type: "purchase_order", id: po.id, code: po.code });
+  }
+  if (row.supplierId) refs.push({ type: "supplier", id: row.supplierId });
+  return refs;
+}
+
+async function logDocument(db: DB | Tx, row: DocumentRow, action: "create" | "delete" | "restore", reason?: string) {
+  const what = DOC_KIND[row.kind];
+  const verb = action === "create" ? "added" : action === "delete" ? "removed" : "put back";
+  await logChange(db, {
+    action,
+    area: "purchasing",
+    entity: { type: "document", id: row.id, code: row.fileName },
+    summary: `${what} ${verb}: ${row.fileName}`,
+    reason,
+    links: await ownerRefs(db, row),
+  });
+}
+
 /** Take a document off the delivery or order. The row and the file are kept, only marked removed. */
-export async function removeDocument(db: DB, id: string, userId?: string | null) {
-  const [row] = await db
-    .update(t.documents)
-    .set({ removedAt: new Date(), removedBy: userId ?? null })
-    .where(and(eq(t.documents.id, id), isNull(t.documents.removedAt)))
-    .returning();
-  return row ?? null;
+export async function removeDocument(db: DB, id: string, userId?: string | null, reason?: string | null) {
+  const why = needReason(reason, "Say why the file is removed");
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(t.documents)
+      .set({ removedAt: new Date(), removedBy: userId ?? null })
+      .where(and(eq(t.documents.id, id), isNull(t.documents.removedAt)))
+      .returning();
+    if (row) await logDocument(tx, row, "delete", why);
+    return row ?? null;
+  });
+}
+
+/** Put a removed document back. */
+export async function restoreDocument(db: DB, id: string, reason?: string | null) {
+  const why = needReason(reason, "Say why the file is put back");
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(t.documents)
+      .set({ removedAt: null, removedBy: null })
+      .where(and(eq(t.documents.id, id), sql`${t.documents.removedAt} is not null`))
+      .returning();
+    if (row) await logDocument(tx, row, "restore", why);
+    return row ?? null;
+  });
 }
 
 export async function documentById(db: DB, id: string) {

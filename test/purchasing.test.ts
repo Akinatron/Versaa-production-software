@@ -152,7 +152,8 @@ suite("suppliers, orders and deliveries", () => {
     const [changed] = await db.select().from(t.purchaseOrderLines).where(eq(t.purchaseOrderLines.id, jarLine!.id));
     expect(changed!.quantity).toBe("200");
     await markOrderSent(db, jarsPo.id, { sentOn: "2026-10-18" });
-    await expect(updateDraftOrder(db, jarsPo.id, { lines: [] })).rejects.toThrow(/Only a draft/);
+    // A sent order can still be corrected, with a reason.
+    await expect(updateDraftOrder(db, jarsPo.id, { lines: [] })).rejects.toThrow(/reason/);
   });
 
   it("a delivery adds only the accepted quantity; refused goods leave the order partly received until it is closed", async () => {

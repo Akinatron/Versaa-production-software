@@ -96,10 +96,10 @@ suite("production, packaging, sales and traceability", () => {
     await recordConsumption(db, { idempotencyKey: "use-garlic", batchId, itemId: ids["ing-garlic"]!, quantity: "1" });
     expect(await garlic()).toBe("99");
     // It was 3, not 1: 2 more from the same lot.
-    await recordConsumption(db, { idempotencyKey: "fix-garlic", batchId, itemId: ids["ing-garlic"]!, quantity: "3" });
+    await recordConsumption(db, { idempotencyKey: "fix-garlic", reason: "Weighed again", batchId, itemId: ids["ing-garlic"]!, quantity: "3" });
     expect(await garlic()).toBe("97");
     // None was used after all: everything goes back, and the line stays recorded as 0.
-    await recordConsumption(db, { idempotencyKey: "fix-garlic-2", batchId, itemId: ids["ing-garlic"]!, quantity: "0" });
+    await recordConsumption(db, { idempotencyKey: "fix-garlic-2", reason: "None used after all", batchId, itemId: ids["ing-garlic"]!, quantity: "0" });
     expect(await garlic()).toBe("100");
     const [line] = await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, batchId), eq(t.batchConsumption.itemId, ids["ing-garlic"]!)));
     expect(line!.confirmedAt).not.toBeNull();
@@ -165,7 +165,7 @@ suite("production, packaging, sales and traceability", () => {
     expect(run!.status).toBe("closed");
     const open = await db.select().from(t.reservations).where(and(eq(t.reservations.runId, runId), sql`released_at is null`));
     expect(open).toHaveLength(0);
-    await expect(recordConsumption(db, { idempotencyKey: "late", batchId, itemId: ids["ing-garlic"]!, quantity: "1" })).rejects.toThrow(/closed/);
+    await expect(recordConsumption(db, { idempotencyKey: "late", batchId, itemId: ids["ing-garlic"]!, quantity: "1" })).rejects.toThrow(/reason/);
   });
 
   it("history: closed batches give an observed yield and reject rate that the planner then uses", async () => {
