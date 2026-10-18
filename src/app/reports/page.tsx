@@ -159,7 +159,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         title="Reports"
-        lead="What was sold, given away and produced in a period, and how production compared with the plan."
         actions={
           <a href="#downloads" className="btn secondary">
             Download CSV

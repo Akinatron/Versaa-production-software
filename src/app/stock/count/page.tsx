@@ -20,7 +20,7 @@ export default async function CountPage({ searchParams }: { searchParams: Promis
       <PageHeader
         back={{ href: "/stock", label: "Stock" }}
         title="Opening stock count"
-        lead="Enter what you have now. Leave a field empty if you haven't counted it; enter 0 if you have none. You can come back for the rest."
+        lead="Leave a field empty if you haven't counted it; enter 0 if you have none."
       />
       <Flash params={params} />
       {items.length === 0 ? (

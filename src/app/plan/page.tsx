@@ -36,7 +36,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <PageHeader title="Plan production" lead="How many sellable jars of each sauce and size? Calculating saves nothing and takes nothing from stock." />
+      <PageHeader title="Plan production" lead="How many sellable jars of each sauce and size? Calculating saves nothing." />
       <Flash params={params} />
       <ModeTabs mode="jars" />
 

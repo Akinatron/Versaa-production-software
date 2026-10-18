@@ -52,8 +52,6 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
   // Show products that have stock or are promised; others in a short note.
   const shown = avail.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
   const empty = avail.filter((a) => !(a.onHand.gt(0) || a.reserved.gt(0)));
-  const freeJars = avail.reduce((n, a) => n + Math.max(0, Number(a.available)), 0);
-  const promised = avail.reduce((n, a) => n + Number(a.reserved), 0);
   const show = params.show === "stock" || params.show === "history" ? params.show : reason ? "history" : "orders";
   const tab = (key: string, label: string, href: string) => (
     <Link href={href} aria-current={show === key ? "page" : undefined}>
@@ -65,7 +63,6 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="Outbound"
-        lead="Every jar that leaves stock: sales, own use, tests, samples and waste. A sales order only promises jars; stock goes down when you deliver it."
         actions={
           <>
             <Link href="/outbound/orders/new" className="btn secondary">
@@ -78,21 +75,6 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
         }
       />
       <Flash params={params} />
-
-      <div className="stats">
-        <Link href="/outbound">
-          <div className="v">{pending.length}</div>
-          <div className="l">{pending.length === 1 ? "order" : "orders"} to deliver</div>
-        </Link>
-        <Link href="/outbound?show=stock">
-          <div className="v">{freeJars}</div>
-          <div className="l">jars free to sell</div>
-        </Link>
-        <Link href="/outbound?show=stock">
-          <div className="v">{promised}</div>
-          <div className="l">jars promised to orders</div>
-        </Link>
-      </div>
 
       <div
         className="row"

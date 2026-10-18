@@ -23,7 +23,6 @@ export default async function NewOutboundPage({ searchParams }: { searchParams: 
       <PageHeader
         back={{ href: "/outbound", label: "Outbound" }}
         title="Record a stock exit"
-        lead="Jars that leave stock, for any reason. Stock goes down as soon as you save, and the jars stay traceable to their batch."
       />
       <Flash params={params} />
 

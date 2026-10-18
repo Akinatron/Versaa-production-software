@@ -222,6 +222,7 @@ th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--bor
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; white-space: nowrap; }
 tbody tr:last-child > td { border-bottom: 0; }
 tbody tr:hover > td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.nowrap { white-space: nowrap; }
 td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stats .v, input[type="number"] { font-variant-numeric: tabular-nums; }
 tfoot td { font-weight: 650; border-top: 1px solid var(--border-strong); border-bottom: 0; }
@@ -289,11 +290,13 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 .inline-edit > summary { font-weight: 550; color: var(--muted); }
 
 /* ---------------------------------------------------------------- summary numbers */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
-.stats > * { background: var(--surface); padding: 14px 16px; color: inherit; }
-.stats > a:hover { background: var(--surface-2); text-decoration: none; }
-.stats .v { font-size: 1.35rem; font-weight: 650; line-height: 1.2; }
-.stats .l { font-size: 0.825rem; color: var(--muted); }
+/* Key facts of a page as one quiet line: "2 batches to cook | 28 jars free". Not a hero number. */
+.stats { display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 6px; margin: 0 0 20px; padding: 0; }
+.stats > * { display: inline-flex; align-items: baseline; gap: 5px; padding: 0 14px; border-left: 1px solid var(--border-strong); color: inherit; }
+.stats > :first-child { padding-left: 0; border-left: 0; }
+.stats > a:hover { text-decoration: none; } .stats > a:hover .l { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.stats .v { font-weight: 650; }
+.stats .l { color: var(--muted); }
 
 /* ---------------------------------------------------------------- disclosure */
 details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-weight: 600; }
@@ -315,8 +318,6 @@ details.card[open] > summary { margin-bottom: 14px; }
   .worklist > li { flex-wrap: wrap; }
   .worklist > li > .what { flex-basis: calc(100% - 24px); }
   .worklist > li > .btn, .worklist > li > .row { margin-left: 20px; }
-  .stats { grid-template-columns: 1fr 1fr; }
-  .stats > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .worklist .what { flex: 1; min-width: 0; }
 .worklist .what .sub { color: var(--muted); font-size: 0.85rem; }
@@ -328,6 +329,13 @@ details.card[open] > summary { margin-bottom: 14px; }
 .offerlist > li { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .offerlist > li:last-child { border-bottom: 0; }
 .offerlist .card-head { margin-bottom: 4px; }
+
+/* An order's items, folded to one line in lists. */
+.items-fold > summary { font-weight: 450; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.items-fold > summary::before { align-self: center; }
+.items-fold > summary > span:first-child { font-weight: 600; white-space: nowrap; }
+.items-fold[open] > summary { margin-bottom: 6px; }
+.items-fold ul { list-style: none; margin: 0; padding: 0 0 0 16px; display: grid; gap: 2px; }
 
 /* A list of places to go: Settings. */
 .linklist { padding: 0; overflow: hidden; }

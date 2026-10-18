@@ -29,7 +29,7 @@ export default async function ProductionPage() {
 
   return (
     <>
-      <PageHeader title="Production" lead="Batches still to cook. Record the ingredients each one used; then it moves to Packaging." />
+      <PageHeader title="Production" />
       <div className="card scroll">
         {toCook.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>

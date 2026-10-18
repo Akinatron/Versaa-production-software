@@ -12,7 +12,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const [me, users] = await Promise.all([currentUser(), db().select().from(t.users).orderBy(t.users.name)]);
   return (
     <>
-      <PageHeader title="Team" lead={<>Everyone who can sign in. Everybody has the same access.</>} />
+      <PageHeader title="Team" />
       <Flash params={params} />
       <div className="card scroll">
         <table>

@@ -6,6 +6,7 @@ import { formatQty, type UnitCode } from "@/domain/quantity";
 import { PO_STATUS } from "./labels";
 import { markSentAction } from "../orders/actions";
 import { fmtDate } from "./ui/format";
+import { OrderItems } from "./order-items";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -23,18 +24,22 @@ export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string
     >
       <input type="hidden" name="poId" value={poId} />
       <input type="hidden" name="back" value={back} />
-      <div>
-        {!compact && <label className="small">Sent on</label>}
-        <input name="sentOn" type="date" defaultValue={today()} aria-label="Sent on" style={{ maxWidth: 160 }} />
-      </div>
+      {compact ? (
+        <input type="hidden" name="sentOn" value={today()} />
+      ) : (
+        <div>
+          <label className="small">Sent on</label>
+          <input name="sentOn" type="date" defaultValue={today()} style={{ maxWidth: 160 }} />
+        </div>
+      )}
       {!compact && (
         <div>
           <label className="small">Expected delivery (optional)</label>
           <input name="expectedOn" type="date" defaultValue={expectedOn ?? ""} style={{ maxWidth: 150 }} />
         </div>
       )}
-      <button type="submit" className={compact ? "sm" : undefined}>
-        Mark as sent
+      <button type="submit" className={compact ? "sm" : undefined} title={compact ? "Marks it as sent today. To use another date, open the order." : undefined}>
+        {compact ? "Mark as sent today" : "Mark as sent"}
       </button>
     </form>
   );
@@ -63,7 +68,7 @@ export function RunOrdersTable({ orders, back }: { orders: OrderView[]; back: st
             const st = PO_STATUS[o.po.status]!;
             return (
               <tr key={o.po.id}>
-                <td>
+                <td className="nowrap">
                   <Link href={`/orders/${o.po.id}`}>{o.po.code}</Link>
                 </td>
                 <td>{o.supplier.name}</td>
@@ -71,17 +76,16 @@ export function RunOrdersTable({ orders, back }: { orders: OrderView[]; back: st
                   <span className={`badge ${st.cls}`}>{st.label}</span>
                 </td>
                 <td className="small">
-                  {o.lines.map((l) => (
-                    <div key={l.line.id}>
-                      {l.item.name}: {formatQty(new Decimal(l.line.quantity), l.item.stockUnit as UnitCode)}
-                      {l.accepted.gt(0) && o.po.status !== "received" && (
-                        <span className="muted"> · {formatQty(l.accepted, l.item.stockUnit as UnitCode)} in</span>
-                      )}
-                    </div>
-                  ))}
+                  <OrderItems
+                    lines={o.lines.map((l) => ({
+                      id: l.line.id,
+                      text: `${l.item.name}: ${formatQty(new Decimal(l.line.quantity), l.item.stockUnit as UnitCode)}`,
+                      note: l.accepted.gt(0) && o.po.status !== "received" ? `${formatQty(l.accepted, l.item.stockUnit as UnitCode)} in` : null,
+                    }))}
+                  />
                 </td>
-                <td>{fmtDate(o.po.orderedOn)}</td>
-                <td>{fmtDate(o.po.expectedOn)}</td>
+                <td className="nowrap">{fmtDate(o.po.orderedOn)}</td>
+                <td className="nowrap">{fmtDate(o.po.expectedOn)}</td>
                 <td className="num">{money(o.cost)}</td>
                 <td>
                   {o.po.status === "draft" && <MarkSentForm poId={o.po.id} back={back} compact />}

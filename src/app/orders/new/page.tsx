@@ -40,7 +40,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       <PageHeader
         back={{ href: "/orders", label: "Orders" }}
         title="New purchase order"
-        lead="One supplier per order. It is saved as a draft; mark it as sent once placed. Stock goes up when the delivery is recorded."
+        lead="One supplier per order, saved as a draft."
       />
       <Flash params={params} />
       {suppliers.length === 0 ? (

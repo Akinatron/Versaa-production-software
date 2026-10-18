@@ -36,7 +36,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader
         title="Orders"
-        lead="Purchase orders: prepared, sent and received. Ordering doesn't change stock; recording the delivery does. To order for a run, use the run's Order step."
         actions={
           <Link href="/orders/new" className="btn">
             New order
@@ -72,7 +71,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                       <tr key={o.po.id}>
                         <td>
                           <Link href={`/orders/${o.po.id}`}>{o.po.code}</Link>
-                          <div className="small muted">{o.lines.map((l) => l.item.name).join(", ")}</div>
+                          <div className="small muted">
+                            {o.lines.length === 1 ? "1 item" : `${o.lines.length} items`}
+                            {o.lines.length > 0 &&
+                              `: ${o.lines
+                                .slice(0, 2)
+                                .map((l) => l.item.name)
+                                .join(", ")}${o.lines.length > 2 ? ` and ${o.lines.length - 2} more` : ""}`}
+                          </div>
                         </td>
                         <td>
                           <Link href={`/suppliers/${o.supplier.id}`}>{o.supplier.name}</Link>
