@@ -69,7 +69,10 @@ export function IngredientsForm({
   producedOn,
   lines,
   extras,
+  correcting,
 }: {
+  /** Something is recorded already (or the batch is closed): changes are corrections and need a reason. */
+  correcting?: boolean;
   action: (prev: FormResult, form: FormData) => Promise<FormResult>;
   batchId: string;
   idemKey: string;
@@ -335,6 +338,14 @@ export function IngredientsForm({
         </ul>
       )}
       <div className="savebar">
+        {correcting && (
+          <input
+            name="reason"
+            aria-label="Why the correction"
+            placeholder="Why the correction? (needed when changing what was recorded)"
+            style={{ flex: "1 1 280px", maxWidth: 420 }}
+          />
+        )}
         <button type="submit" disabled={saving}>
           {saving ? "Recording…" : "Record"}
         </button>

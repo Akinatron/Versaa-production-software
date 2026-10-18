@@ -4,6 +4,7 @@ import { PageHeader, Steps } from "./ui/header";
 import { fmtDate } from "./ui/format";
 import { SauceName } from "./sauce-name";
 import { batchHref, type BatchStep } from "./batch-paths";
+import { EditedMark } from "./history";
 
 /** Batch header with its three steps, all under /batches/[id]: Cook (ingredients), Pack (jars), Close (summary). */
 export function BatchSteps({
@@ -43,6 +44,9 @@ export function BatchSteps({
           <>
             <SauceName name={sauceName} color={sauceColor} chip /> · recipe v{versionNo} · run <Link href={`/runs/${run.id}`}>{run.code}</Link> ·{" "}
             {fmtDate(run.plannedFor, { weekday: true })}
+            <div>
+              <EditedMark of={{ type: "batch", id: batch.id }} />
+            </div>
           </>
         }
         actions={actions}
