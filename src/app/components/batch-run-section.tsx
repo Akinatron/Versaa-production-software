@@ -8,14 +8,6 @@ import { BATCH_STATUS } from "./labels";
 import { createBatches } from "../runs/actions";
 import { SauceName } from "./sauce-name";
 
-/** A batch opens on the page where its next step is recorded. */
-const nextHref = (b: { id: string; status: string }) =>
-  b.status === "planned" || b.status === "in_production"
-    ? `/production/${b.id}`
-    : b.status === "awaiting_packaging" || b.status === "packing"
-      ? `/packaging/${b.id}`
-      : `/batches/${b.id}`;
-
 /** Run page: the run's batches, and once production has started, plan vs actual. */
 export async function BatchRunSection({ runId, runStatus, frozen }: { runId: string; runStatus: string; frozen: PlanResult | null }) {
   if (runStatus === "draft" || runStatus === "cancelled") return null;
@@ -96,7 +88,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
                 return (
                   <tr key={batch.id}>
                     <td>
-                      <Link href={nextHref(batch)}>
+                      <Link href={`/batches/${batch.id}`}>
                         <strong>{batch.code}</strong>
                       </Link>
                     </td>

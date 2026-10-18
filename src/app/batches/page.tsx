@@ -4,151 +4,209 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { BATCH_STATUS } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
-import { fmtDate } from "../components/ui/format";
+import { fmtDate, relDate } from "../components/ui/format";
 import { SauceName } from "../components/sauce-name";
+import { batchHref, batchStepFor } from "../components/batch-paths";
 
 export const dynamic = "force-dynamic";
 
-const OPEN_ORDER = ["planned", "in_production", "awaiting_packaging", "packing"] as const;
+type Show = "cook" | "pack" | "closed";
+const COOKING = ["planned", "in_production"];
+const PACKING = ["awaiting_packaging", "packing"];
 
-export default async function BatchesPage() {
-  const rows = await db()
-    .select({
-      batch: t.productionBatches,
-      sauce: t.sauces.name,
-      sauceColor: t.sauces.color,
-      runCode: t.productionRuns.code,
-      plannedFor: t.productionRuns.plannedFor,
-      pending: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id} and c.confirmed_at is null)`,
-      sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
-    })
-    .from(t.productionBatches)
-    .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
-    .innerJoin(t.productionRuns, eq(t.productionBatches.runId, t.productionRuns.id))
-    .orderBy(t.productionRuns.plannedFor, t.productionBatches.code);
-  const closed = await db()
-    .select({
-      batch: t.productionBatches,
-      sauce: t.sauces.name,
-      sauceColor: t.sauces.color,
-      runCode: t.productionRuns.code,
-    })
-    .from(t.productionBatches)
-    .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
-    .innerJoin(t.productionRuns, eq(t.productionBatches.runId, t.productionRuns.id))
-    .where(sql`${t.productionBatches.status} in ('closed', 'cancelled')`)
-    .orderBy(desc(t.productionBatches.closedAt))
-    .limit(20);
+/** Every batch in one list, filtered by where it is: to cook, to pack (or close), closed. Each opens on the step it waits on. */
+export default async function BatchesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const sp = await searchParams;
+  const base = () =>
+    db()
+      .select({
+        batch: t.productionBatches,
+        sauce: t.sauces.name,
+        sauceColor: t.sauces.color,
+        runCode: t.productionRuns.code,
+        plannedFor: t.productionRuns.plannedFor,
+        pending: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id} and c.confirmed_at is null)`,
+        lines: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id})`,
+        sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
+        accepted: sql<number>`(select coalesce(sum(l.accepted), 0)::int from packaging_sessions s join packaging_session_lines l on l.session_id = s.id
+        where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
+      })
+      .from(t.productionBatches)
+      .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
+      .innerJoin(t.productionRuns, eq(t.productionBatches.runId, t.productionRuns.id));
+  const [open, closed] = await Promise.all([
+    base()
+      .where(sql`${t.productionBatches.status} not in ('closed', 'cancelled')`)
+      .orderBy(t.productionRuns.plannedFor, t.productionBatches.code),
+    base()
+      .where(sql`${t.productionBatches.status} in ('closed', 'cancelled')`)
+      .orderBy(desc(t.productionBatches.closedAt))
+      .limit(30),
+  ]);
+  type Row = (typeof open)[number];
+  const toCook = open.filter((r) => COOKING.includes(r.batch.status));
+  const toPack = open.filter((r) => PACKING.includes(r.batch.status));
+  const asked = sp.show as Show | undefined;
+  const show: Show = asked && ["cook", "pack", "closed"].includes(asked) ? asked : toCook.length === 0 && toPack.length > 0 ? "pack" : "cook";
 
-  const todo = (r: (typeof rows)[number]) => {
-    const out: string[] = [];
-    if (r.pending > 0) out.push(`${r.pending} ingredient${r.pending === 1 ? "" : "s"} not recorded`);
-    if (r.sessions === 0) out.push("not packed");
-    return out.length ? out.join(" · ") : "ready to close";
+  const tab = (key: Show, label: string, n?: number) => (
+    <Link href={`/batches?show=${key}`} aria-current={show === key ? "page" : undefined}>
+      {label}
+      {n ? ` (${n})` : ""}
+    </Link>
+  );
+  const badge = (r: Row) => {
+    const s = BATCH_STATUS[r.batch.status] ?? { label: r.batch.status, cls: "" };
+    return <span className={`badge ${s.cls}`}>{s.label}</span>;
   };
-  const open = rows.filter((r) => !["closed", "cancelled"].includes(r.batch.status));
-
-  const nextHref = (r: (typeof rows)[number]) =>
-    r.pending > 0 || r.batch.status === "planned" ? `/production/${r.batch.id}` : r.sessions === 0 ? `/packaging/${r.batch.id}` : `/batches/${r.batch.id}`;
-  open.sort((a, b) => OPEN_ORDER.indexOf(b.batch.status as never) - OPEN_ORDER.indexOf(a.batch.status as never) || a.plannedFor.localeCompare(b.plannedFor));
+  const sauceCell = (r: Row) => <SauceName name={r.sauce} color={r.sauceColor} />;
+  const runCell = (r: Row) => <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>;
+  const codeCell = (r: Row) => (
+    <Link href={batchHref(r.batch.id, batchStepFor({ status: r.batch.status, pending: r.pending, sessions: r.sessions }))}>
+      <strong>{r.batch.code}</strong>
+    </Link>
+  );
 
   return (
     <>
       <PageHeader title="Batches" />
-      <h2 style={{ marginTop: 0 }}>Open</h2>
-      <div className="card scroll">
-        {open.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            No open batches. They appear when a run is confirmed. <Link href="/plan">Plan production</Link>.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Batch</th>
-                <th>Sauce</th>
-                <th>Run</th>
-                <th>Status</th>
-                <th>Still to do</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {open.map((r) => {
-                const s = BATCH_STATUS[r.batch.status]!;
-                return (
+      <nav className="tabs" aria-label="Show">
+        {tab("cook", "To cook", toCook.length)}
+        {tab("pack", "To pack", toPack.length)}
+        {tab("closed", "Closed")}
+      </nav>
+
+      {show === "cook" && (
+        <div className="card scroll">
+          {toCook.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Nothing to cook. Batches appear here when a run is confirmed. <Link href="/plan">Plan production</Link>.
+            </p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Sauce</th>
+                  <th>Run</th>
+                  <th>Cook on</th>
+                  <th>Still to record</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {toCook.map((r) => (
                   <tr key={r.batch.id}>
+                    <td>{codeCell(r)}</td>
+                    <td>{sauceCell(r)}</td>
+                    <td>{runCell(r)}</td>
                     <td>
-                      <Link href={`/batches/${r.batch.id}`}>
-                        <strong>{r.batch.code}</strong>
-                      </Link>
+                      {relDate(r.plannedFor)}
+                      {r.batch.status !== "planned" && <> {badge(r)}</>}
                     </td>
-                    <td>
-                      <SauceName name={r.sauce} color={r.sauceColor} />
-                    </td>
-                    <td>
-                      <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
-                      <div className="small muted">{fmtDate(r.batch.producedOn ?? r.plannedFor)}</div>
-                    </td>
-                    <td>
-                      <span className={`badge ${s.cls}`}>{s.label}</span>
-                    </td>
-                    <td className="small">{todo(r)}</td>
+                    <td className="small">{r.lines === 0 ? "no recipe lines" : `${r.pending} of ${r.lines} ingredients`}</td>
                     <td className="num">
-                      <Link href={nextHref(r)} className="btn secondary sm">
-                        {r.pending > 0 || r.batch.status === "planned" ? "Ingredients" : r.sessions === 0 ? "Jars" : "Close"}
+                      <Link href={batchHref(r.batch.id, "cook")} className="btn sm">
+                        Cook
                       </Link>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-      <h2>Recently closed</h2>
-      <div className="card scroll">
-        {closed.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            None yet.
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Batch</th>
-                <th>Sauce</th>
-                <th>Run</th>
-                <th>Cooked</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {closed.map((r) => {
-                const s = BATCH_STATUS[r.batch.status]!;
-                return (
-                  <tr key={r.batch.id}>
-                    <td>
-                      <Link href={`/batches/${r.batch.id}`}>{r.batch.code}</Link>
-                    </td>
-                    <td>
-                      <SauceName name={r.sauce} color={r.sauceColor} />
-                    </td>
-                    <td>
-                      <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
-                    </td>
-                    <td>{fmtDate(r.batch.producedOn)}</td>
-                    <td>
-                      <span className={`badge ${s.cls}`}>{s.label}</span>
-                      {r.batch.closedAt ? <span className="small muted"> {fmtDate(r.batch.closedAt.toISOString().slice(0, 10))}</span> : null}
-                    </td>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {show === "pack" && (
+        <div className="card scroll">
+          {toPack.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              No cooked batches waiting. A batch moves here once all its ingredients are recorded.
+            </p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Sauce</th>
+                  <th>Run</th>
+                  <th>Cooked</th>
+                  <th>Status</th>
+                  <th className="num">Jars so far</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {toPack.map((r) => {
+                  const step = batchStepFor({ status: r.batch.status, pending: r.pending, sessions: r.sessions });
+                  return (
+                    <tr key={r.batch.id}>
+                      <td>{codeCell(r)}</td>
+                      <td>{sauceCell(r)}</td>
+                      <td>{runCell(r)}</td>
+                      <td>{r.batch.producedOn ? relDate(r.batch.producedOn) : "—"}</td>
+                      <td>
+                        {badge(r)}
+                        {r.sessions > 0 && <div className="small muted">ready to close</div>}
+                      </td>
+                      <td className="num">{r.sessions > 0 ? r.accepted : "—"}</td>
+                      <td className="num">
+                        <Link href={batchHref(r.batch.id, step)} className={`btn sm${step === "close" ? " secondary" : ""}`}>
+                          {step === "close" ? "Close" : "Pack"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {show === "closed" && (
+        <>
+          <div className="card scroll">
+            {closed.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                None yet. Batches land here when they are closed or marked as not made.
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch</th>
+                    <th>Sauce</th>
+                    <th>Run</th>
+                    <th>Cooked</th>
+                    <th>Status</th>
+                    <th className="num">Jars</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {closed.map((r) => (
+                    <tr key={r.batch.id}>
+                      <td>
+                        <Link href={batchHref(r.batch.id, "close")}>{r.batch.code}</Link>
+                      </td>
+                      <td>{sauceCell(r)}</td>
+                      <td>{runCell(r)}</td>
+                      <td>{fmtDate(r.batch.producedOn)}</td>
+                      <td>
+                        {badge(r)}
+                        {r.batch.closedAt ? <span className="small muted"> {fmtDate(r.batch.closedAt.toISOString().slice(0, 10))}</span> : null}
+                      </td>
+                      <td className="num">{r.sessions > 0 ? r.accepted : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <p className="small muted">The 30 most recent. Packaging of a closed batch can still be edited from its Pack step.</p>
+        </>
+      )}
     </>
   );
 }

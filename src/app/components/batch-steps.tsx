@@ -3,10 +3,9 @@ import { BATCH_STATUS } from "./labels";
 import { PageHeader, Steps } from "./ui/header";
 import { fmtDate } from "./ui/format";
 import { SauceName } from "./sauce-name";
+import { batchHref, type BatchStep } from "./batch-paths";
 
-type Step = "summary" | "production" | "packaging";
-
-/** Batch header with its three pages: Production (ingredients), Packaging, and the batch summary (close). */
+/** Batch header with its three steps, all under /batches/[id]: Cook (ingredients), Pack (jars), Close (summary). */
 export function BatchSteps({
   batch,
   sauceName,
@@ -14,40 +13,30 @@ export function BatchSteps({
   run,
   current,
   versionNo,
+  progress,
   actions,
 }: {
   batch: { id: string; code: string; status: string };
   sauceName: string;
   sauceColor?: string | null;
   run: { id: string; code: string; plannedFor: string };
-  current: Step;
+  current: BatchStep;
   versionNo: number;
+  /** Ticks on the steps already done: every ingredient recorded, at least one packaging session. */
+  progress?: { cooked: boolean; packed: boolean };
   actions?: React.ReactNode;
 }) {
   const status = BATCH_STATUS[batch.status] ?? { label: batch.status, cls: "" };
   const steps = [
-    {
-      key: "production",
-      label: "Ingredients",
-      href: `/production/${batch.id}`,
-    },
-    { key: "packaging", label: "Jars", href: `/packaging/${batch.id}` },
-    {
-      key: "summary",
-      label: "Summary and close",
-      href: `/batches/${batch.id}`,
-    },
+    { key: "cook", label: "Cook", href: batchHref(batch.id, "cook"), done: progress?.cooked },
+    { key: "pack", label: "Pack", href: batchHref(batch.id, "pack"), done: progress?.packed },
+    { key: "close", label: "Close", href: batchHref(batch.id, "close"), done: batch.status === "closed" },
   ];
-  const back =
-    current === "production"
-      ? { href: "/production", label: "Production" }
-      : current === "packaging"
-        ? { href: "/packaging", label: "Packaging" }
-        : { href: "/batches", label: "Batches" };
+  const show = batch.status === "closed" || batch.status === "cancelled" ? "closed" : current === "cook" ? "cook" : "pack";
   return (
     <>
       <PageHeader
-        back={back}
+        back={{ href: `/batches?show=${show}`, label: "Batches" }}
         title={batch.code}
         status={status}
         lead={

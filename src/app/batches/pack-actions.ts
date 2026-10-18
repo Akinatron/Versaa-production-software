@@ -20,13 +20,13 @@ function jarLines(form: FormData): PackagingLineInput[] {
 }
 
 function done(batchId: string, msg: string): never {
-  for (const p of [`/packaging/${batchId}`, "/packaging", `/batches/${batchId}`, "/batches", "/runs", "/stock"]) revalidatePath(p);
-  redirect(withOk(`/packaging/${batchId}`, msg));
+  for (const p of [`/batches/${batchId}/pack`, `/batches/${batchId}/close`, "/batches", "/runs", "/stock", "/"]) revalidatePath(p);
+  redirect(withOk(`/batches/${batchId}/pack`, msg));
 }
 
 export async function recordPack(form: FormData) {
   const batchId = str(form, "batchId");
-  await attempt(`/packaging/${batchId}`, async () =>
+  await attempt(`/batches/${batchId}/pack`, async () =>
     recordPackaging(db(), {
       idempotencyKey: str(form, "key"),
       batchId,
@@ -42,7 +42,7 @@ export async function recordPack(form: FormData) {
 export async function editPack(form: FormData) {
   const batchId = str(form, "batchId");
   const sessionId = str(form, "sessionId");
-  await attempt(`/packaging/${batchId}?edit=${sessionId}`, async () =>
+  await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
     changePackaging(db(), {
       idempotencyKey: str(form, "key"),
       sessionId,
@@ -58,7 +58,7 @@ export async function editPack(form: FormData) {
 export async function deletePack(form: FormData) {
   const batchId = str(form, "batchId");
   const sessionId = str(form, "sessionId");
-  await attempt(`/packaging/${batchId}?edit=${sessionId}`, async () =>
+  await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
     changePackaging(db(), { idempotencyKey: str(form, "key"), sessionId, delete: true, reason: str(form, "reason") || null }),
   );
   done(batchId, "Packaging session deleted. Its jars were taken out of stock and its materials put back; the record is kept for traceability.");

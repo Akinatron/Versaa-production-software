@@ -3,11 +3,13 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import * as t from "@/db/schema";
 import { db } from "@/db/client";
 import { OperationError } from "@/db/operations";
 import { recordIngredients } from "@/db/production";
 import { withOk } from "../components/flash";
-import type { FormResult } from "./[id]/ingredients-form";
+import type { FormResult } from "./[id]/cook/ingredients-form";
 
 const Payload = z.array(
   z.object({
@@ -34,11 +36,19 @@ export async function recordIngredientsAction(_prev: FormResult, form: FormData)
     if (e instanceof OperationError) return { error: e.message };
     throw e;
   }
-  for (const p of [`/production/${batchId}`, "/production", "/packaging", `/batches/${batchId}`, "/batches", "/runs"]) revalidatePath(p);
+  for (const p of [`/batches/${batchId}/cook`, `/batches/${batchId}/pack`, `/batches/${batchId}/close`, "/batches", "/runs", "/"]) revalidatePath(p);
+  // First time every ingredient is in: the batch is cooked, so go straight on to packing.
+  if (!result.alreadyRecorded && result.pending === 0) {
+    const [{ n } = { n: 0 }] = await db()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(t.packagingSessions)
+      .where(and(eq(t.packagingSessions.batchId, batchId), isNull(t.packagingSessions.deletedAt)));
+    if (n === 0) redirect(withOk(`/batches/${batchId}/pack`, "Ingredients recorded and stock updated. Next: record the jars."));
+  }
   const msg = result.alreadyRecorded
     ? "Already recorded."
     : result.changed === 0
       ? "Recorded. Nothing had changed, so stock stays as it was."
       : `Recorded ${result.changed} ingredient line(s). Stock is updated.`;
-  redirect(withOk(`/production/${batchId}`, msg));
+  redirect(withOk(`/batches/${batchId}/cook`, msg));
 }
