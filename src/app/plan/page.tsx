@@ -321,10 +321,7 @@ async function OrdersMode({ params, base }: { params: Record<string, string | un
 
   return (
     <>
-      <PageHeader
-        title="Plan production"
-        lead="Jars your pending sales orders still need: what they ask for, minus jars in stock and jars still to come from confirmed runs. Review the proposal, adjust it if you like, and save it as a run."
-      />
+      <PageHeader title="Plan production" lead="What pending sales orders still need, minus jars in stock and jars confirmed runs will pack." />
       <Flash params={params} />
       <ModeTabs mode="orders" />
 
@@ -343,8 +340,7 @@ async function OrdersMode({ params, base }: { params: Record<string, string | un
           </Link>
         )}
         <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-          {until ? `Counts orders due by ${fmtDate(until)} and orders with no delivery date.` : "Counts every pending order."}{" "}
-          {demand.ordersLater > 0 && `${demand.ordersLater} ${demand.ordersLater === 1 ? "order is" : "orders are"} due later and left out.`}
+          {until ? `Orders due by ${fmtDate(until)}, plus orders with no delivery date.` : "Every pending order."}
         </p>
       </form>
 
@@ -359,9 +355,22 @@ async function OrdersMode({ params, base }: { params: Record<string, string | un
         </Empty>
       ) : (
         <>
-          <h2>
-            {demand.ordersCounted} {demand.ordersCounted === 1 ? "order" : "orders"} counted
-          </h2>
+          <div className="stats">
+            <span>
+              <span className="v">{demand.ordersCounted}</span>
+              <span className="l">{demand.ordersCounted === 1 ? "order counted" : "orders counted"}</span>
+            </span>
+            {demand.ordersLater > 0 && (
+              <span>
+                <span className="v">{demand.ordersLater}</span>
+                <span className="l">due later</span>
+              </span>
+            )}
+            <span>
+              <span className="v">{Object.values(targets).reduce((a, n) => a + n, 0)}</span>
+              <span className="l">jars to make</span>
+            </span>
+          </div>
           <div className="card scroll">
             {lines.length === 0 ? (
               <p className="muted" style={{ margin: 0 }}>
@@ -392,8 +401,7 @@ async function OrdersMode({ params, base }: { params: Record<string, string | un
               </table>
             )}
             <p className="small muted" style={{ marginBottom: 0 }}>
-              Coming from runs: jars confirmed runs still have to pack.
-              {demand.draftRuns > 0 && ` ${demand.draftRuns} draft ${demand.draftRuns === 1 ? "run is" : "runs are"} not counted until confirmed.`}
+              {demand.draftRuns > 0 && `${demand.draftRuns} draft ${demand.draftRuns === 1 ? "run is" : "runs are"} not counted until confirmed.`}
               {hasTargets && (
                 <>
                   {" "}
