@@ -1,7 +1,8 @@
 import Decimal from "decimal.js";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
+import { netLines } from "./production";
 
 /*
  * Traceability queries. Movements link lots to the documents that used or
@@ -174,7 +175,12 @@ export async function traceBatch(db: DB, batchId: string) {
     .from(t.batchConsumption)
     .innerJoin(t.items, eq(t.batchConsumption.itemId, t.items.id))
     .where(eq(t.batchConsumption.batchId, batchId));
-  const sessions = await db.select().from(t.packagingSessions).where(eq(t.packagingSessions.batchId, batchId)).orderBy(t.packagingSessions.packedOn);
+  // Deleted sessions stay in the database for traceability but are left out here; their stock effect is already reversed.
+  const sessions = await db
+    .select()
+    .from(t.packagingSessions)
+    .where(and(eq(t.packagingSessions.batchId, batchId), isNull(t.packagingSessions.deletedAt)))
+    .orderBy(t.packagingSessions.packedOn, t.packagingSessions.createdAt);
   const sessionLines = sessions.length
     ? await db
         .select({ line: t.packagingSessionLines, product: t.products })
@@ -226,9 +232,9 @@ export async function traceBatch(db: DB, batchId: string) {
   const destinations = await destinationsOfLots(db, jarLots.map((l) => l.id));
   const incidents = await db.select().from(t.incidents).where(eq(t.incidents.batchId, batchId)).orderBy(t.incidents.occurredOn);
 
-  const bySize = new Map<string, { productId: string; name: string; filled: number; rejected: number; accepted: number }>();
+  const bySize = new Map<string, { productId: string; itemId: string; name: string; filled: number; rejected: number; accepted: number }>();
   for (const { line, product } of sessionLines) {
-    const cur = bySize.get(product.id) ?? { productId: product.id, name: product.name, filled: 0, rejected: 0, accepted: 0 };
+    const cur = bySize.get(product.id) ?? { productId: product.id, itemId: product.itemId, name: product.name, filled: 0, rejected: 0, accepted: 0 };
     cur.filled += line.filled;
     cur.rejected += line.rejected;
     cur.accepted += line.accepted;
@@ -240,7 +246,11 @@ export async function traceBatch(db: DB, batchId: string) {
   return {
     ...row,
     ingredientUse,
-    sessions: sessions.map((s) => ({ ...s, lines: sessionLines.filter((l) => l.line.sessionId === s.id) })),
+    // Per session, one line per size: the original plus any corrections from edits.
+    sessions: sessions.map((s) => {
+      const mine = sessionLines.filter((l) => l.line.sessionId === s.id);
+      return { ...s, lines: netLines(mine.map((l) => l.line)).map((line) => ({ line, product: mine.find((m) => m.product.id === line.productId)!.product })) };
+    }),
     jarsBySize: [...bySize.values()],
     filledLitres,
     sellableLitres,

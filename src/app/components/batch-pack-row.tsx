@@ -5,9 +5,23 @@ import { useState } from "react";
 const big = { fontSize: "1.15rem", padding: "12px", maxWidth: 140 } as const;
 
 /** One jar size in a packaging session: filled and rejected, with accepted worked out as you type. */
-export function BatchPackRow({ index, productId, name, fillMl }: { index: number; productId: string; name: string; fillMl: number }) {
-  const [filled, setFilled] = useState("");
-  const [rejected, setRejected] = useState("");
+export function BatchPackRow({
+  index,
+  productId,
+  name,
+  fillMl,
+  initialFilled = "",
+  initialRejected = "",
+}: {
+  index: number;
+  productId: string;
+  name: string;
+  fillMl: number;
+  initialFilled?: string;
+  initialRejected?: string;
+}) {
+  const [filled, setFilled] = useState(initialFilled);
+  const [rejected, setRejected] = useState(initialRejected);
   const f = filled === "" ? 0 : Number(filled);
   const r = rejected === "" ? 0 : Number(rejected);
   const valid = Number.isInteger(f) && Number.isInteger(r) && f >= 0 && r >= 0 && r <= f;

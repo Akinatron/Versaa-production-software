@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
-import { ensureBulkItem } from "./production";
 import { batchPrefixFor } from "@/domain/codes";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
@@ -205,11 +204,8 @@ export async function addSauce(db: DB, input: { name: string; batchPrefix?: stri
   if (!name) throw new OperationError("Name is required.");
   const code = await uniqueCode(db, slug(name), t.sauces);
   const prefix = (input.batchPrefix?.trim() || batchPrefixFor(name)).toUpperCase().slice(0, 5);
-  return db.transaction(async (tx) => {
-    const [row] = await tx.insert(t.sauces).values({ code, name, batchPrefix: prefix }).returning();
-    await ensureBulkItem(tx, row!);
-    return row!;
-  });
+  const [row] = await db.insert(t.sauces).values({ code, name, batchPrefix: prefix }).returning();
+  return row!;
 }
 
 export async function setSauceActive(db: DB, sauceId: string, active: boolean) {

@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 
 const tiles = [
   { href: "/plan", title: "Plan production", text: "Jars or batches per sauce → ingredients, packaging and what to buy." },
-  { href: "/batches", title: "Batches", text: "Record what was used, measured and packed." },
+  { href: "/production", title: "Production", text: "Record the ingredients each batch used." },
+  { href: "/packaging", title: "Packaging", text: "Record the jars packed from each cooked batch." },
   { href: "/outbound", title: "Outbound", text: "Every jar leaving stock: sales and orders, own use, tests, samples, waste." },
   { href: "/deliveries/new", title: "Record a delivery", text: "What arrived, with supplier batch and best-before." },
   { href: "/orders", title: "Purchase orders", text: "What's ordered and still pending." },
@@ -42,10 +43,10 @@ export default async function Home() {
         (select count(*)::int from purchase_order_lines l where l.purchase_order_id = o.id) as lines
       from purchase_orders o join suppliers s on s.id = o.supplier_id
       where o.status in ('sent', 'partly_received') order by o.expected_on nulls last`),
-    d.execute<{ id: string; code: string; status: string; sauce: string; planned_for: string; pending: number; bulk_left: string | null }>(sql`
+    d.execute<{ id: string; code: string; status: string; sauce: string; planned_for: string; pending: number; sessions: number }>(sql`
       select b.id, b.code, b.status::text, s.name as sauce, r.planned_for::text,
         (select count(*)::int from batch_consumption c where c.batch_id = b.id and c.confirmed_at is null) as pending,
-        (select sum(m.quantity)::text from movements m where m.lot_id = b.bulk_lot_id) as bulk_left
+        (select count(*)::int from packaging_sessions ps where ps.batch_id = b.id and ps.deleted_at is null) as sessions
       from production_batches b join sauces s on s.id = b.sauce_id join production_runs r on r.id = b.run_id
       where b.status not in ('closed', 'cancelled') order by r.planned_for, b.code`),
     d.execute<{ id: string; code: string; who: string | null; product: string; jars: number; on_hand: string; other: string }>(sql`
@@ -169,15 +170,13 @@ export default async function Home() {
     const why =
       b.status === "planned"
         ? `planned for ${b.planned_for}, nothing recorded yet`
-        : b.status === "in_production"
-          ? b.pending > 0
-            ? `${b.pending} ingredient line(s) still pending`
-            : "ingredients recorded, measured output still missing"
-          : b.status === "awaiting_packaging"
-            ? "output measured, packaging not recorded yet"
-            : b.pending > 0
-              ? `packed, but ${b.pending} ingredient line(s) still pending before it can close`
-              : `packed, waiting to be closed${b.bulk_left && new Decimal(b.bulk_left).gt(0) ? ` (${new Decimal(b.bulk_left).toString()} L bulk left)` : ""}`;
+        : b.pending > 0
+          ? b.sessions > 0
+            ? `packed, but ${b.pending} ingredient line(s) still pending before it can close`
+            : `${b.pending} ingredient line(s) still pending`
+          : b.sessions === 0
+            ? "cooked, packaging not recorded yet"
+            : "packed, waiting to be closed";
     alerts.push({
       level: "warn",
       text: (
