@@ -233,24 +233,24 @@ export default async function Home() {
       b.status === "planned"
         ? {
             why: `To cook, planned ${relDate(b.planned_for)}`,
-            href: `/production/${b.id}`,
+            href: `/batches/${b.id}/cook`,
             label: "Record ingredients",
           }
         : b.pending > 0
           ? {
               why: `${plural(b.pending, "ingredient line")} still to record`,
-              href: `/production/${b.id}`,
+              href: `/batches/${b.id}/cook`,
               label: "Record ingredients",
             }
           : b.sessions === 0
             ? {
                 why: "Cooked, jars not recorded yet",
-                href: `/packaging/${b.id}`,
+                href: `/batches/${b.id}/pack`,
                 label: "Record jars",
               }
             : {
                 why: "Packed, ready to close",
-                href: `/batches/${b.id}`,
+                href: `/batches/${b.id}/close`,
                 label: "Close batch",
               };
     alerts.push({
@@ -379,11 +379,11 @@ export default async function Home() {
       />
 
       <div className="stats">
-        <Link href="/production">
+        <Link href="/batches?show=cook">
           <div className="v">{toCook}</div>
           <div className="l">{toCook === 1 ? "batch" : "batches"} to cook</div>
         </Link>
-        <Link href="/packaging">
+        <Link href="/batches?show=pack">
           <div className="v">{toPack}</div>
           <div className="l">{toPack === 1 ? "batch" : "batches"} to pack or close</div>
         </Link>

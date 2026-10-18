@@ -39,18 +39,12 @@ export function Sidebar({ user, counts, signOut }: { user: { name: string }; cou
         { href: "/plan", label: "Plan", icon: "plan" },
         { href: "/runs", label: "Runs", icon: "runs" },
         {
-          href: "/production",
-          label: "Production",
-          icon: "production",
-          count: counts.production,
+          href: "/batches",
+          label: "Batches",
+          icon: "batches",
+          count: counts.production + counts.packaging,
+          also: ["/production", "/packaging"],
         },
-        {
-          href: "/packaging",
-          label: "Packaging",
-          icon: "packaging",
-          count: counts.packaging,
-        },
-        { href: "/batches", label: "Batches", icon: "batches" },
       ],
     },
     {

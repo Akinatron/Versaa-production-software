@@ -181,7 +181,7 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
   return db.transaction(async (tx) => {
     const { batch } = await getBatch(tx, input.batchId);
     const existing = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
-    if (existing.some((l) => l.recordKey === input.idempotencyKey)) return { alreadyRecorded: true, changed: 0 };
+    if (existing.some((l) => l.recordKey === input.idempotencyKey)) return { alreadyRecorded: true, changed: 0, pending: null };
     assertOpen(batch);
 
     const seen = new Set<string>();
@@ -270,7 +270,7 @@ export async function recordIngredients(db: DB, input: { idempotencyKey: string;
       .from(t.batchConsumption)
       .where(and(eq(t.batchConsumption.batchId, batch.id), isNull(t.batchConsumption.confirmedAt)));
     if (pending === 0) await advance(tx, batch.id, "awaiting_packaging");
-    return { alreadyRecorded: false, changed };
+    return { alreadyRecorded: false, changed, pending };
   });
 }
 

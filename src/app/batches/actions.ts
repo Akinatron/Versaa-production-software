@@ -9,7 +9,7 @@ import { closeBatch, recordIncident } from "@/db/production";
 import { attempt, withOk } from "../components/flash";
 
 const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
-const pathOf = (batchId: string) => `/batches/${batchId}`;
+const pathOf = (batchId: string) => `/batches/${batchId}/close`;
 
 function done(batchId: string, msg: string, anchor = ""): never {
   revalidatePath(pathOf(batchId));
