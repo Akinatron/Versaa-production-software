@@ -40,7 +40,11 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <PageHeader title="Plan production" lead="How many sellable jars of each sauce and size? Calculating saves nothing." />
+      <PageHeader
+        back={{ href: "/runs", label: "Runs" }}
+        title="Plan production"
+        lead="How many sellable jars of each sauce and size? Calculating saves nothing."
+      />
       <Flash params={params} />
       <ModeTabs mode="jars" />
 
@@ -183,6 +187,7 @@ function BatchMode({ params, base }: { params: Record<string, string | undefined
   return (
     <>
       <PageHeader
+        back={{ href: "/runs", label: "Runs" }}
         title="Plan production"
         lead="How many batches of each sauce, and how to split each one over the jar sizes (percent of its volume)? This becomes sellable jar targets, planned exactly like entering jars."
       />
@@ -321,7 +326,11 @@ async function OrdersMode({ params, base }: { params: Record<string, string | un
 
   return (
     <>
-      <PageHeader title="Plan production" lead="What pending sales orders still need, minus jars in stock and jars confirmed runs will pack." />
+      <PageHeader
+        back={{ href: "/runs", label: "Runs" }}
+        title="Plan production"
+        lead="What pending sales orders still need, minus jars in stock and jars confirmed runs will pack."
+      />
       <Flash params={params} />
       <ModeTabs mode="orders" />
 

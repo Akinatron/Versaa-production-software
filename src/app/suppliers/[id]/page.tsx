@@ -9,8 +9,8 @@ import { type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
 import { PO_STATUS } from "../../components/labels";
-import { OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
-import { linkAction, setSupplierActiveAction, updateSupplierAction } from "../actions";
+import { AddLinkForm, MakeFavourite, OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
+import { setSupplierActiveAction, updateSupplierAction } from "../actions";
 import { loadOrders } from "@/db/purchasing";
 import { PageHeader } from "../../components/ui/header";
 import { History } from "../../components/history";
@@ -80,7 +80,7 @@ export default async function SupplierPage({
         lead={supplier.contact ?? "No contact saved."}
         actions={
           supplier.active ? (
-            <Link href="/orders/new" className="btn secondary">
+            <Link href={`/orders/new?supplier=${id}`} className="btn secondary">
               New order
             </Link>
           ) : null
@@ -89,7 +89,10 @@ export default async function SupplierPage({
       <Flash params={flash} />
 
       <h2>Items sold</h2>
-      <p className="small muted">Prices are per pack as this supplier sells it (e.g. 12 € per 25 kg sack). Orders are rounded up to whole packs.</p>
+      <p className="small muted">
+        Price for a quantity as this supplier sells it (e.g. 12 € for a 25 kg sack); orders are rounded up to whole packs. The favourite is preselected when
+        ordering. These are the same links shown on each item&apos;s card.
+      </p>
       {offers.length === 0 && <p className="card muted">No items yet. Add the first one below.</p>}
       {offers.length > 0 && (
         <ul className="offerlist card">
@@ -106,6 +109,11 @@ export default async function SupplierPage({
                   </Link>
                   <span className={`badge ${o.rank === 1 ? "ok" : "neutral"}`}>{ordinal(o.rank)}</span>
                   {count > 1 && <span className="small muted">of {count} suppliers</span>}
+                  {o.rank !== 1 && (
+                    <span style={{ marginLeft: "auto" }}>
+                      <MakeFavourite supplierItemId={o.supplierItemId} back={back} />
+                    </span>
+                  )}
                 </div>
                 <div>
                   <PriceText offer={o} unit={unit} />
@@ -119,42 +127,28 @@ export default async function SupplierPage({
       )}
 
       <h2>Add an item this supplier sells</h2>
-      <form action={linkAction} className="card row" style={{ gap: 8, alignItems: "flex-end" }}>
-        <input type="hidden" name="supplierId" value={id} />
-        <input type="hidden" name="back" value={back} />
-        <div style={{ minWidth: 220 }}>
-          <label>Item (required)</label>
-          <ItemSelect
-            name="itemId"
-            items={items
-              .filter((i) => !linked.has(i.id))
-              .map((i) => ({
-                id: i.id,
-                name: i.name,
-                kind: i.kind,
-                stockUnit: i.stockUnit as UnitCode,
-              }))}
-          />
-        </div>
-        <div>
-          <label>Pack size (in the item's unit)</label>
-          <input name="packQty" type="number" min="0" step="any" placeholder="e.g. 25" />
-        </div>
-        <div>
-          <label>Pack name</label>
-          <input name="packName" type="text" placeholder="sack, box…" style={{ maxWidth: 120 }} />
-        </div>
-        <div>
-          <label>Price per pack (€)</label>
-          <input name="price" type="number" min="0" step="any" />
-        </div>
-        <button type="submit" className="secondary">
-          Add item
-        </button>
-        <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-          Leave the pack size empty if they sell any quantity; the price is then per kg, L or unit.
-        </p>
-      </form>
+      <AddLinkForm
+        supplierId={id}
+        back={back}
+        button="Add item"
+        canBeFavourite
+        chooser={
+          <div style={{ minWidth: 220 }}>
+            <label>Item (required)</label>
+            <ItemSelect
+              name="itemId"
+              items={items
+                .filter((i) => !linked.has(i.id))
+                .map((i) => ({
+                  id: i.id,
+                  name: i.name,
+                  kind: i.kind,
+                  stockUnit: i.stockUnit as UnitCode,
+                }))}
+            />
+          </div>
+        }
+      />
 
       <h2>Recent orders</h2>
       <div className="card scroll">

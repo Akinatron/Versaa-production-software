@@ -1,12 +1,14 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { planForRun } from "@/db/operations";
+import { planForRun, runTargets } from "@/db/operations";
+import { loadPlanCatalog } from "@/db/planning";
 import { loadOrders, planBudget } from "@/db/purchasing";
 import type { PlanResult } from "@/domain/planner";
 import { Flash } from "../../components/flash";
 import { PlanView } from "../../components/plan-view";
-import { cancel, confirm, restore } from "../actions";
+import { cancel, confirm, editDraft, restore } from "../actions";
+import Link from "next/link";
 import { EditedMark, History, ReasonField } from "../../components/history";
 import { BatchRunSection } from "../../components/batch-run-section";
 import { BudgetTable } from "../../components/budget-table";
@@ -33,9 +35,16 @@ export default async function RunPage({
   const frozen = snapshot ? (snapshot.data as PlanResult) : null;
   const [orders, budget] = await Promise.all([loadOrders(db(), { runId: id }), planBudget(db(), live)]);
   const shortCount = live.requirements.filter((r) => r.status === "short").length;
+  const editing = run.status === "draft" && flash.edit === "1";
+  const shown = frozen ?? live;
 
-  const actions = (
+  const actions = editing ? null : (
     <>
+      {run.status === "draft" && (
+        <Link href={`/runs/${run.id}?edit=1`} className="btn secondary edit-only">
+          Edit
+        </Link>
+      )}
       {(run.status === "draft" || run.status === "confirmed") && (
         <a href="#cancel" className="btn secondary edit-only">
           {run.status === "draft" ? "Discard" : "Cancel run"}
@@ -55,6 +64,7 @@ export default async function RunPage({
       <RunHeader run={run} step="run" actions={actions} />
       <EditedMark of={{ type: "run", id: run.id }} />
       <Flash params={flash} />
+      {editing ? <EditDraft runId={run.id} plannedFor={run.plannedFor} /> : <RunSummary result={shown} />}
       {run.status === "cancelled" && !run.confirmedAt && (
         <form action={restore} className="card row" style={{ alignItems: "flex-end" }}>
           <input type="hidden" name="runId" value={run.id} />
@@ -69,7 +79,7 @@ export default async function RunPage({
         </form>
       )}
 
-      {run.status === "draft" && (
+      {run.status === "draft" && !editing && (
         <ul className="issues">
           <li>
             <strong>This run is a draft.</strong> Confirming saves this forecast to compare with what is actually produced and reserves the ingredients and
@@ -83,7 +93,7 @@ export default async function RunPage({
         </p>
       )}
 
-      <PlanView result={frozen ?? live} only={["issues", "production"]} batchesTitle="Batches per sauce" />
+      <PlanView result={shown} only={["issues"]} />
 
       <BatchRunSection runId={run.id} runStatus={run.status} frozen={frozen} />
 
@@ -131,5 +141,103 @@ export default async function RunPage({
         {shortCount > 0 ? ` (${shortCount} item${shortCount === 1 ? "" : "s"} to buy)` : ""}
       </NextStep>
     </>
+  );
+}
+
+/** First thing on the run: how many batches and jars it makes. */
+async function RunSummary({ result }: { result: PlanResult }) {
+  const batches = result.sauces.reduce((a, s) => a + (s.batches ?? 0), 0);
+  const unknownBatches = result.sauces.some((s) => s.batches === null);
+  const target = result.products.reduce((a, p) => a + p.targetJars, 0);
+  const toFill = result.products.reduce((a, p) => a + p.jarsToFill, 0);
+  if (result.products.length === 0) return null;
+  return (
+    <>
+      <div className="stats">
+        <span>
+          <span className="v">{unknownBatches ? "?" : batches}</span>
+          <span className="l">{batches === 1 && !unknownBatches ? "batch" : "batches"}</span>
+        </span>
+        <span>
+          <span className="v">{target}</span>
+          <span className="l">sellable jars</span>
+        </span>
+        <span>
+          <span className="v">{toFill}</span>
+          <span className="l">jars to fill</span>
+        </span>
+      </div>
+      <PlanView result={result} only={["production"]} batchesTitle="Batches per sauce" />
+    </>
+  );
+}
+
+/** Edit a draft: production date and sellable jars per size. */
+async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: string }) {
+  const [catalog, targets] = await Promise.all([loadPlanCatalog(db()), runTargets(db(), runId)]);
+  // Sizes in the run that are no longer active still show, so nothing is dropped by accident.
+  const known = new Set(catalog.products.map((p) => p.id));
+  const missing = Object.keys(targets).filter((id) => !known.has(id));
+  const extra = missing.length ? await db().select().from(t.products).where(inArray(t.products.id, missing)) : [];
+  return (
+    <form action={editDraft} className="card">
+      <input type="hidden" name="runId" value={runId} />
+      <div className="card-head">
+        <h2 style={{ margin: 0 }}>Edit this draft</h2>
+      </div>
+      <div className="field" style={{ maxWidth: 220 }}>
+        <label htmlFor="plannedFor">Production date</label>
+        <input id="plannedFor" name="plannedFor" type="date" required defaultValue={plannedFor} />
+      </div>
+      <p className="small muted">Sellable jars of each sauce and size. Leave empty or 0 to drop a size.</p>
+      <div className="grid">
+        {catalog.sauces.map((s) => (
+          <div key={s.id}>
+            <h3 style={{ margin: "0 0 8px" }}>{s.name}</h3>
+            {catalog.products
+              .filter((p) => p.sauceId === s.id)
+              .map((p) => (
+                <div key={p.id} className="row" style={{ marginBottom: 8, alignItems: "center" }}>
+                  <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
+                    {p.formatName}
+                  </label>
+                  <input
+                    id={`t-${p.id}`}
+                    name={`t:${p.id}`}
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    defaultValue={targets[p.id] ?? ""}
+                    placeholder="0"
+                  />
+                </div>
+              ))}
+          </div>
+        ))}
+        {extra.length > 0 && (
+          <div>
+            <h3 style={{ margin: "0 0 8px" }}>No longer in use</h3>
+            {extra.map((p) => (
+              <div key={p.id} className="row" style={{ marginBottom: 8, alignItems: "center" }}>
+                <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
+                  {p.name}
+                </label>
+                <input id={`t-${p.id}`} name={`t:${p.id}`} type="number" min={0} step={1} inputMode="numeric" defaultValue={targets[p.id] ?? ""} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="row" style={{ alignItems: "flex-end", marginTop: 8 }}>
+        <ReasonField id="run-edit" label="Why the change?" optional placeholder="e.g. a new order came in" />
+      </div>
+      <div className="form-actions">
+        <button type="submit">Save changes</button>
+        <Link href={`/runs/${runId}`} className="btn secondary">
+          Cancel
+        </Link>
+      </div>
+    </form>
   );
 }

@@ -932,3 +932,93 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
     return { alreadyClosed: false, runClosed: open.length === 0 };
   });
 }
+
+// ---------------------------------------------------------------- packaging form helpers
+
+export interface PackMaterial {
+  itemId: string;
+  perJar: number;
+}
+
+export interface PackStock {
+  name: string;
+  unit: string;
+  /** What a session can use: lots with stock, plus what the session being edited already uses. */
+  available: string;
+}
+
+/**
+ * What the packaging form needs to warn while typing: the materials per jar
+ * of each size (the session's own packaging version when editing, else the
+ * active one) and how much of each material can be used. Mirrors the check
+ * made when saving.
+ */
+export async function packFormMaterials(db: DB, sizes: { productId: string; packagingVersionId?: string | null }[], editingSessionId?: string) {
+  const productIds = sizes.map((s) => s.productId);
+  const active = productIds.length
+    ? await db.select().from(t.packagingVersions).where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
+    : [];
+  const versionOf = new Map(sizes.map((s) => [s.productId, s.packagingVersionId ?? active.find((v) => v.productId === s.productId)?.id ?? null]));
+  const versionIds = [...new Set([...versionOf.values()].filter((v): v is string => !!v))];
+  const lines = versionIds.length ? await db.select().from(t.packagingLines).where(inArray(t.packagingLines.packagingVersionId, versionIds)) : [];
+  const materials: Record<string, PackMaterial[]> = {};
+  for (const id of productIds) materials[id] = lines.filter((l) => l.packagingVersionId === versionOf.get(id)).map((l) => ({ itemId: l.itemId, perJar: l.perJar }));
+
+  const itemIds = [...new Set(lines.map((l) => l.itemId))];
+  const stock: Record<string, PackStock> = {};
+  if (!itemIds.length) return { materials, stock };
+  const [items, lots, used] = await Promise.all([
+    itemsById(db as unknown as Tx, itemIds),
+    lotsOf(db as unknown as Tx, itemIds),
+    editingSessionId ? usedByDocs(db as unknown as Tx, "packaging_session", [editingSessionId]) : Promise.resolve(new Map<string, Map<string, LotSplit>>()),
+  ]);
+  const mine = editingSessionId ? (used.get(editingSessionId) ?? new Map<string, LotSplit>()) : new Map<string, LotSplit>();
+  for (const id of itemIds) {
+    const item = items.get(id)!;
+    const inLots = lots.filter((l) => l.itemId === id).reduce((s, l) => s.plus(Decimal.max(D0, l.balance)), D0);
+    const own = mine.get(id);
+    stock[id] = { name: item.name, unit: item.stockUnit, available: inLots.plus(own ? splitTotal(own) : D0).toString() };
+  }
+  return { materials, stock };
+}
+
+/**
+ * The jars the run planned for this batch's sauce, per size: from the forecast
+ * saved at confirmation, shared evenly over the sauce's batches in the run,
+ * with what the run's batches of this sauce have packed so far.
+ */
+export async function plannedJarsForBatch(db: DB, batch: { id: string; runId: string; sauceId: string }) {
+  const [snap] = await db.select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, batch.runId));
+  if (!snap) return null;
+  const plan = snap.data as PlanResult;
+  const products = await db.select({ id: t.products.id, sauceId: t.products.sauceId }).from(t.products);
+  const ofSauce = new Set(products.filter((p) => p.sauceId === batch.sauceId).map((p) => p.id));
+  const lines = plan.products.filter((p) => ofSauce.has(p.productId) && p.jarsToFill > 0);
+  if (!lines.length) return null;
+  const batches = await db
+    .select({ id: t.productionBatches.id })
+    .from(t.productionBatches)
+    .where(and(eq(t.productionBatches.runId, batch.runId), eq(t.productionBatches.sauceId, batch.sauceId), sql`${t.productionBatches.status} <> 'cancelled'`));
+  const count = Math.max(1, batches.length);
+  const packed = await db.execute<{ product_id: string; filled: number; this_batch: number }>(sql`
+    select l.product_id, sum(l.filled)::int as filled, sum(case when s.batch_id = ${batch.id} then l.filled else 0 end)::int as this_batch
+    from packaging_session_lines l
+    join packaging_sessions s on s.id = l.session_id and s.deleted_at is null
+    join production_batches b on b.id = s.batch_id
+    where b.run_id = ${batch.runId} and b.sauce_id = ${batch.sauceId}
+    group by l.product_id`);
+  const packedBy = new Map([...packed].map((r) => [r.product_id, r]));
+  return {
+    batchCount: count,
+    sizes: lines.map((p) => ({
+      productId: p.productId,
+      name: p.name,
+      targetJars: p.targetJars,
+      runToFill: p.jarsToFill,
+      /** This batch's share of the jars to fill (rounded up). */
+      perBatch: Math.ceil(p.jarsToFill / count),
+      runFilled: packedBy.get(p.productId)?.filled ?? 0,
+      batchFilled: packedBy.get(p.productId)?.this_batch ?? 0,
+    })),
+  };
+}

@@ -11,6 +11,8 @@ import { LotOrigin, lotQty } from "../../components/trace-format";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
 import { History } from "../../components/history";
+import { loadOffers } from "@/db/suppliers";
+import { describePrice } from "@/domain/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,8 @@ export default async function ItemStockPage({
   const withStock = lots.filter((l) => new Decimal(l.balance).gt(0));
   const empty = lots.filter((l) => !new Decimal(l.balance).gt(0));
   const total = lots.reduce((s, l) => s.plus(l.balance), new Decimal(0));
+  const bought = item.kind === "ingredient" || item.kind === "packaging";
+  const offers = bought ? await loadOffers(db(), { itemIds: [itemId] }) : [];
   const unitWord = item.kind === "finished" ? "jars" : UNITS[unit].label;
 
   const lotTable = (list: typeof lots) => (
@@ -89,6 +93,11 @@ export default async function ItemStockPage({
         title={item.name}
         actions={
           <>
+            {bought && (
+              <Link href={`/items/${item.id}`} className="btn secondary">
+                Suppliers and prices
+              </Link>
+            )}
             <Link href={`/stock/adjust?item=${item.id}`} className="btn secondary">
               Correct the count
             </Link>
@@ -114,6 +123,12 @@ export default async function ItemStockPage({
           <div className="v">{withStock.length}</div>
           <div className="l">{withStock.length === 1 ? "lot" : "lots"} with stock</div>
         </div>
+        {bought && (
+          <Link href={`/items/${item.id}`}>
+            <div className="v">{offers[0] ? offers[0].supplierName : "No supplier"}</div>
+            <div className="l">{offers[0] ? `favourite · ${describePrice(offers[0], UNITS[unit].label)}` : "add one"}</div>
+          </Link>
+        )}
       </div>
       <h2>Lots with stock</h2>
       <div className="card scroll">

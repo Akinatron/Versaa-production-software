@@ -40,3 +40,13 @@ export function relDate(iso: string | null | undefined): string {
 
 /** "1 batch", "2 batches". */
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+const DAY_ISO = new Intl.DateTimeFormat("en-CA", {
+  timeZone: process.env.APP_TIME_ZONE || "Europe/Amsterdam",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** The calendar day (ISO) of a timestamp, in the business's own time zone. */
+export const dayOf = (at: Date) => DAY_ISO.format(at);

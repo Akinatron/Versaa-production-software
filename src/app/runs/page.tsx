@@ -1,15 +1,22 @@
 import Link from "next/link";
-import { desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { RUN_STATUS } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
-import { fmtDate } from "../components/ui/format";
+import { dayOf, fmtDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function RunsPage() {
-  const runs = await db().select().from(t.productionRuns).orderBy(desc(t.productionRuns.plannedFor));
+  const [runs, jars] = await Promise.all([
+    db().select().from(t.productionRuns).orderBy(desc(t.productionRuns.plannedFor)),
+    db()
+      .select({ runId: t.runTargets.runId, jars: sql<number>`sum(${t.runTargets.targetJars})::int` })
+      .from(t.runTargets)
+      .groupBy(t.runTargets.runId),
+  ]);
+  const jarsOf = new Map(jars.map((j) => [j.runId, j.jars]));
   return (
     <>
       <PageHeader
@@ -31,6 +38,8 @@ export default async function RunsPage() {
               <tr>
                 <th>Run</th>
                 <th>Production</th>
+                <th>Created</th>
+                <th className="num">Sellable jars</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -41,6 +50,8 @@ export default async function RunsPage() {
                     <Link href={`/runs/${r.id}`}>{r.code}</Link>
                   </td>
                   <td>{fmtDate(r.plannedFor, { weekday: true })}</td>
+                  <td>{fmtDate(dayOf(r.createdAt))}</td>
+                  <td className="num">{jarsOf.get(r.id) ?? 0}</td>
                   <td>
                     <span className={`badge ${RUN_STATUS[r.status]!.cls}`}>{RUN_STATUS[r.status]!.label}</span>
                   </td>

@@ -91,7 +91,7 @@ function parseOffer(input: OfferInput) {
  */
 export async function linkSupplierItem(
   db: DB,
-  input: { supplierId: string; itemId: string; supplierCode?: string | null; note?: string | null } & OfferInput,
+  input: { supplierId: string; itemId: string; supplierCode?: string | null; note?: string | null; favourite?: boolean } & OfferInput,
 ) {
   if (!input.supplierId || !input.itemId) throw new OperationError("Choose a supplier and an item.");
   const offer = parseOffer(input);
@@ -119,12 +119,13 @@ export async function linkSupplierItem(
         .returning() as [typeof link];
     }
     if (offer.packQty !== null || offer.price !== null) await addPriceIfChanged(tx, link.id, offer);
+    if (input.favourite && rank > 1) await renumber(tx, input.itemId, link.id);
     const r = await linkRefs(tx, input.supplierId, input.itemId);
     await logChange(tx, {
       action: "create",
       area: "purchasing",
       entity: { type: "supplier", id: input.supplierId, code: r.sup?.name },
-      summary: `${r.sup?.name ?? "Supplier"} now sells ${r.item?.name ?? "item"}`,
+      summary: `${r.sup?.name ?? "Supplier"} now sells ${r.item?.name ?? "item"}${rank === 1 || input.favourite ? " (favourite)" : ""}`,
       changes: diff([["Price", null, offerText(offer)]]),
       links: r.links,
     });
