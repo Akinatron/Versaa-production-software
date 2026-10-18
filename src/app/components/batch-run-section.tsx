@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -5,18 +6,36 @@ import type { PlanResult } from "@/domain/planner";
 import { BATCH_STATUS } from "./labels";
 import { createBatches } from "../runs/actions";
 
+/** A batch opens on the page where its next step is recorded. */
+const nextHref = (b: { id: string; status: string }) =>
+  b.status === "planned" || b.status === "in_production"
+    ? `/production/${b.id}`
+    : b.status === "awaiting_packaging" || b.status === "packing"
+      ? `/packaging/${b.id}`
+      : `/batches/${b.id}`;
+
 /** Run page: the run's batches, and once production has started, plan vs actual. */
 export async function BatchRunSection({ runId, runStatus, frozen }: { runId: string; runStatus: string; frozen: PlanResult | null }) {
   if (runStatus === "draft" || runStatus === "cancelled") return null;
   const batches = await db()
-    .select({ batch: t.productionBatches, sauce: t.sauces.name, versionNo: t.recipeVersions.versionNo })
+    .select({
+      batch: t.productionBatches,
+      sauce: t.sauces.name,
+      versionNo: t.recipeVersions.versionNo,
+    })
     .from(t.productionBatches)
     .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
     .innerJoin(t.recipeVersions, eq(t.productionBatches.recipeVersionId, t.recipeVersions.id))
     .where(eq(t.productionBatches.runId, runId))
     .orderBy(t.productionBatches.code);
 
-  const packed = await db().execute<{ product_id: string; name: string; filled: number; rejected: number; accepted: number }>(sql`
+  const packed = await db().execute<{
+    product_id: string;
+    name: string;
+    filled: number;
+    rejected: number;
+    accepted: number;
+  }>(sql`
     select l.product_id, p.name, sum(l.filled)::int as filled, sum(l.rejected)::int as rejected, sum(l.accepted)::int as accepted
     from packaging_session_lines l
     join packaging_sessions s on s.id = l.session_id and s.deleted_at is null
@@ -28,8 +47,14 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
 
   const showActual = runStatus === "in_progress" || runStatus === "closed";
   const productRows = [
-    ...(frozen?.products ?? []).map((p) => ({ productId: p.productId, name: p.name, target: p.targetJars as number | null })),
-    ...[...packedBy.values()].filter((r) => !frozen?.products.some((p) => p.productId === r.product_id)).map((r) => ({ productId: r.product_id, name: r.name, target: null })),
+    ...(frozen?.products ?? []).map((p) => ({
+      productId: p.productId,
+      name: p.name,
+      target: p.targetJars as number | null,
+    })),
+    ...[...packedBy.values()]
+      .filter((r) => !frozen?.products.some((p) => p.productId === r.product_id))
+      .map((r) => ({ productId: r.product_id, name: r.name, target: null })),
   ];
   const sauceIds = [...new Set([...(frozen?.sauces ?? []).map((s) => s.sauceId), ...batches.map((b) => b.batch.sauceId)])];
 
@@ -40,8 +65,8 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
         {batches.length === 0 ? (
           <div className="row">
             <p style={{ margin: 0, flexBasis: "100%" }}>
-              This run has no batches yet (it was confirmed before batches existed). Create them from the forecast saved at confirmation: one batch per planned batch,
-              following the recipe version in that forecast.
+              This run has no batches yet (it was confirmed before batches existed). Create them from the forecast saved at confirmation: one batch per planned
+              batch, following the recipe version in that forecast.
             </p>
             <form action={createBatches}>
               <input type="hidden" name="runId" value={runId} />
@@ -60,16 +85,19 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
             </thead>
             <tbody>
               {batches.map(({ batch, sauce, versionNo }) => {
-                const s = BATCH_STATUS[batch.status] ?? { label: batch.status, cls: "" };
+                const s = BATCH_STATUS[batch.status] ?? {
+                  label: batch.status,
+                  cls: "",
+                };
                 return (
                   <tr key={batch.id}>
                     <td>
-                      <a href={`/batches/${batch.id}`}>
+                      <Link href={nextHref(batch)}>
                         <strong>{batch.code}</strong>
-                      </a>
+                      </Link>
                     </td>
                     <td>{sauce}</td>
-                    <td>version {versionNo}</td>
+                    <td>v{versionNo}</td>
                     <td>
                       <span className={`badge ${s.cls}`}>{s.label}</span>
                     </td>
@@ -84,7 +112,9 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
       {showActual && (
         <>
           <h2>Plan vs actual</h2>
-          <p className="small muted">Planned figures come from the forecast saved at confirmation. Actual figures are what has been recorded on the batches so far.</p>
+          <p className="small muted">
+            Planned figures come from the forecast saved at confirmation. Actual figures are what has been recorded on the batches so far.
+          </p>
           <div className="card scroll">
             <strong>Batches per sauce</strong>
             <table>
@@ -140,7 +170,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
                       <td className="num">
                         <strong>{accepted}</strong>
                       </td>
-                      <td className={`num ${diff === null ? "" : diff < 0 ? "bad" : ""}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${diff}`}</td>
+                      <td className={`num ${diff === null ? "" : diff < 0 ? "text-bad" : ""}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${diff}`}</td>
                       <td className="num">{a?.filled ?? 0}</td>
                       <td className="num">{a?.rejected ?? 0}</td>
                     </tr>

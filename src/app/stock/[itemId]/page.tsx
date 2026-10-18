@@ -8,10 +8,18 @@ import Decimal from "decimal.js";
 import { Flash } from "../../components/flash";
 import { MOVEMENT } from "../../components/labels";
 import { LotOrigin, lotQty } from "../../components/trace-format";
+import { PageHeader } from "../../components/ui/header";
+import { fmtDate } from "../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function ItemStockPage({ params, searchParams }: { params: Promise<{ itemId: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function ItemStockPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ itemId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { itemId } = await params;
   const flash = await searchParams;
   const [item] = await db().select().from(t.items).where(eq(t.items.id, itemId));
@@ -61,8 +69,8 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
             <td>
               <LotOrigin lot={{ ...lot, supplierName: supplier }} batchCode={batchCode} />
             </td>
-            <td>{lot.receivedOn ?? "—"}</td>
-            <td>{lot.bestBefore ?? <span className="muted">not recorded</span>}</td>
+            <td>{lot.receivedOn ? fmtDate(lot.receivedOn, { year: true }) : "—"}</td>
+            <td>{lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
             <td className="num">{q(balance)}</td>
           </tr>
         ))}
@@ -72,25 +80,51 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
 
   return (
     <>
-      <h1>{item.name}</h1>
-      <p className="lead">
-        Stock is kept in {unitWord}. Each delivery, count or batch is its own lot, so you can see where every part came from. Click a lot to trace
-        where it went.
-      </p>
+      <PageHeader
+        back={{
+          href: item.kind === "finished" ? "/stock?show=jars" : item.kind === "packaging" ? "/stock?show=packaging" : "/stock",
+          label: "Stock",
+        }}
+        title={item.name}
+        lead={`Kept in ${unitWord}. Each delivery, count or batch is its own lot. Open a lot to trace where it went.`}
+        actions={
+          <>
+            <Link href={`/stock/adjust?item=${item.id}`} className="btn secondary">
+              Correct the count
+            </Link>
+            {item.kind !== "finished" ? (
+              <Link href={`/stock/adjust?mode=writeoff&item=${item.id}`} className="btn secondary">
+                Write off
+              </Link>
+            ) : (
+              <Link href="/outbound/new" className="btn secondary">
+                Record a stock exit
+              </Link>
+            )}
+          </>
+        }
+      />
       <Flash params={flash} />
-      <div className="card row">
-        <span>
-          In stock now: <strong>{lots.length ? q(total) : "not counted yet"}</strong>
-        </span>
-        <Link href={`/stock/adjust?item=${item.id}`}>Correct the count</Link>
-        {item.kind !== "finished" ? (
-          <Link href={`/stock/adjust?mode=writeoff&item=${item.id}`}>Write some off</Link>
-        ) : (
-          <Link href="/outbound/new">Record jars leaving stock (Outbound)</Link>
-        )}
+      <div className="stats">
+        <div>
+          <div className="v">{lots.length ? q(total) : "Not counted"}</div>
+          <div className="l">in stock now</div>
+        </div>
+        <div>
+          <div className="v">{withStock.length}</div>
+          <div className="l">{withStock.length === 1 ? "lot" : "lots"} with stock</div>
+        </div>
       </div>
       <h2>Lots with stock</h2>
-      <div className="card scroll">{withStock.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nothing in stock.</p> : lotTable(withStock)}</div>
+      <div className="card scroll">
+        {withStock.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>
+            Nothing in stock.
+          </p>
+        ) : (
+          lotTable(withStock)
+        )}
+      </div>
       {empty.length > 0 && (
         <details className="card scroll">
           <summary>Used-up lots ({empty.length})</summary>
@@ -100,7 +134,9 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
       <h2>History</h2>
       <div className="card scroll">
         {history.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>Nothing recorded yet.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            Nothing recorded yet.
+          </p>
         ) : (
           <table>
             <thead>
@@ -114,9 +150,17 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
             <tbody>
               {history.map(({ m, lot }) => (
                 <tr key={m.id}>
-                  <td>{m.occurredAt.toISOString().slice(0, 10)}</td>
                   <td>
-                    {m.docType === "outflow" && m.docId ? <Link href={`/trace/outflow/${m.docId}`}>{MOVEMENT[m.type] ?? m.type}</Link> : (MOVEMENT[m.type] ?? m.type)}
+                    {fmtDate(m.occurredAt.toISOString().slice(0, 10), {
+                      year: true,
+                    })}
+                  </td>
+                  <td>
+                    {m.docType === "outflow" && m.docId ? (
+                      <Link href={`/trace/outflow/${m.docId}`}>{MOVEMENT[m.type] ?? m.type}</Link>
+                    ) : (
+                      (MOVEMENT[m.type] ?? m.type)
+                    )}
                     {m.reason && <div className="small muted">{m.reason}</div>}
                   </td>
                   <td>
@@ -132,9 +176,6 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
           </table>
         )}
       </div>
-      <p>
-        <Link href="/stock">← Back to stock</Link>
-      </p>
     </>
   );
 }

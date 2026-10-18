@@ -4,8 +4,11 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../../components/flash";
-import { OUTFLOW, OUTFLOW_EXPLAIN, OUTFLOW_REASONS, outflowBadge, type OutflowReason } from "../../components/labels";
-import { buttonLink, who } from "../../components/trace-format";
+import { OUTFLOW, OUTFLOW_EXPLAIN, OUTFLOW_REASONS, type OutflowReason } from "../../components/labels";
+import { who } from "../../components/trace-format";
+import { PageHeader } from "../../components/ui/header";
+import { fmtDate, relDate } from "../../components/ui/format";
+import { GuardedForm } from "../../components/unsaved-guard";
 import { saveOutflow } from "../actions";
 import { activeProducts, customerList, finishedLots, todayIso } from "../data";
 
@@ -17,42 +20,25 @@ export default async function NewOutboundPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <h1>Record a stock exit</h1>
-      <p className="lead">Any jars that leave stock, for any reason. Stock goes down as soon as you save, and the jars stay traceable to their batch.</p>
+      <PageHeader
+        back={{ href: "/outbound", label: "Outbound" }}
+        title="Record a stock exit"
+        lead="Jars that leave stock, for any reason. Stock goes down as soon as you save, and the jars stay traceable to their batch."
+      />
       <Flash params={params} />
 
-      <div className="card">
-        <label>1. Why are the jars leaving?</label>
-        <div className="row" style={{ gap: 8 }}>
-          {OUTFLOW_REASONS.map((x) => (
-            <Link
-              key={x}
-              href={`/outbound/new?reason=${x}`}
-              className={`badge ${x === reason ? outflowBadge(x) : ""}`}
-              style={{
-                padding: "8px 16px",
-                border: "1px solid var(--border)",
-                textDecoration: "none",
-                color: x === reason ? undefined : "var(--text)",
-                fontWeight: x === reason ? 700 : undefined,
-              }}
-              aria-current={x === reason ? "page" : undefined}
-            >
-              {OUTFLOW[x]}
-            </Link>
-          ))}
-        </div>
-        <p className="small muted" style={{ marginBottom: 0 }}>
-          {reason ? OUTFLOW_EXPLAIN[reason] : "Choose a reason to continue. Only “Sale” counts in the sales reports."}
-        </p>
-      </div>
+      <h2>Why are the jars leaving?</h2>
+      <nav className="choices" aria-label="Reason">
+        {OUTFLOW_REASONS.map((x) => (
+          <Link key={x} href={`/outbound/new?reason=${x}`} aria-current={x === reason ? "page" : undefined}>
+            <strong>{OUTFLOW[x]}</strong>
+            <span>{OUTFLOW_EXPLAIN[x]}</span>
+          </Link>
+        ))}
+      </nav>
 
       {reason === "sale" && <SaleForm />}
       {reason && reason !== "sale" && <ExitForm reason={reason} />}
-
-      <p>
-        <Link href="/outbound">← Back to outbound</Link>
-      </p>
     </>
   );
 }
@@ -75,39 +61,42 @@ async function SaleForm() {
 
   return (
     <>
-      <div className="card">
-        <label>2. Is it for a sales order?</label>
-        {pending.length === 0 ? (
-          <p className="small muted" style={{ marginTop: 0 }}>No pending sales orders.</p>
-        ) : (
-          <>
-            <p className="small muted" style={{ marginTop: 0 }}>Delivering a pending order takes its jars out of stock and records the sale with the order&apos;s customer and prices.</p>
-            <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
+      {pending.length > 0 && (
+        <>
+          <h2>Is it one of these orders?</h2>
+          <p className="small muted">Delivering an order records the sale with its customer and prices.</p>
+          <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
+            <ul className="worklist">
               {pending.map(({ o, customer }) => (
                 <li key={o.id}>
-                  <Link href={`/outbound/orders/${o.id}#deliver`}>Deliver {o.code}</Link> · {who(customer, o.destination)} · ordered {o.orderedOn}
+                  <div className="what">
+                    <strong>{who(customer, o.destination)}</strong>
+                    <div className="sub">
+                      {o.code} · ordered {relDate(o.orderedOn)}
+                    </div>
+                  </div>
+                  <Link href={`/outbound/orders/${o.id}#deliver`} className="btn sm secondary">
+                    Deliver this order
+                  </Link>
                 </li>
               ))}
             </ul>
-          </>
-        )}
-        <div className="row">
-          <Link href="/outbound/orders/new" style={buttonLink}>
-            New sales order
-          </Link>
-          <span className="small muted">Promise jars now and deliver them later. Stock goes down on delivery.</span>
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
-      <h2>…or a sale handed over now, without an order</h2>
-      <form action={saveOutflow}>
+      <h2>{pending.length > 0 ? "No, it's a sale handed over now" : "Sale handed over now"}</h2>
+      <p className="small muted">
+        Selling later? <Link href="/outbound/orders/new">Take a sales order</Link> instead: it holds the jars and stock goes down on delivery.
+      </p>
+      <GuardedForm action={saveOutflow}>
         <input type="hidden" name="key" value={crypto.randomUUID()} />
         <input type="hidden" name="type" value="sale" />
         <div className="card grid">
           <div>
             <label htmlFor="customerId">Customer</label>
             <select id="customerId" name="customerId" defaultValue="">
-              <option value="">—</option>
+              <option value="">Choose…</option>
               {customers
                 .filter((c) => c.active)
                 .map((c) => (
@@ -121,7 +110,7 @@ async function SaleForm() {
             </div>
           </div>
           <div>
-            <label htmlFor="destination">…or destination (free text)</label>
+            <label htmlFor="destination">Or a destination (free text)</label>
             <input id="destination" name="destination" type="text" placeholder="e.g. Saturday market Utrecht" />
           </div>
           <div>
@@ -138,8 +127,10 @@ async function SaleForm() {
           </div>
         </div>
         <Lines products={products} lots={lots} free={free} withPrice />
-        <button type="submit">Record sale</button>
-      </form>
+        <div className="savebar">
+          <button type="submit">Record sale</button>
+        </div>
+      </GuardedForm>
     </>
   );
 }
@@ -150,12 +141,13 @@ async function ExitForm({ reason }: { reason: Exclude<OutflowReason, "sale"> }) 
   const noteRequired = reason === "waste";
 
   return (
-    <form action={saveOutflow}>
+    <GuardedForm action={saveOutflow}>
+      <h2>Details</h2>
       <input type="hidden" name="key" value={crypto.randomUUID()} />
       <input type="hidden" name="type" value={reason} />
       <div className="card grid">
         <div>
-          <label htmlFor="occurredOn">2. Date (required)</label>
+          <label htmlFor="occurredOn">Date (required)</label>
           <input id="occurredOn" name="occurredOn" type="date" required defaultValue={todayIso()} />
         </div>
         <div style={{ gridColumn: "1 / -1" }}>
@@ -164,8 +156,10 @@ async function ExitForm({ reason }: { reason: Exclude<OutflowReason, "sale"> }) 
         </div>
       </div>
       <Lines products={products} lots={lots} free={free} />
-      <button type="submit">Record {OUTFLOW[reason]!.toLowerCase()}</button>
-    </form>
+      <div className="savebar">
+        <button type="submit">Record {OUTFLOW[reason]!.toLowerCase()}</button>
+      </div>
+    </GuardedForm>
   );
 }
 
@@ -196,7 +190,7 @@ function Lines({
             <tr key={i}>
               <td>
                 <select name={`product_${i}`} defaultValue="" aria-label="Product">
-                  <option value="">—</option>
+                  <option value="">Choose…</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({free.get(p.id)?.toString() ?? "0"} free)
@@ -218,7 +212,7 @@ function Lines({
                           .filter((l) => l.productId === p.id)
                           .map((l) => (
                             <option key={l.id} value={l.id}>
-                              {l.code} · best before {l.bestBefore ?? "not recorded"} · {l.balance.toString()} left
+                              {l.code} · best before {l.bestBefore ? fmtDate(l.bestBefore, { year: true }) : "not recorded"} · {l.balance.toString()} left
                             </option>
                           ))}
                       </optgroup>

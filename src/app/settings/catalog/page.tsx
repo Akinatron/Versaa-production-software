@@ -3,7 +3,6 @@ import { asc, desc } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { Flash } from "../../components/flash";
-import { SettingsBack } from "../../components/settings-versions";
 import {
   addFormatAction,
   addProductAction,
@@ -13,6 +12,7 @@ import {
   setProductActiveAction,
   setSauceActiveAction,
 } from "../actions";
+import { PageHeader } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -42,16 +42,20 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const sauceName = new Map(sauces.map((s) => [s.id, s]));
   const formatOf = new Map(formats.map((f) => [f.id, f]));
   const sortedProducts = [...products].sort(
-    (a, b) => (sauceName.get(a.sauceId)?.name ?? "").localeCompare(sauceName.get(b.sauceId)?.name ?? "") || (formatOf.get(b.formatId)?.capacityMl ?? 0) - (formatOf.get(a.formatId)?.capacityMl ?? 0),
+    (a, b) =>
+      (sauceName.get(a.sauceId)?.name ?? "").localeCompare(sauceName.get(b.sauceId)?.name ?? "") ||
+      (formatOf.get(b.formatId)?.capacityMl ?? 0) - (formatOf.get(a.formatId)?.capacityMl ?? 0),
   );
 
   return (
     <>
-      <SettingsBack />
-      <h1>Sauces, sizes & products</h1>
-      <p className="lead">
-        A product is one sauce in one jar size. Nothing is deleted: retiring takes something out of plans and lists, but keeps its history and stock.
-      </p>
+      <PageHeader
+        back={{ href: "/settings", label: "Settings" }}
+        title="Sauces, sizes & products"
+        lead={
+          <>A product is one sauce in one jar size. Nothing is deleted: retiring takes something out of plans and lists, but keeps its history and stock.</>
+        }
+      />
       <Flash params={sp} />
 
       <h2>Sauces</h2>
@@ -99,8 +103,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           <button type="submit">Add sauce</button>
         </form>
         <p className="small muted" style={{ marginBottom: 0 }}>
-          Left empty, the prefix is the first 3 letters of the second word (Tikka → TIK). A new sauce needs a recipe, a yield estimate and products before it can be
-          planned.
+          Left empty, the prefix is the first 3 letters of the second word (Tikka → TIK). A new sauce needs a recipe, a yield estimate and products before it
+          can be planned.
         </p>
       </div>
 
@@ -126,8 +130,17 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 <td>
                   <form action={setFormatFillAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
                     <input type="hidden" name="formatId" value={f.id} />
-                    <input name="fillMl" type="number" min={1} max={f.capacityMl} step={1} defaultValue={f.fillMl} required aria-label={`New fill for ${f.name} in ml`} />
-                    <button type="submit" style={{ ...small, background: "var(--muted)" }}>
+                    <input
+                      name="fillMl"
+                      type="number"
+                      min={1}
+                      max={f.capacityMl}
+                      step={1}
+                      defaultValue={f.fillMl}
+                      required
+                      aria-label={`New fill for ${f.name} in ml`}
+                    />
+                    <button type="submit" className="secondary sm">
                       Set
                     </button>
                   </form>
@@ -182,7 +195,9 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                     {blocked && <div className="small muted">Not planned: its {s && !s.active ? "sauce" : "size"} is retired.</div>}
                   </td>
                   <td>
-                    <Link href={`/settings/packaging/${p.id}`}>{active ? `v${active.versionNo}` : <span className="badge bad">None — needed before planning</span>}</Link>
+                    <Link href={`/settings/packaging/${p.id}`}>
+                      {active ? `v${active.versionNo}` : <span className="badge bad">None — needed before planning</span>}
+                    </Link>
                   </td>
                   <td>{p.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>
                   <td>
@@ -223,7 +238,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           <button type="submit">Add product</button>
         </form>
         <p className="small muted" style={{ marginBottom: 0 }}>
-          A new product needs a packaging list before it can be planned; you'll be taken there after adding it. Adding a product that was retired brings it back.
+          A new product needs a packaging list before it can be planned; you'll be taken there after adding it. Adding a product that was retired brings it
+          back.
         </p>
       </div>
     </>

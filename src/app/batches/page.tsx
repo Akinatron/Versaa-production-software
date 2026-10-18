@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { BATCH_STATUS } from "../components/labels";
+import { PageHeader } from "../components/ui/header";
+import { fmtDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +25,11 @@ export default async function BatchesPage() {
     .innerJoin(t.productionRuns, eq(t.productionBatches.runId, t.productionRuns.id))
     .orderBy(t.productionRuns.plannedFor, t.productionBatches.code);
   const closed = await db()
-    .select({ batch: t.productionBatches, sauce: t.sauces.name, runCode: t.productionRuns.code })
+    .select({
+      batch: t.productionBatches,
+      sauce: t.sauces.name,
+      runCode: t.productionRuns.code,
+    })
     .from(t.productionBatches)
     .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
     .innerJoin(t.productionRuns, eq(t.productionBatches.runId, t.productionRuns.id))
@@ -38,62 +45,62 @@ export default async function BatchesPage() {
   };
   const open = rows.filter((r) => !["closed", "cancelled"].includes(r.batch.status));
 
+  const nextHref = (r: (typeof rows)[number]) =>
+    r.pending > 0 || r.batch.status === "planned" ? `/production/${r.batch.id}` : r.sessions === 0 ? `/packaging/${r.batch.id}` : `/batches/${r.batch.id}`;
+  open.sort((a, b) => OPEN_ORDER.indexOf(b.batch.status as never) - OPEN_ORDER.indexOf(a.batch.status as never) || a.plannedFor.localeCompare(b.plannedFor));
+
   return (
     <>
-      <h1>Batches</h1>
-      <p className="lead">
-        One batch is one pot of sauce, created when a production run is confirmed. Ingredients are recorded in <a href="/production">Production</a> and jars in{" "}
-        <a href="/packaging">Packaging</a>; open a batch here for its summary, cost and closing.
-      </p>
-      {open.length === 0 && (
-        <div className="card">
+      <PageHeader title="Batches" lead="One batch is one pot of sauce, created when a run is confirmed. Open a batch for its summary, cost and closing." />
+      <h2 style={{ marginTop: 0 }}>Open</h2>
+      <div className="card scroll">
+        {open.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            No open batches. Confirm a run on the <a href="/plan">Plan</a> page to create them.
+            No open batches. They appear when a run is confirmed. <Link href="/plan">Plan production</Link>.
           </p>
-        </div>
-      )}
-      {OPEN_ORDER.map((st) => {
-        const list = open.filter((r) => r.batch.status === st);
-        if (!list.length) return null;
-        const s = BATCH_STATUS[st]!;
-        return (
-          <section key={st}>
-            <h2>
-              <span className={`badge ${s.cls}`}>{s.label}</span> <span className="small muted">{list.length}</span>
-            </h2>
-            <div className="card scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Batch</th>
-                    <th>Sauce</th>
-                    <th>Run</th>
-                    <th>Production date</th>
-                    <th>Still to do</th>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Sauce</th>
+                <th>Run</th>
+                <th>Status</th>
+                <th>Still to do</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {open.map((r) => {
+                const s = BATCH_STATUS[r.batch.status]!;
+                return (
+                  <tr key={r.batch.id}>
+                    <td>
+                      <Link href={`/batches/${r.batch.id}`}>
+                        <strong>{r.batch.code}</strong>
+                      </Link>
+                    </td>
+                    <td>{r.sauce}</td>
+                    <td>
+                      <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
+                      <div className="small muted">{fmtDate(r.batch.producedOn ?? r.plannedFor)}</div>
+                    </td>
+                    <td>
+                      <span className={`badge ${s.cls}`}>{s.label}</span>
+                    </td>
+                    <td className="small">{todo(r)}</td>
+                    <td className="num">
+                      <Link href={nextHref(r)} className="btn secondary sm">
+                        {r.pending > 0 || r.batch.status === "planned" ? "Ingredients" : r.sessions === 0 ? "Jars" : "Close"}
+                      </Link>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {list.map((r) => (
-                    <tr key={r.batch.id}>
-                      <td>
-                        <a href={`/batches/${r.batch.id}`}>
-                          <strong>{r.batch.code}</strong>
-                        </a>
-                      </td>
-                      <td>{r.sauce}</td>
-                      <td>
-                        <a href={`/runs/${r.batch.runId}`}>{r.runCode}</a>
-                      </td>
-                      <td>{r.batch.producedOn ?? <span className="muted">planned {r.plannedFor}</span>}</td>
-                      <td className={todo(r) === "ready to close" ? "" : "small"}>{todo(r)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        );
-      })}
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
       <h2>Recently closed</h2>
       <div className="card scroll">
         {closed.length === 0 ? (
@@ -107,7 +114,7 @@ export default async function BatchesPage() {
                 <th>Batch</th>
                 <th>Sauce</th>
                 <th>Run</th>
-                <th>Production date</th>
+                <th>Cooked</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -117,16 +124,16 @@ export default async function BatchesPage() {
                 return (
                   <tr key={r.batch.id}>
                     <td>
-                      <a href={`/batches/${r.batch.id}`}>{r.batch.code}</a>
+                      <Link href={`/batches/${r.batch.id}`}>{r.batch.code}</Link>
                     </td>
                     <td>{r.sauce}</td>
                     <td>
-                      <a href={`/runs/${r.batch.runId}`}>{r.runCode}</a>
+                      <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
                     </td>
-                    <td>{r.batch.producedOn ?? "—"}</td>
+                    <td>{fmtDate(r.batch.producedOn)}</td>
                     <td>
                       <span className={`badge ${s.cls}`}>{s.label}</span>
-                      {r.batch.closedAt ? <span className="small muted"> {r.batch.closedAt.toISOString().slice(0, 10)}</span> : null}
+                      {r.batch.closedAt ? <span className="small muted"> {fmtDate(r.batch.closedAt.toISOString().slice(0, 10))}</span> : null}
                     </td>
                   </tr>
                 );

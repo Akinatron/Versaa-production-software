@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { Flash } from "../components/flash";
 import { addSupplierAction } from "./actions";
+import { PageHeader } from "../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const params = await searchParams;
   const [suppliers, counts] = await Promise.all([
     db().select().from(t.suppliers).orderBy(asc(t.suppliers.name)),
-    db().execute<{ supplier_id: string; items: number; favourite: number; open_orders: number }>(sql`
+    db().execute<{
+      supplier_id: string;
+      items: number;
+      favourite: number;
+      open_orders: number;
+    }>(sql`
       select s.id as supplier_id,
         (select count(*)::int from supplier_items si where si.supplier_id = s.id and si.active) as items,
         (select count(*)::int from supplier_items si where si.supplier_id = s.id and si.active and si.rank = 1) as favourite,
@@ -22,12 +28,11 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <h1>Suppliers</h1>
-      <p className="lead">Who you buy from, what each one sells and at what price. Open a supplier to add items and prices.</p>
+      <PageHeader title="Suppliers" lead="Who you buy from, what each one sells and at what price. Open a supplier to add items and prices." />
       <Flash params={params} />
       <div className="card scroll">
         {suppliers.length === 0 ? (
-          <p className="muted">No suppliers yet.</p>
+          <p className="muted">No suppliers yet. Add the first one below.</p>
         ) : (
           <table>
             <thead>
@@ -46,7 +51,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                   <tr key={s.id} style={s.active ? undefined : { opacity: 0.6 }}>
                     <td>
                       <Link href={`/suppliers/${s.id}`}>{s.name}</Link>
-                      {!s.active && <span className="badge"> Not in use</span>}
+                      {!s.active && <span className="badge neutral">Not in use</span>}
                     </td>
                     <td className="small">{s.contact ?? <span className="muted">—</span>}</td>
                     <td className="num">{c?.items ?? 0}</td>
@@ -60,7 +65,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
         )}
       </div>
       <h2>Add a supplier</h2>
-      <form action={addSupplierAction} className="card row">
+      <form action={addSupplierAction} className="card row" style={{ alignItems: "flex-end" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <label htmlFor="sname">Name (required)</label>
           <input id="sname" name="name" type="text" required />
@@ -69,7 +74,9 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
           <label htmlFor="scontact">Contact (optional)</label>
           <input id="scontact" name="contact" type="text" />
         </div>
-        <button type="submit">Add supplier</button>
+        <button type="submit" className="secondary">
+          Add supplier
+        </button>
       </form>
     </>
   );

@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { BATCH_STATUS } from "../components/labels";
+import { PageHeader } from "../components/ui/header";
+import { relDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +30,7 @@ export default async function PackagingPage() {
 
   return (
     <>
-      <h1>Packaging</h1>
-      <p className="lead">Cooked batches waiting to be put in jars. Open one to record a packaging session, or to edit or delete one already recorded.</p>
+      <PageHeader title="Packaging" lead="Cooked batches waiting to be put in jars." />
       <div className="card scroll">
         {waiting.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
@@ -42,15 +43,18 @@ export default async function PackagingPage() {
                 <th>Batch</th>
                 <th>Sauce</th>
                 <th>Run</th>
-                <th>Production date</th>
+                <th>Cooked</th>
                 <th>Status</th>
-                <th className="num">Sessions</th>
-                <th className="num">Jars accepted</th>
+                <th className="num">Jars so far</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {waiting.map((r) => {
-                const s = BATCH_STATUS[r.batch.status] ?? { label: r.batch.status, cls: "" };
+                const s = BATCH_STATUS[r.batch.status] ?? {
+                  label: r.batch.status,
+                  cls: "",
+                };
                 return (
                   <tr key={r.batch.id}>
                     <td>
@@ -62,13 +66,17 @@ export default async function PackagingPage() {
                     <td>
                       <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
                     </td>
-                    <td>{r.batch.producedOn ?? "—"}</td>
+                    <td>{r.batch.producedOn ? relDate(r.batch.producedOn) : "—"}</td>
                     <td>
                       <span className={`badge ${s.cls}`}>{s.label}</span>
-                      {r.pending > 0 ? <span className="small muted"> · {r.pending} ingredient(s) not recorded</span> : null}
+                      {r.pending > 0 ? <div className="small muted">{r.pending} ingredient(s) not recorded</div> : null}
                     </td>
-                    <td className="num">{r.sessions}</td>
-                    <td className="num">{r.accepted}</td>
+                    <td className="num">{r.sessions > 0 ? r.accepted : "—"}</td>
+                    <td className="num">
+                      <Link href={`/packaging/${r.batch.id}`} className={`btn sm${r.sessions > 0 ? " secondary" : ""}`}>
+                        {r.sessions > 0 ? "Open" : "Record jars"}
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
@@ -78,7 +86,7 @@ export default async function PackagingPage() {
       </div>
       {cooking > 0 && (
         <p className="small muted">
-          {cooking} batch(es) are still being cooked in <Link href="/production">Production</Link>.
+          {cooking} {cooking === 1 ? "batch is" : "batches are"} still being cooked in <Link href="/production">Production</Link>.
         </p>
       )}
       <p className="small muted">Closed batches can still have their packaging edited or deleted from their batch page.</p>

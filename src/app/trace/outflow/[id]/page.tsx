@@ -8,6 +8,8 @@ import { traceOutflow } from "@/db/trace";
 import { OUTFLOW, outflowBadge } from "../../../components/labels";
 import { BatchBackward } from "../../../components/trace-backward";
 import { who } from "../../../components/trace-format";
+import { PageHeader } from "../../../components/ui/header";
+import { fmtDate } from "../../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +26,20 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
 
   return (
     <>
-      <h1>
-        {out.code} <span className={`badge ${outflowBadge(out.type)}`}>{OUTFLOW[out.type] ?? out.type}</span>
-      </h1>
-      <p className="lead">{out.type === "sale" ? "Jars sold and delivered." : "Jars that left stock. This is not a sale."}</p>
+      <PageHeader
+        back={{ href: "/outbound?show=history", label: "Outbound" }}
+        title={out.code}
+        status={{
+          label: OUTFLOW[out.type] ?? out.type,
+          cls: outflowBadge(out.type),
+        }}
+        lead={out.type === "sale" ? "Jars sold and delivered." : "Jars that left stock. This is not a sale."}
+      />
 
       <div className="card grid">
         <div>
           <div className="small muted">Date</div>
-          {out.occurredOn}
+          {fmtDate(out.occurredOn, { weekday: true, year: true })}
         </div>
         <div>
           <div className="small muted">Customer / destination</div>
@@ -73,10 +80,18 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
                 <td className="num">{l.line.jars}</td>
                 <td>
                   <Link href={`/trace/lot/${l.lot.id}`}>{l.lot.code}</Link>
-                  <div className="small muted">best before {l.lot.bestBefore ?? "not recorded"}</div>
+                  <div className="small muted">best before {l.lot.bestBefore ? fmtDate(l.lot.bestBefore, { year: true }) : "not recorded"}</div>
                 </td>
-                <td>{l.lot.batchId ? <Link href={`/batches/${l.lot.batchId}`}>{l.batchCode ?? "view batch"}</Link> : <span className="muted">no batch (counted stock)</span>}</td>
-                <td className="num">{l.line.unitPrice === null ? <span className="muted">not recorded</span> : `€ ${new Decimal(l.line.unitPrice).toFixed(2)}`}</td>
+                <td>
+                  {l.lot.batchId ? (
+                    <Link href={`/batches/${l.lot.batchId}`}>{l.batchCode ?? "view batch"}</Link>
+                  ) : (
+                    <span className="muted">no batch (counted stock)</span>
+                  )}
+                </td>
+                <td className="num">
+                  {l.line.unitPrice === null ? <span className="muted">not recorded</span> : `€ ${new Decimal(l.line.unitPrice).toFixed(2)}`}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -99,9 +114,6 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
       ) : (
         batchIds.map((b) => <BatchBackward key={b} batchId={b} />)
       )}
-      <p>
-        <Link href="/outbound">← Outbound</Link> · <Link href="/trace">Trace something else</Link>
-      </p>
     </>
   );
 }

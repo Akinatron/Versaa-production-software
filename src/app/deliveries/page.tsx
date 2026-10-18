@@ -5,6 +5,8 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../components/flash";
+import { PageHeader, Empty } from "../components/ui/header";
+import { fmtDate } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -23,23 +25,36 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
 
   return (
     <>
-      <h1>Deliveries</h1>
-      <p className="lead">What actually arrived. Each line becomes a lot with its origin, so it can be traced into production.</p>
+      <PageHeader
+        title="Deliveries"
+        lead="What actually arrived. Each line becomes a lot, so it can be traced into production."
+        actions={
+          <Link href="/deliveries/new" className="btn">
+            Record a delivery
+          </Link>
+        }
+      />
       <Flash params={params} />
-      <p>
-        <Link href="/deliveries/new">+ Record a delivery</Link>
-      </p>
-      {receipts.length === 0 && <p className="card muted">No deliveries recorded yet.</p>}
+      {receipts.length === 0 && (
+        <Empty title="No deliveries yet">
+          <p>When goods arrive, record them here. Stock goes up and each line becomes a traceable lot.</p>
+        </Empty>
+      )}
       {receipts.map(({ r, supplier }) => (
-        <div key={r.id} className="card scroll">
-          <strong>
-            {r.receivedOn}
-            {r.receivedTime && ` ${r.receivedTime}`}
-          </strong>{" "}
-          · {supplier ?? "No supplier"}
-          {r.deliveryRef && <span className="muted"> · delivery note {r.deliveryRef}</span>}
-          {r.note && <div className="small muted">{r.note}</div>}
-          <table style={{ marginTop: 8 }}>
+        <section key={r.id} className="card scroll">
+          <div className="card-head">
+            <h2>
+              {supplier ?? "No supplier"}
+              <span className="muted small" style={{ fontWeight: 400 }}>
+                {" "}
+                {fmtDate(r.receivedOn, { weekday: true })}
+                {r.receivedTime && ` ${r.receivedTime.slice(0, 5)}`}
+                {r.deliveryRef && ` · note ${r.deliveryRef}`}
+              </span>
+            </h2>
+          </div>
+          {r.note && <p className="small muted">{r.note}</p>}
+          <table>
             <thead>
               <tr>
                 <th>Item</th>
@@ -64,12 +79,12 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
                     <td className="small">{line.damageNote ?? "—"}</td>
                     <td>{lot ? <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link> : <span className="muted">none</span>}</td>
                     <td>{lot?.supplierBatch ?? "—"}</td>
-                    <td>{lot?.bestBefore ?? "—"}</td>
+                    <td>{lot?.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : "—"}</td>
                   </tr>
                 ))}
             </tbody>
           </table>
-        </div>
+        </section>
       ))}
     </>
   );

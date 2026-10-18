@@ -12,11 +12,18 @@ import { BudgetTable } from "../../components/budget-table";
 import { budgetForTable } from "../../components/budget-format";
 import { RunOrdersTable } from "../../components/order-bits";
 import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
+import { fmtDate } from "../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
 /** Step 1: what the run makes, its batches, its orders and its budget. */
-export default async function RunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function RunPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const run = await loadRun(id);
@@ -26,36 +33,45 @@ export default async function RunPage({ params, searchParams }: { params: Promis
   const [orders, budget] = await Promise.all([loadOrders(db(), { runId: id }), planBudget(db(), live)]);
   const shortCount = live.requirements.filter((r) => r.status === "short").length;
 
+  const actions = (
+    <>
+      {(run.status === "draft" || run.status === "confirmed") && (
+        <form action={cancel}>
+          <input type="hidden" name="runId" value={run.id} />
+          <button type="submit" className="danger">
+            Cancel run
+          </button>
+        </form>
+      )}
+      {run.status === "draft" && (
+        <form action={confirm}>
+          <input type="hidden" name="runId" value={run.id} />
+          <button type="submit">Confirm run</button>
+        </form>
+      )}
+    </>
+  );
+
   return (
     <>
-      <RunHeader run={run} step="run" />
+      <RunHeader run={run} step="run" actions={actions} />
       <Flash params={flash} />
 
-      <div className="card row">
-        {run.status === "draft" && (
-          <form action={confirm}>
-            <input type="hidden" name="runId" value={run.id} />
-            <button type="submit">Confirm run</button>
-          </form>
-        )}
-        {(run.status === "draft" || run.status === "confirmed") && (
-          <form action={cancel}>
-            <input type="hidden" name="runId" value={run.id} />
-            <button type="submit" style={{ background: "var(--muted)" }}>
-              Cancel run
-            </button>
-          </form>
-        )}
-        <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-          {run.status === "draft"
-            ? "Confirming saves this forecast so it can be compared with what is actually produced, and reserves the ingredients and packaging so other runs don't count on them. Nothing is taken from stock yet."
-            : run.status === "confirmed"
-              ? `Confirmed ${run.confirmedAt?.toISOString().slice(0, 16).replace("T", " ")}. Stock is reserved; it is used when production is recorded.`
-              : null}
+      {run.status === "draft" && (
+        <ul className="issues">
+          <li>
+            <strong>This run is a draft.</strong> Confirming saves this forecast to compare with what is actually produced and reserves the ingredients and
+            packaging so other runs don&apos;t count on them. Nothing is taken from stock yet.
+          </li>
+        </ul>
+      )}
+      {run.status === "confirmed" && run.confirmedAt && (
+        <p className="small muted" style={{ marginTop: -8 }}>
+          Confirmed {fmtDate(run.confirmedAt.toISOString().slice(0, 10))}. Its stock is reserved and is used when production is recorded.
         </p>
-      </div>
+      )}
 
-      <PlanView result={frozen ?? live} only={["issues", "production"]} batchesTitle="Planned batches" />
+      <PlanView result={frozen ?? live} only={["issues", "production"]} batchesTitle="Batches per sauce" />
 
       <BatchRunSection runId={run.id} runStatus={run.status} frozen={frozen} />
 
@@ -68,7 +84,7 @@ export default async function RunPage({ params, searchParams }: { params: Promis
           { key: "toBuy", label: "To buy" },
           { key: "total", label: "Total cost" },
         ])}
-        note={`Favourite supplier's current price. "To buy" is only what's missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock. All sauces are added together.`}
+        note={`At the favourite supplier's current price. "To buy" is only what's missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock.`}
       />
 
       {frozen && (
@@ -80,7 +96,8 @@ export default async function RunPage({ params, searchParams }: { params: Promis
       )}
 
       <NextStep href={`/runs/${id}/stock`}>
-        Next: stock vs need{shortCount > 0 ? ` (${shortCount} item${shortCount === 1 ? "" : "s"} to buy)` : ""}
+        Stock vs need
+        {shortCount > 0 ? ` (${shortCount} item${shortCount === 1 ? "" : "s"} to buy)` : ""}
       </NextStep>
     </>
   );

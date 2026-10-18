@@ -2,7 +2,8 @@ import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { SettingsBack, VERSION_STATUS, fmtDate } from "../../components/settings-versions";
+import { VERSION_STATUS, fmtDate } from "../../components/settings-versions";
+import { PageHeader } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,13 @@ export default async function RecipesPage() {
 
   return (
     <>
-      <SettingsBack />
-      <h1>Recipes</h1>
-      <p className="lead">
-        One active recipe per sauce, for one reference batch. To change a recipe you make a new version; batches already made keep the version they used.
-      </p>
+      <PageHeader
+        back={{ href: "/settings", label: "Settings" }}
+        title="Recipes"
+        lead={
+          <>One active recipe per sauce, for one reference batch. To change a recipe you make a new version; batches already made keep the version they used.</>
+        }
+      />
       <div className="card scroll">
         <table>
           <thead>
@@ -48,7 +51,7 @@ export default async function RecipesPage() {
                   <td>{active ? `${active.batchReferenceKg} kg` : "—"}</td>
                   <td>{draft ? <span className={`badge ${VERSION_STATUS.draft!.cls}`}>v{draft.versionNo} draft</span> : <span className="muted">—</span>}</td>
                   <td>
-                    <Link href={`/settings/recipes/${s.id}`}>{active ? "Open" : "Set up"} →</Link>
+                    <Link href={`/settings/recipes/${s.id}`}>{active ? "Open" : "Set up"}</Link>
                   </td>
                 </tr>
               );

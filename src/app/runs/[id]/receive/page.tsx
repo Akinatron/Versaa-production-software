@@ -7,11 +7,18 @@ import { Flash } from "../../../components/flash";
 import { PO_STATUS } from "../../../components/labels";
 import { MarkSentForm } from "../../../components/order-bits";
 import { RunHeader, loadRun } from "../../../components/run-steps";
+import { fmtDate } from "../../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
 /** Step 4: receive the run's orders. */
-export default async function RunReceivePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function RunReceivePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const run = await loadRun(id);
@@ -39,11 +46,13 @@ export default async function RunReceivePage({ params, searchParams }: { params:
               </Link>{" "}
               · {o.supplier.name} <span className={`badge ${PO_STATUS[o.po.status]!.cls}`}>{PO_STATUS[o.po.status]!.label}</span>
               <div className="small muted">
-                Sent {o.po.orderedOn ?? "—"}
-                {o.po.expectedOn && ` · expected ${o.po.expectedOn}`}
+                Sent {fmtDate(o.po.orderedOn)}
+                {o.po.expectedOn && ` · expected ${fmtDate(o.po.expectedOn)}`}
               </div>
             </div>
-            <Link href={`/deliveries/new?po=${o.po.id}`}>Record delivery →</Link>
+            <Link href={`/deliveries/new?po=${o.po.id}`} className="btn">
+              Record delivery
+            </Link>
           </div>
           <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
             {o.lines.map((l) => {
@@ -92,7 +101,14 @@ export default async function RunReceivePage({ params, searchParams }: { params:
                     <td className="small">
                       {o.lines.map((l) => `${l.item.name} ${formatQty(l.accepted, l.item.stockUnit as UnitCode)}`).join(", ")}
                       {o.lines.some((l) => l.rejected.gt(0)) && (
-                        <span className="muted"> · refused: {o.lines.filter((l) => l.rejected.gt(0)).map((l) => `${l.item.name} ${formatQty(new Decimal(l.rejected), l.item.stockUnit as UnitCode)}`).join(", ")}</span>
+                        <span className="muted">
+                          {" "}
+                          · refused:{" "}
+                          {o.lines
+                            .filter((l) => l.rejected.gt(0))
+                            .map((l) => `${l.item.name} ${formatQty(new Decimal(l.rejected), l.item.stockUnit as UnitCode)}`)
+                            .join(", ")}
+                        </span>
                       )}
                     </td>
                   </tr>

@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { traceBatch, type LotSummary } from "@/db/trace";
 import { BATCH_STATUS } from "./labels";
 import { LotOrigin, lotQty } from "./trace-format";
+import { fmtDate } from "./ui/format";
 
 /** Backward trace of one batch: the ingredient and packaging lots it used, with suppliers. */
 export async function BatchBackward({ batchId, heading = true }: { batchId: string; heading?: boolean }) {
@@ -16,7 +17,7 @@ export async function BatchBackward({ batchId, heading = true }: { batchId: stri
       <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link>
       <div className="small muted">
         <LotOrigin lot={lot} />
-        {lot.bestBefore ? ` · best before ${lot.bestBefore}` : ""}
+        {lot.bestBefore ? ` · best before ${fmtDate(lot.bestBefore, { year: true })}` : ""}
       </div>
     </>
   );
@@ -28,7 +29,7 @@ export async function BatchBackward({ batchId, heading = true }: { batchId: stri
         </h3>
       )}
       <p className="small muted" style={{ marginTop: 0 }}>
-        {b.sauce.name}, recipe version {b.recipe.versionNo}, produced {b.batch.producedOn ?? "date not recorded"}.
+        {b.sauce.name}, recipe version {b.recipe.versionNo}, produced {b.batch.producedOn ? fmtDate(b.batch.producedOn, { year: true }) : "date not recorded"}.
       </p>
       <h4 style={{ margin: "8px 0 4px" }}>Ingredients used</h4>
       <table>

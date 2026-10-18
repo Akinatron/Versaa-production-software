@@ -2,7 +2,8 @@ import Link from "next/link";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { SettingsBack, fmtDate } from "../../components/settings-versions";
+import { fmtDate } from "../../components/settings-versions";
+import { PageHeader } from "../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,16 @@ export default async function PackagingListPage() {
 
   return (
     <>
-      <SettingsBack />
-      <h1>Packaging per product</h1>
-      <p className="lead">
-        What each filled jar uses. Packaging materials are taken from stock for every filled jar, rejected ones included. A product can only be planned once it
-        has an active packaging list.
-      </p>
+      <PageHeader
+        back={{ href: "/settings", label: "Settings" }}
+        title="Packaging per product"
+        lead={
+          <>
+            What each filled jar uses. Packaging materials are taken from stock for every filled jar, rejected ones included. A product can only be planned once
+            it has an active packaging list.
+          </>
+        }
+      />
       <div className="card scroll">
         <table>
           <thead>
@@ -51,7 +56,11 @@ export default async function PackagingListPage() {
                     {p.name} {!p.active && <span className="badge">Retired</span>}
                   </td>
                   <td>
-                    {active ? `v${active.versionNo} · since ${fmtDate(active.activatedAt)}` : <span className="badge bad">No packaging list — can't be planned</span>}
+                    {active ? (
+                      `v${active.versionNo} · since ${fmtDate(active.activatedAt)}`
+                    ) : (
+                      <span className="badge bad">No packaging list — can't be planned</span>
+                    )}
                     {draft && (
                       <>
                         {" "}
@@ -61,7 +70,7 @@ export default async function PackagingListPage() {
                   </td>
                   <td className="small">{ls.map((l) => `${l.perJar} × ${name.get(l.itemId) ?? "?"}`).join(", ") || "—"}</td>
                   <td>
-                    <Link href={`/settings/packaging/${p.id}`}>{active ? "Open" : "Set up"} →</Link>
+                    <Link href={`/settings/packaging/${p.id}`}>{active ? "Open" : "Set up"}</Link>
                   </td>
                 </tr>
               );

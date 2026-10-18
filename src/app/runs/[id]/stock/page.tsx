@@ -7,7 +7,13 @@ import { NextStep, RunHeader, loadRun } from "../../../components/run-steps";
 export const dynamic = "force-dynamic";
 
 /** Step 2: stock against what the run needs. */
-export default async function RunStockPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function RunStockPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const flash = await searchParams;
   const run = await loadRun(id);
@@ -19,13 +25,15 @@ export default async function RunStockPage({ params, searchParams }: { params: P
     <>
       <RunHeader run={run} step="stock" />
       <Flash params={flash} />
-      <p className="card">
-        {short === 0 && unknown === 0
-          ? "Everything this run needs is in stock or already on order."
-          : `${short} item${short === 1 ? "" : "s"} to buy${unknown ? `, ${unknown} with unknown stock` : ""}. "On order" counts only orders already sent.`}
-      </p>
+      <ul className="issues">
+        <li className={short ? "bad" : unknown ? "warn" : "ok"}>
+          {short === 0 && unknown === 0
+            ? "Everything this run needs is in stock or already on order."
+            : `${short} item${short === 1 ? "" : "s"} to buy${unknown ? `, ${unknown} with unknown stock` : ""}. "On order" counts only orders already sent.`}
+        </li>
+      </ul>
       <PlanView result={live} only={["requirements"]} />
-      {short > 0 && <NextStep href={`/runs/${id}/order`}>Next: order what's missing</NextStep>}
+      {short > 0 && <NextStep href={`/runs/${id}/order`}>Order what's missing</NextStep>}
     </>
   );
 }

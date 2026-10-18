@@ -5,18 +5,27 @@ import { money } from "@/domain/pricing";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { PO_STATUS } from "./labels";
 import { markSentAction } from "../orders/actions";
+import { fmtDate } from "./ui/format";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** "Mark as sent": draft → sent, with the date it was sent. */
 export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string; back: string; compact?: boolean; expectedOn?: string | null }) {
   return (
-    <form action={markSentAction} className="row" style={{ gap: 6, alignItems: "end", flexWrap: compact ? "nowrap" : "wrap" }}>
+    <form
+      action={markSentAction}
+      className="row"
+      style={{
+        gap: 6,
+        alignItems: "end",
+        flexWrap: compact ? "nowrap" : "wrap",
+      }}
+    >
       <input type="hidden" name="poId" value={poId} />
       <input type="hidden" name="back" value={back} />
       <div>
         {!compact && <label className="small">Sent on</label>}
-        <input name="sentOn" type="date" defaultValue={today()} aria-label="Sent on" style={{ maxWidth: 150 }} />
+        <input name="sentOn" type="date" defaultValue={today()} aria-label="Sent on" style={{ maxWidth: 160 }} />
       </div>
       {!compact && (
         <div>
@@ -24,7 +33,7 @@ export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string
           <input name="expectedOn" type="date" defaultValue={expectedOn ?? ""} style={{ maxWidth: 150 }} />
         </div>
       )}
-      <button type="submit" style={{ padding: "6px 12px", whiteSpace: "nowrap" }}>
+      <button type="submit" className={compact ? "sm" : undefined}>
         Mark as sent
       </button>
     </form>
@@ -33,7 +42,7 @@ export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string
 
 /** Orders made for a run, with their status: shown on the run. */
 export function RunOrdersTable({ orders, back }: { orders: OrderView[]; back: string }) {
-  if (orders.length === 0) return <p className="card muted small">No orders for this run yet.</p>;
+  if (orders.length === 0) return <p className="card muted">No orders for this run yet. Step 3 creates them from what&apos;s missing.</p>;
   return (
     <div className="card scroll">
       <table>
@@ -65,16 +74,22 @@ export function RunOrdersTable({ orders, back }: { orders: OrderView[]; back: st
                   {o.lines.map((l) => (
                     <div key={l.line.id}>
                       {l.item.name}: {formatQty(new Decimal(l.line.quantity), l.item.stockUnit as UnitCode)}
-                      {l.accepted.gt(0) && o.po.status !== "received" && <span className="muted"> · {formatQty(l.accepted, l.item.stockUnit as UnitCode)} in</span>}
+                      {l.accepted.gt(0) && o.po.status !== "received" && (
+                        <span className="muted"> · {formatQty(l.accepted, l.item.stockUnit as UnitCode)} in</span>
+                      )}
                     </div>
                   ))}
                 </td>
-                <td>{o.po.orderedOn ?? "—"}</td>
-                <td>{o.po.expectedOn ?? "—"}</td>
+                <td>{fmtDate(o.po.orderedOn)}</td>
+                <td>{fmtDate(o.po.expectedOn)}</td>
                 <td className="num">{money(o.cost)}</td>
                 <td>
                   {o.po.status === "draft" && <MarkSentForm poId={o.po.id} back={back} compact />}
-                  {(o.po.status === "sent" || o.po.status === "partly_received") && <Link href={`/deliveries/new?po=${o.po.id}`}>Record delivery →</Link>}
+                  {(o.po.status === "sent" || o.po.status === "partly_received") && (
+                    <Link href={`/deliveries/new?po=${o.po.id}`} className="btn secondary sm">
+                      Record delivery
+                    </Link>
+                  )}
                 </td>
               </tr>
             );

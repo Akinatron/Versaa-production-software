@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { BATCH_STATUS } from "./labels";
+import { PageHeader, Steps } from "./ui/header";
+import { fmtDate } from "./ui/format";
 
 type Step = "summary" | "production" | "packaging";
 
@@ -10,40 +12,49 @@ export function BatchSteps({
   run,
   current,
   versionNo,
+  actions,
 }: {
   batch: { id: string; code: string; status: string };
   sauceName: string;
   run: { id: string; code: string; plannedFor: string };
   current: Step;
   versionNo: number;
+  actions?: React.ReactNode;
 }) {
   const status = BATCH_STATUS[batch.status] ?? { label: batch.status, cls: "" };
-  const steps: [Step, string, string][] = [
-    ["production", "1. Production: ingredients", `/production/${batch.id}`],
-    ["packaging", "2. Packaging: jars", `/packaging/${batch.id}`],
-    ["summary", "3. Batch summary and close", `/batches/${batch.id}`],
+  const steps = [
+    {
+      key: "production",
+      label: "Ingredients",
+      href: `/production/${batch.id}`,
+    },
+    { key: "packaging", label: "Jars", href: `/packaging/${batch.id}` },
+    {
+      key: "summary",
+      label: "Summary and close",
+      href: `/batches/${batch.id}`,
+    },
   ];
+  const back =
+    current === "production"
+      ? { href: "/production", label: "Production" }
+      : current === "packaging"
+        ? { href: "/packaging", label: "Packaging" }
+        : { href: "/batches", label: "Batches" };
   return (
     <>
-      <h1>
-        {batch.code} <span className={`badge ${status.cls}`}>{status.label}</span>
-      </h1>
-      <p className="lead" style={{ marginBottom: 12 }}>
-        {sauceName} · recipe version {versionNo} · run <Link href={`/runs/${run.id}`}>{run.code}</Link> (planned for {run.plannedFor})
-      </p>
-      <nav aria-label="Batch steps" className="row" style={{ gap: 8, marginBottom: 16 }}>
-        {steps.map(([key, label, href]) =>
-          key === current ? (
-            <span key={key} className="badge" style={{ background: "var(--accent)", color: "#fff", padding: "8px 14px", fontSize: "0.95rem" }} aria-current="page">
-              {label}
-            </span>
-          ) : (
-            <Link key={key} href={href} className="badge" style={{ border: "1px solid var(--border)", padding: "8px 14px", fontSize: "0.95rem", color: "var(--text)", textDecoration: "none" }}>
-              {label}
-            </Link>
-          ),
-        )}
-      </nav>
+      <PageHeader
+        back={back}
+        title={batch.code}
+        status={status}
+        lead={
+          <>
+            {sauceName} · recipe v{versionNo} · run <Link href={`/runs/${run.id}`}>{run.code}</Link> · {fmtDate(run.plannedFor, { weekday: true })}
+          </>
+        }
+        actions={actions}
+      />
+      <Steps label="Batch steps" current={current} steps={steps} />
     </>
   );
 }

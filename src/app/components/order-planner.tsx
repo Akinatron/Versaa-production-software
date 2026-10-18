@@ -49,7 +49,13 @@ export function OrderPlanner({
     Object.fromEntries(
       lines.map((l) => {
         const fav = [...l.offers].sort((a, b) => a.rank - b.rank)[0];
-        return [l.itemId, { supplierId: new Decimal(l.missing).gt(0) ? (fav?.supplierId ?? "") : "", amount: "" }];
+        return [
+          l.itemId,
+          {
+            supplierId: new Decimal(l.missing).gt(0) ? (fav?.supplierId ?? "") : "",
+            amount: "",
+          },
+        ];
       }),
     ),
   );
@@ -70,7 +76,15 @@ export function OrderPlanner({
     }
     const price = offer?.price != null ? new Decimal(offer.price) : null;
     const cost = price === null ? null : packs !== null ? price.mul(packs) : price.mul(quantity);
-    return { line: l, offer, packQty, packs, quantity, cost, supplierId: c.supplierId };
+    return {
+      line: l,
+      offer,
+      packQty,
+      packs,
+      quantity,
+      cost,
+      supplierId: c.supplierId,
+    };
   });
 
   const groups = new Map<string, typeof computed>();
@@ -78,7 +92,10 @@ export function OrderPlanner({
   const supplierName = (id: string) => suppliers.find((s) => s.id === id)?.name ?? "?";
 
   const set = (itemId: string, patch: Partial<{ supplierId: string; amount: string }>) =>
-    setChoice((prev) => ({ ...prev, [itemId]: { ...prev[itemId]!, ...patch } }));
+    setChoice((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId]!, ...patch },
+    }));
 
   return (
     <form action={action}>
@@ -118,7 +135,16 @@ export function OrderPlanner({
                     {l.missing} {l.unitLabel}
                   </td>
                   <td>
-                    <select value={c.supplierId} onChange={(e) => set(l.itemId, { supplierId: e.target.value, amount: "" })} aria-label={`Supplier for ${l.name}`}>
+                    <select
+                      value={c.supplierId}
+                      onChange={(e) =>
+                        set(l.itemId, {
+                          supplierId: e.target.value,
+                          amount: "",
+                        })
+                      }
+                      aria-label={`Supplier for ${l.name}`}
+                    >
                       <option value="">Don't order</option>
                       {[...l.offers]
                         .sort((a, b) => a.rank - b.rank)
@@ -142,7 +168,14 @@ export function OrderPlanner({
                   </td>
                   <td>
                     {c.supplierId && (
-                      <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                      <div
+                        className="row"
+                        style={{
+                          gap: 6,
+                          alignItems: "center",
+                          flexWrap: "nowrap",
+                        }}
+                      >
                         <input
                           type="number"
                           min={0}
@@ -156,7 +189,9 @@ export function OrderPlanner({
                           {c.packQty ? (
                             <>
                               × {c.packQty.toString()} {l.unitLabel} {c.offer?.packName ?? "pack"}
-                              <div className="muted">= {c.quantity.toString()} {l.unitLabel}</div>
+                              <div className="muted">
+                                = {c.quantity.toString()} {l.unitLabel}
+                              </div>
                             </>
                           ) : (
                             l.unitLabel
@@ -178,7 +213,7 @@ export function OrderPlanner({
 
       <h2>Orders that will be created</h2>
       {groups.size === 0 ? (
-        <p className="card muted">Nothing selected to order.</p>
+        <p className="empty">Nothing selected to order.</p>
       ) : (
         <div className="grid">
           {[...groups.entries()].map(([sid, list]) => {
@@ -189,7 +224,8 @@ export function OrderPlanner({
                 <ul className="small" style={{ paddingLeft: 18, margin: "6px 0" }}>
                   {list.map((c) => (
                     <li key={c.line.itemId}>
-                      {c.line.name}: {c.packs !== null ? `${c.packs} × ${c.packQty!.toString()} ${c.line.unitLabel}` : `${c.quantity.toString()} ${c.line.unitLabel}`}
+                      {c.line.name}:{" "}
+                      {c.packs !== null ? `${c.packs} × ${c.packQty!.toString()} ${c.line.unitLabel}` : `${c.quantity.toString()} ${c.line.unitLabel}`}
                     </li>
                   ))}
                 </ul>
@@ -202,12 +238,12 @@ export function OrderPlanner({
           })}
         </div>
       )}
-      <p style={{ marginTop: 16 }}>
+      <div className="savebar">
+        <span className="small muted">Saved as drafts. Nothing is sent to suppliers until you mark each order as sent.</span>
         <button type="submit" disabled={groups.size === 0}>
           Create {groups.size === 1 ? "draft order" : `${groups.size} draft orders`}
         </button>
-      </p>
-      <p className="small muted">Orders are saved as drafts. Nothing is sent: in Orders, use "Mark as sent" once you've placed each one with the supplier.</p>
+      </div>
     </form>
   );
 }

@@ -6,6 +6,8 @@ import { loadPlanCatalog } from "@/db/planning";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
 import { saveOrder } from "../actions";
+import { PageHeader } from "../../components/ui/header";
+import { fmtDate } from "../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,11 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const [catalog, suppliers, runs] = await Promise.all([
     loadPlanCatalog(db()),
     db().select().from(t.suppliers).where(eq(t.suppliers.active, true)),
-    db().select().from(t.productionRuns).where(inArray(t.productionRuns.status, ["draft", "confirmed", "in_progress"])).orderBy(t.productionRuns.plannedFor),
+    db()
+      .select()
+      .from(t.productionRuns)
+      .where(inArray(t.productionRuns.status, ["draft", "confirmed", "in_progress"]))
+      .orderBy(t.productionRuns.plannedFor),
   ]);
   const prefill = (params.items ?? "")
     .split(",")
@@ -23,15 +29,19 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       const [itemId, qty] = p.split(":");
       return { itemId: itemId!, qty: qty ?? "" };
     });
-  const blank = Array.from({ length: Math.max(4, 8 - prefill.length) }, () => ({ itemId: "", qty: "" }));
+  const blank = Array.from({ length: Math.max(4, 8 - prefill.length) }, () => ({
+    itemId: "",
+    qty: "",
+  }));
   const lines = [...prefill, ...blank];
 
   return (
     <>
-      <h1>New purchase order</h1>
-      <p className="lead">
-        Prepare an order for one supplier, for a run or just to restock. It is saved as a draft; mark it as sent once placed. Stock goes up only when you record the delivery.
-      </p>
+      <PageHeader
+        back={{ href: "/orders", label: "Orders" }}
+        title="New purchase order"
+        lead="One supplier per order. It is saved as a draft; mark it as sent once placed. Stock goes up when the delivery is recorded."
+      />
       <Flash params={params} />
       {suppliers.length === 0 ? (
         <p className="card">
@@ -58,7 +68,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 <option value="">No run: restock</option>
                 {runs.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.code} ({r.plannedFor})
+                    {r.code} ({fmtDate(r.plannedFor)})
                   </option>
                 ))}
               </select>
@@ -99,7 +109,9 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
             </table>
             <p className="small muted">Leave the price empty to use the supplier's saved price. Quantities that are whole packs are recorded as packs.</p>
           </div>
-          <button type="submit">Save draft order</button>
+          <div className="form-actions">
+            <button type="submit">Save draft order</button>
+          </div>
         </form>
       )}
     </>

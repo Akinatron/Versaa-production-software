@@ -5,32 +5,33 @@ import { db } from "@/db/client";
 import { loadPlanInput } from "@/db/planning";
 import { finishedAvailability } from "@/db/sales";
 import { formatQty, type UnitCode } from "@/domain/quantity";
-import { BATCH_STATUS, PO_STATUS, RUN_STATUS } from "./components/labels";
+import { RUN_STATUS } from "./components/labels";
+import { PageHeader } from "./components/ui/header";
+import { fmtDate, plural, relDate } from "./components/ui/format";
 
 export const dynamic = "force-dynamic";
 
-const tiles = [
-  { href: "/plan", title: "Plan production", text: "Jars or batches per sauce → ingredients, packaging and what to buy." },
-  { href: "/production", title: "Production", text: "Record the ingredients each batch used." },
-  { href: "/packaging", title: "Packaging", text: "Record the jars packed from each cooked batch." },
-  { href: "/outbound", title: "Outbound", text: "Every jar leaving stock: sales and orders, own use, tests, samples, waste." },
-  { href: "/deliveries/new", title: "Record a delivery", text: "What arrived, with supplier batch and best-before." },
-  { href: "/orders", title: "Purchase orders", text: "What's ordered and still pending." },
-  { href: "/stock", title: "Stock", text: "What you have, by lot, and what's reserved." },
-  { href: "/trace", title: "Trace", text: "From a lot or batch to where it came from and where it went." },
-  { href: "/reports", title: "Reports", text: "Sales, production, plan vs actual and downloads." },
-];
-
-type Alert = { level: "bad" | "warn"; text: React.ReactNode };
+type Alert = {
+  level: "bad" | "warn";
+  text: React.ReactNode;
+  sub?: React.ReactNode;
+  action?: { href: string; label: string };
+};
 
 export default async function Home() {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
   const d = db();
-  const [input, activeItems, runs, runNeeds, orders, batches, pendingSales, deliveries, available, soldMonth] = await Promise.all([
+  const [input, activeItems, runs, runNeeds, orders, batches, pendingSales, available, soldMonth] = await Promise.all([
     loadPlanInput(d, {}),
     d.execute<{ id: string }>(sql`select id from items where active and kind in ('ingredient', 'packaging')`),
-    d.execute<{ id: string; code: string; planned_for: string; status: string; batches: number }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      planned_for: string;
+      status: string;
+      batches: number;
+    }>(sql`
       select r.id, r.code, r.planned_for::text, r.status::text, (select count(*)::int from production_batches b where b.run_id = r.id and b.status <> 'cancelled') as batches
       from production_runs r where r.status in ('draft', 'confirmed', 'in_progress') order by r.planned_for`),
     d.execute<{ item_id: string; reserved: string; runs: string }>(sql`
@@ -38,18 +39,42 @@ export default async function Home() {
       from reservations r join production_runs pr on pr.id = r.run_id
       where r.released_at is null and r.run_id is not null and pr.status in ('confirmed', 'in_progress')
       group by r.item_id having sum(r.quantity) > 0`),
-    d.execute<{ id: string; code: string; supplier: string; status: string; expected_on: string | null; ordered_on: string | null; lines: number }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      supplier: string;
+      status: string;
+      expected_on: string | null;
+      ordered_on: string | null;
+      lines: number;
+    }>(sql`
       select o.id, o.code, s.name as supplier, o.status::text, o.expected_on::text, o.ordered_on::text,
         (select count(*)::int from purchase_order_lines l where l.purchase_order_id = o.id) as lines
       from purchase_orders o join suppliers s on s.id = o.supplier_id
       where o.status in ('sent', 'partly_received') order by o.expected_on nulls last`),
-    d.execute<{ id: string; code: string; status: string; sauce: string; planned_for: string; pending: number; sessions: number }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      status: string;
+      sauce: string;
+      planned_for: string;
+      pending: number;
+      sessions: number;
+    }>(sql`
       select b.id, b.code, b.status::text, s.name as sauce, r.planned_for::text,
         (select count(*)::int from batch_consumption c where c.batch_id = b.id and c.confirmed_at is null) as pending,
         (select count(*)::int from packaging_sessions ps where ps.batch_id = b.id and ps.deleted_at is null) as sessions
       from production_batches b join sauces s on s.id = b.sauce_id join production_runs r on r.id = b.run_id
       where b.status not in ('closed', 'cancelled') order by r.planned_for, b.code`),
-    d.execute<{ id: string; code: string; who: string | null; product: string; jars: number; on_hand: string; other: string }>(sql`
+    d.execute<{
+      id: string;
+      code: string;
+      who: string | null;
+      product: string;
+      jars: number;
+      on_hand: string;
+      other: string;
+    }>(sql`
       select so.id, so.code, coalesce(c.name, so.destination) as who, p.name as product, sol.jars,
         (select coalesce(sum(m.quantity), 0)::text from movements m where m.item_id = p.item_id) as on_hand,
         (select coalesce(sum(r.quantity), 0)::text from reservations r
@@ -59,9 +84,6 @@ export default async function Home() {
       join products p on p.id = sol.product_id
       left join customers c on c.id = so.customer_id
       where so.status = 'pending' order by so.ordered_on, so.code`),
-    d.execute<{ id: string; received_on: string; supplier: string | null; delivery_ref: string | null; lines: number }>(sql`
-      select r.id, r.received_on::text, s.name as supplier, r.delivery_ref, (select count(*)::int from receipt_lines l where l.receipt_id = r.id) as lines
-      from receipts r left join suppliers s on s.id = r.supplier_id order by r.received_on desc, r.created_at desc limit 5`),
     finishedAvailability(d),
     d.execute<{ product: string; jars: number }>(sql`
       select p.name as product, sum(ol.jars)::int as jars
@@ -70,7 +92,11 @@ export default async function Home() {
       group by p.name order by p.name`),
   ]);
 
-  const draftOrders = await d.execute<{ id: string; code: string; supplier: string }>(sql`
+  const draftOrders = await d.execute<{
+    id: string;
+    code: string;
+    supplier: string;
+  }>(sql`
     select o.id, o.code, s.name as supplier from purchase_orders o join suppliers s on s.id = o.supplier_id where o.status = 'draft' order by o.created_at`);
   const itemById = new Map(input.items.map((i) => [i.id, i]));
   const active = new Set([...activeItems].map((r) => r.id));
@@ -80,23 +106,18 @@ export default async function Home() {
   for (const s of input.sauces.filter((x) => x.yield.litresPerBatch === null)) {
     alerts.push({
       level: "bad",
-      text: (
-        <>
-          {s.name}: no litres-per-batch figure, so batches can't be planned. <Link href="/settings/yields">Enter an estimate</Link>.
-        </>
-      ),
+      text: <>{s.name} can't be planned</>,
+      sub: "No litres-per-batch figure yet.",
+      action: { href: "/settings/yields", label: "Enter an estimate" },
     });
   }
   const noPkg = input.catalog.products.filter((p) => p.packaging.length === 0);
   if (noPkg.length) {
     alerts.push({
       level: "bad",
-      text: (
-        <>
-          {noPkg.map((p) => p.name).join(", ")}: no packaging list, so {noPkg.length === 1 ? "it" : "they"} can't be planned.{" "}
-          <Link href="/settings/packaging">Set up packaging</Link>.
-        </>
-      ),
+      text: <>{plural(noPkg.length, "product")} without a packaging list</>,
+      sub: noPkg.map((p) => p.name).join(", "),
+      action: { href: "/settings/packaging", label: "Set up packaging" },
     });
   }
   const uncounted = input.items.filter((i) => active.has(i.id) && input.stock[i.id]?.onHand == null);
@@ -105,15 +126,25 @@ export default async function Home() {
       level: "warn",
       text: (
         <>
-          {uncounted.length} of {active.size} ingredients and packaging items have no stock count yet, so their stock is unknown
-          {uncounted.length <= 4 ? ` (${uncounted.map((i) => i.name).join(", ")})` : ""}. <Link href="/stock/count">Count stock</Link>.
+          {uncounted.length} of {active.size} items have never been counted
         </>
       ),
+      sub: uncounted.length <= 4 ? uncounted.map((i) => i.name).join(", ") : "Their stock is unknown until they are.",
+      action: { href: "/stock/count", label: "Count stock" },
     });
   }
 
   // Shortages for confirmed runs: what they still need vs what is in stock.
-  const shortLines: { name: string; unit: UnitCode; short: Decimal; onOrder: Decimal; toBuy: Decimal; runs: string; itemId: string; onHand: Decimal | null }[] = [];
+  const shortLines: {
+    name: string;
+    unit: UnitCode;
+    short: Decimal;
+    onOrder: Decimal;
+    toBuy: Decimal;
+    runs: string;
+    itemId: string;
+    onHand: Decimal | null;
+  }[] = [];
   for (const r of runNeeds) {
     const item = itemById.get(r.item_id);
     if (!item) continue;
@@ -124,52 +155,63 @@ export default async function Home() {
     const onOrder = pos?.onOrder ?? new Decimal(0);
     let toBuy = Decimal.max(0, short.minus(onOrder));
     if (item.stockUnit === "unit") toBuy = toBuy.ceil();
-    shortLines.push({ name: item.name, unit: item.stockUnit, short, onOrder, toBuy, runs: r.runs, itemId: item.id, onHand });
+    shortLines.push({
+      name: item.name,
+      unit: item.stockUnit,
+      short,
+      onOrder,
+      toBuy,
+      runs: r.runs,
+      itemId: item.id,
+      onHand,
+    });
   }
   if (shortLines.length) {
     const buy = shortLines.filter((s) => s.toBuy.gt(0));
-    alerts.push({
-      level: buy.length ? "bad" : "warn",
-      text: (
-        <>
-          Confirmed runs need more than is in stock:
-          <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-            {shortLines.slice(0, 8).map((s) => (
-              <li key={s.itemId}>
-                <Link href={`/stock/${s.itemId}`}>{s.name}</Link>: short {formatQty(s.short, s.unit)}
-                {s.onHand === null && " (never counted)"}
-                {s.onOrder.gt(0) && `, ${formatQty(s.onOrder, s.unit)} on order`}
-                <span className="small"> · {s.runs}</span>
-              </li>
-            ))}
-            {shortLines.length > 8 && <li>…and {shortLines.length - 8} more</li>}
-          </ul>
-          {buy.length ? (
-            <Link href={`/orders/plan?items=${encodeURIComponent(buy.map((s) => `${s.itemId}:${s.toBuy.toString()}`).join(","))}`}>Order what's missing</Link>
-          ) : (
-            "Everything short is already on order; check it arrives in time."
-          )}
-        </>
-      ),
-    });
+    const runsShort = [...new Set(shortLines.flatMap((s) => s.runs.split(", ")))].join(", ");
+    alerts.push(
+      buy.length
+        ? {
+            level: "bad",
+            text: (
+              <>
+                {plural(buy.length, "item")} to buy for {runsShort}
+              </>
+            ),
+            sub:
+              buy
+                .slice(0, 6)
+                .map((s) => `${s.name} ${formatQty(s.toBuy, s.unit)}${s.onHand === null ? " (never counted)" : ""}`)
+                .join(" · ") + (buy.length > 6 ? ` · and ${buy.length - 6} more` : ""),
+            action: {
+              href: `/orders/plan?items=${encodeURIComponent(buy.map((s) => `${s.itemId}:${s.toBuy.toString()}`).join(","))}`,
+              label: "Order what's missing",
+            },
+          }
+        : {
+            level: "warn",
+            text: (
+              <>
+                {plural(shortLines.length, "item")} for {runsShort} still on the way
+              </>
+            ),
+            sub: `${shortLines.map((s) => s.name).join(", ")}. Already ordered; check it arrives in time.`,
+            action: { href: "/deliveries", label: "See deliveries" },
+          },
+    );
   }
 
   // Orders prepared but not sent.
-  const drafts = [...draftOrders];
-  if (drafts.length) {
+  for (const o of [...draftOrders]) {
     alerts.push({
       level: "warn",
       text: (
         <>
-          {drafts.length} draft order{drafts.length === 1 ? "" : "s"} not sent yet: {drafts.map((o, i) => (
-            <span key={o.id}>
-              {i > 0 && ", "}
-              <Link href={`/orders/${o.id}`}>{o.code}</Link> ({o.supplier})
-            </span>
-          ))}
-          . Mark each as sent once placed with the supplier.
+          Send order {o.code} to {o.supplier}
         </>
       ),
+      sub: "Prepared but not sent yet. Mark it as sent once placed with the supplier.",
+      action: { href: `/orders/${o.id}`, label: "Open order" },
     });
   }
 
@@ -177,34 +219,47 @@ export default async function Home() {
   for (const o of [...orders].filter((x) => x.expected_on && x.expected_on < today)) {
     alerts.push({
       level: "warn",
-      text: (
-        <>
-          {o.code} from {o.supplier} was expected {o.expected_on} and hasn't fully arrived. <Link href={`/deliveries/new?po=${o.id}`}>Record the delivery</Link> or{" "}
-          <Link href="/orders">check the order</Link>.
-        </>
-      ),
+      text: <>{o.supplier} delivery is late</>,
+      sub: `${o.code} was expected ${fmtDate(o.expected_on)} and hasn't fully arrived.`,
+      action: { href: `/deliveries/new?po=${o.id}`, label: "Record delivery" },
     });
   }
 
   // Batches waiting on something (their production date has come).
   for (const b of [...batches].filter((x) => x.planned_for <= today)) {
-    const why =
+    const step =
       b.status === "planned"
-        ? `planned for ${b.planned_for}, nothing recorded yet`
+        ? {
+            why: `To cook, planned ${relDate(b.planned_for)}`,
+            href: `/production/${b.id}`,
+            label: "Record ingredients",
+          }
         : b.pending > 0
-          ? b.sessions > 0
-            ? `packed, but ${b.pending} ingredient line(s) still pending before it can close`
-            : `${b.pending} ingredient line(s) still pending`
+          ? {
+              why: `${plural(b.pending, "ingredient line")} still to record`,
+              href: `/production/${b.id}`,
+              label: "Record ingredients",
+            }
           : b.sessions === 0
-            ? "cooked, packaging not recorded yet"
-            : "packed, waiting to be closed";
+            ? {
+                why: "Cooked, jars not recorded yet",
+                href: `/packaging/${b.id}`,
+                label: "Record jars",
+              }
+            : {
+                why: "Packed, ready to close",
+                href: `/batches/${b.id}`,
+                label: "Close batch",
+              };
     alerts.push({
       level: "warn",
       text: (
         <>
-          <Link href={`/batches/${b.id}`}>{b.code}</Link> ({b.sauce}): {why}.
+          {b.code} · {b.sauce}
         </>
       ),
+      sub: step.why,
+      action: { href: step.href, label: step.label },
     });
   }
 
@@ -214,168 +269,206 @@ export default async function Home() {
     const onHand = new Decimal(l.on_hand);
     const free = Decimal.max(0, onHand.minus(l.other));
     if (free.gte(l.jars)) continue;
-    const entry = salesShort.get(l.id) ?? { code: l.code, who: l.who, parts: [] };
-    entry.parts.push(`${l.product}: ${l.jars} ordered, ${free} free${new Decimal(l.other).gt(0) ? ` (${onHand} in stock, ${l.other} promised to other orders)` : ""}`);
+    const entry = salesShort.get(l.id) ?? {
+      code: l.code,
+      who: l.who,
+      parts: [],
+    };
+    entry.parts.push(`${l.product}: ${l.jars} ordered, ${free} free`);
     salesShort.set(l.id, entry);
   }
   for (const [id, s] of salesShort) {
     alerts.push({
       level: "warn",
-      text: (
+      text: <>Not enough jars for {s.who ?? s.code}</>,
+      sub: (
         <>
-          <Link href={`/outbound/orders/${id}`}>{s.code}</Link>
-          {s.who && ` (${s.who})`} can't be fully delivered from stock: {s.parts.join("; ")}. <Link href="/plan">Plan production</Link>.
+          <Link href={`/outbound/orders/${id}`}>{s.code}</Link> · {s.parts.join(" · ")}
         </>
       ),
+      action: { href: "/plan", label: "Plan production" },
     });
   }
+  alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === "bad" ? -1 : 1));
 
   const upcoming = [...runs];
   const pendingOrders = [...orders];
-  const pendingSalesCount = new Set([...pendingSales].map((l) => l.id)).size;
+  const pendingSalesIds = [...new Set([...pendingSales].map((l) => l.id))];
   const soldTotal = [...soldMonth].reduce((a, r) => a + r.jars, 0);
   const jars = available.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
+  const freeJars = available.reduce((a, r) => a.plus(r.available), new Decimal(0));
+  const openBatches = [...batches];
+  const toCook = openBatches.filter((b) => b.status === "planned" || b.status === "in_production").length;
+  const toPack = openBatches.length - toCook;
+
+  // One agenda of what's coming: production days, deliveries expected, sales to deliver.
+  type Ev = {
+    date: string | null;
+    kind: string;
+    title: React.ReactNode;
+    sub?: React.ReactNode;
+    href: string;
+  };
+  const agenda: Ev[] = [
+    ...upcoming.map((r) => ({
+      date: r.planned_for,
+      kind: "Production",
+      title: r.code,
+      sub: (
+        <>
+          <span className={`badge ${RUN_STATUS[r.status]?.cls ?? ""}`}>{RUN_STATUS[r.status]?.label ?? r.status}</span>
+          {r.batches > 0 && ` ${plural(r.batches, "batch", "batches")}`}
+        </>
+      ),
+      href: `/runs/${r.id}`,
+    })),
+    ...pendingOrders.map((o) => ({
+      date: o.expected_on,
+      kind: "Delivery",
+      title: o.supplier,
+      sub: (
+        <>
+          {o.code} · {plural(o.lines, "item")}
+          {o.expected_on && o.expected_on < today && (
+            <>
+              {" "}
+              <span className="badge bad">late</span>
+            </>
+          )}
+        </>
+      ),
+      href: `/deliveries/new?po=${o.id}`,
+    })),
+    ...pendingSalesIds.map((id) => {
+      const l = [...pendingSales].find((x) => x.id === id)!;
+      const n = [...pendingSales].filter((x) => x.id === id).reduce((a, x) => a + x.jars, 0);
+      return {
+        date: null,
+        kind: "To deliver",
+        title: l.who ?? l.code,
+        sub: (
+          <>
+            {l.code} · {n} jars
+          </>
+        ),
+        href: `/outbound/orders/${id}`,
+      };
+    }),
+  ].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
 
   return (
     <>
-      <h1>Versaa operations</h1>
-      <p className="lead">
-        {upcoming.length} open run(s) · {[...batches].length} open batch(es) · {pendingOrders.length} purchase order(s) on the way · {pendingSalesCount} sales
-        order(s) to deliver · {soldTotal} jars sold this month
-      </p>
+      <PageHeader
+        title="Today"
+        lead={fmtDate(today, { weekday: true, year: true })}
+        actions={
+          <>
+            <Link href="/deliveries/new" className="btn secondary">
+              Record a delivery
+            </Link>
+            <Link href="/outbound/new" className="btn secondary">
+              Record a stock exit
+            </Link>
+            <Link href="/plan" className="btn">
+              Plan production
+            </Link>
+          </>
+        }
+      />
 
-      <h2 style={{ marginTop: 0 }}>Needs attention</h2>
-      <ul className="issues">
-        {alerts.map((a, i) => (
-          <li key={i} className={a.level}>
-            {a.text}
-          </li>
-        ))}
-        {alerts.length === 0 && <li className="ok">Nothing needs attention right now.</li>}
-      </ul>
+      <div className="stats">
+        <Link href="/production">
+          <div className="v">{toCook}</div>
+          <div className="l">{toCook === 1 ? "batch" : "batches"} to cook</div>
+        </Link>
+        <Link href="/packaging">
+          <div className="v">{toPack}</div>
+          <div className="l">{toPack === 1 ? "batch" : "batches"} to pack or close</div>
+        </Link>
+        <Link href="/orders">
+          <div className="v">{pendingOrders.length}</div>
+          <div className="l">{pendingOrders.length === 1 ? "order" : "orders"} on the way</div>
+        </Link>
+        <Link href="/outbound">
+          <div className="v">{freeJars.toString()}</div>
+          <div className="l">jars free to sell</div>
+        </Link>
+        <Link href="/reports">
+          <div className="v">{soldTotal}</div>
+          <div className="l">jars sold this month</div>
+        </Link>
+      </div>
 
-      <div className="grid">
-        <section className="card scroll">
-          <strong>Upcoming runs</strong>
-          {upcoming.length === 0 ? (
-            <p className="small muted">
-              No open runs. <Link href="/plan">Plan production</Link>.
-            </p>
-          ) : (
-            <table>
-              <tbody>
-                {upcoming.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <Link href={`/runs/${r.id}`}>{r.code}</Link>
-                      <div className="small muted">
-                        {r.planned_for}
-                        {r.batches > 0 && ` · ${r.batches} batch(es)`}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${RUN_STATUS[r.status]?.cls ?? ""}`}>{RUN_STATUS[r.status]?.label ?? r.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        <section className="card scroll">
-          <strong>Open batches</strong>
-          {[...batches].length === 0 ? (
-            <p className="small muted">No batches in progress.</p>
-          ) : (
-            <table>
-              <tbody>
-                {[...batches].map((b) => (
-                  <tr key={b.id}>
-                    <td>
-                      <Link href={`/batches/${b.id}`}>{b.code}</Link>
-                      <div className="small muted">
-                        {b.sauce} · {b.planned_for}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${BATCH_STATUS[b.status]?.cls ?? ""}`}>{BATCH_STATUS[b.status]?.label ?? b.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        <section className="card scroll">
-          <strong>Purchases on the way</strong>
-          {pendingOrders.length === 0 ? (
-            <p className="small muted">Nothing on order.</p>
-          ) : (
-            <table>
-              <tbody>
-                {pendingOrders.map((o) => (
-                  <tr key={o.id}>
-                    <td>
-                      <Link href={`/deliveries/new?po=${o.id}`}>{o.code}</Link>
-                      <div className="small muted">
-                        {o.supplier} · {o.lines} item(s)
-                      </div>
-                    </td>
-                    <td className="small">
-                      {o.expected_on ? (
-                        <span className={o.expected_on < today ? "badge bad" : "muted"}>
-                          {o.expected_on < today ? "overdue " : "expected "}
-                          {o.expected_on}
-                        </span>
-                      ) : (
-                        <span className="muted">no date</span>
-                      )}
-                      <div>
-                        <span className={`badge ${PO_STATUS[o.status]?.cls ?? ""}`}>{PO_STATUS[o.status]?.label}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        <section className="card scroll">
-          <strong>Recent deliveries</strong>
-          {[...deliveries].length === 0 ? (
-            <p className="small muted">
-              No deliveries recorded yet. <Link href="/deliveries/new">Record one</Link>.
-            </p>
-          ) : (
-            <table>
-              <tbody>
-                {[...deliveries].map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      {r.supplier ?? "Unknown supplier"}
-                      <div className="small muted">
-                        {r.received_on}
-                        {r.delivery_ref && ` · ${r.delivery_ref}`}
-                      </div>
-                    </td>
-                    <td className="num">{r.lines} line(s)</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <p className="small" style={{ marginBottom: 0 }}>
-            <Link href="/deliveries">All deliveries →</Link>
+      <section className="card">
+        <div className="card-head">
+          <h2>To do</h2>
+          {alerts.length > 0 && <span className="muted small">{plural(alerts.length, "thing")} waiting</span>}
+        </div>
+        {alerts.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>
+            Nothing needs attention right now.
           </p>
+        ) : (
+          <ul className="worklist">
+            {alerts.map((a, i) => (
+              <li key={i}>
+                <span className={`dot ${a.level}`} aria-label={a.level === "bad" ? "Urgent" : "To do"} />
+                <div className="what">
+                  <div>{a.text}</div>
+                  {a.sub && <div className="sub">{a.sub}</div>}
+                </div>
+                {a.action && (
+                  <Link href={a.action.href} className={`btn sm ${a.level === "bad" ? "" : "secondary"}`}>
+                    {a.action.label}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="split">
+        <section className="card">
+          <div className="card-head">
+            <h2>Coming up</h2>
+            <Link href="/runs" className="more">
+              All runs
+            </Link>
+          </div>
+          {agenda.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Nothing planned. <Link href="/plan">Plan production</Link>.
+            </p>
+          ) : (
+            <ul className="worklist">
+              {agenda.map((e, i) => (
+                <li key={i}>
+                  <div style={{ width: 76, flex: "none" }}>
+                    <div style={{ fontWeight: 650 }}>{e.date ? relDate(e.date) : "—"}</div>
+                    <div className="small muted">{e.kind}</div>
+                  </div>
+                  <div className="what">
+                    <Link href={e.href}>{e.title}</Link>
+                    {e.sub && <div className="sub">{e.sub}</div>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
-        <section className="card scroll">
-          <strong>Finished jars</strong>
+        <section className="card">
+          <div className="card-head">
+            <h2>Jars in stock</h2>
+            <Link href="/outbound" className="more">
+              Outbound
+            </Link>
+          </div>
           {jars.length === 0 ? (
-            <p className="small muted">No finished jars in stock.</p>
+            <p className="muted" style={{ margin: 0 }}>
+              No finished jars in stock.
+            </p>
           ) : (
             <table>
               <thead>
@@ -391,7 +484,7 @@ export default async function Home() {
                     <td>{a.name}</td>
                     <td className="num">{a.onHand.toString()}</td>
                     <td className="num">
-                      {a.available.toString()}
+                      <strong className={a.available.lte(0) ? "text-bad" : undefined}>{a.available.toString()}</strong>
                       {a.reserved.gt(0) && <div className="small muted">{a.reserved.toString()} promised</div>}
                     </td>
                   </tr>
@@ -399,52 +492,7 @@ export default async function Home() {
               </tbody>
             </table>
           )}
-          <p className="small muted" style={{ marginBottom: 0 }}>
-            Free = in stock minus jars promised to pending sales orders.
-          </p>
         </section>
-
-        <section className="card scroll">
-          <strong>Sales this month</strong>
-          <span className="small muted"> (jars delivered as sales since {monthStart})</span>
-          {soldTotal === 0 ? (
-            <p className="small muted">No sales recorded this month.</p>
-          ) : (
-            <table>
-              <tbody>
-                {[...soldMonth].map((r) => (
-                  <tr key={r.product}>
-                    <td>{r.product}</td>
-                    <td className="num">{r.jars}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td>
-                    <strong>Total</strong>
-                  </td>
-                  <td className="num">
-                    <strong>{soldTotal}</strong>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-          <p className="small" style={{ marginBottom: 0 }}>
-            <Link href="/reports">Reports →</Link>
-          </p>
-        </section>
-      </div>
-
-      <h2>Quick actions</h2>
-      <div className="grid">
-        {tiles.map((tile) => (
-          <Link key={tile.href} href={tile.href} className="card" style={{ color: "inherit", textDecoration: "none", marginBottom: 0 }}>
-            <strong>{tile.title} →</strong>
-            <p className="muted small" style={{ marginBottom: 0 }}>
-              {tile.text}
-            </p>
-          </Link>
-        ))}
       </div>
     </>
   );

@@ -7,10 +7,17 @@ import { lotsByIds, traceForward } from "@/db/trace";
 import { OUTFLOW } from "../../../components/labels";
 import { BatchBackward } from "../../../components/trace-backward";
 import { LotOrigin, batchCodes, jars, lotQty, who } from "../../../components/trace-format";
+import { PageHeader } from "../../../components/ui/header";
+import { fmtDate } from "../../../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
-const KIND: Record<string, string> = { ingredient: "Ingredient", packaging: "Packaging", finished: "Finished jars", bulk: "Bulk sauce" };
+const KIND: Record<string, string> = {
+  ingredient: "Ingredient",
+  packaging: "Packaging",
+  finished: "Finished jars",
+  bulk: "Bulk sauce",
+};
 
 export default async function LotTracePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,7 +30,17 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
   const inStock = jarLots.filter((l) => l.balance.gt(0));
   // Sauce from affected batches that hasn't been put in jars yet.
   const bulkIds = affected.length
-    ? (await db().select({ id: t.productionBatches.bulkLotId }).from(t.productionBatches).where(inArray(t.productionBatches.id, affected.map((b) => b.batchId))))
+    ? (
+        await db()
+          .select({ id: t.productionBatches.bulkLotId })
+          .from(t.productionBatches)
+          .where(
+            inArray(
+              t.productionBatches.id,
+              affected.map((b) => b.batchId),
+            ),
+          )
+      )
         .map((r) => r.id)
         .filter((x): x is string => !!x && x !== lot.id)
     : [];
@@ -36,16 +53,25 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
     // Non-sales (own use, tests, gifts, waste) usually have no destination: name them by their reason.
     const w = named !== "—" ? named : d.type === "sale" ? "No destination recorded" : (OUTFLOW[d.type] ?? d.type);
     const k = `${d.type}|${w}`;
-    out.set(k, { type: d.type, who: w, jars: (out.get(k)?.jars ?? 0) + d.jars });
+    out.set(k, {
+      type: d.type,
+      who: w,
+      jars: (out.get(k)?.jars ?? 0) + d.jars,
+    });
   }
   const sorted = [...destinations].sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.code.localeCompare(b.code)));
 
   return (
     <>
-      <h1>Lot {lot.code}</h1>
-      <p className="lead">
-        {lot.itemName} · {KIND[lot.itemKind] ?? lot.itemKind}
-      </p>
+      <PageHeader
+        back={{ href: "/trace", label: "Trace" }}
+        title={`Lot ${lot.code}`}
+        lead={
+          <>
+            <Link href={`/stock/${lot.itemId}`}>{lot.itemName}</Link> · {KIND[lot.itemKind] ?? lot.itemKind}
+          </>
+        }
+      />
 
       <div className="card grid">
         <div>
@@ -53,28 +79,30 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           <LotOrigin lot={lot} batchCode={lot.batchId ? codes.get(lot.batchId) : null} />
         </div>
         <div>
-          <div className="small muted">{isMade ? "Made / packed on" : "Received on"}</div>
-          {lot.receivedOn ?? "not recorded"}
+          <div className="small muted">{isMade ? "Made or packed on" : "Received on"}</div>
+          {lot.receivedOn ? fmtDate(lot.receivedOn, { year: true }) : "not recorded"}
         </div>
         <div>
           <div className="small muted">Best before</div>
-          {lot.bestBefore ?? "not recorded"}
+          {lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : "not recorded"}
         </div>
         <div>
           <div className="small muted">Still in stock</div>
-          <strong>{lotQty(lot.balance, lot.unit, lot.itemKind)}</strong> <Link href={`/stock/${lot.itemId}`} className="small">stock of this item</Link>
+          <strong>{lotQty(lot.balance, lot.unit, lot.itemKind)}</strong>
         </div>
       </div>
 
       <h2>Recall summary</h2>
-      <div className="card" style={{ borderColor: "var(--warn)" }}>
-        <p className="small muted" style={{ marginTop: 0 }}>If this lot had a problem, this is everything it reached, from recorded production and outflows.</p>
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          If this lot had a problem, this is everything it reached, from recorded production and outflows.
+        </p>
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           <li>
             <strong>Batches affected:</strong>{" "}
             {affected.length === 0
               ? lot.itemKind === "ingredient" || lot.itemKind === "packaging"
-                ? "none — this lot hasn't been used in production."
+                ? "none, this lot hasn't been used in production."
                 : "none recorded."
               : affected.map((b, i) => (
                   <span key={b.batchId}>
@@ -92,8 +120,7 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
             <strong>Jars still in stock:</strong> {jars(jarsInStock)}
             {inStock.length > 0 && (
               <>
-                {" "}
-                —{" "}
+                {": "}
                 {inStock.map((l, i) => (
                   <span key={l.id}>
                     {i > 0 && ", "}
@@ -134,7 +161,9 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
         <div className="card scroll">
           <h3 style={{ marginTop: 0 }}>Batches that used this lot</h3>
           {batches.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>Not used in any batch yet.</p>
+            <p className="muted" style={{ margin: 0 }}>
+              Not used in any batch yet.
+            </p>
           ) : (
             <table>
               <thead>
@@ -161,7 +190,9 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
         <div className="card scroll">
           <h3 style={{ marginTop: 0 }}>Jar lots made</h3>
           {jarLots.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>No jars packed from {lot.itemKind === "bulk" ? "this batch" : "these batches"} yet.</p>
+            <p className="muted" style={{ margin: 0 }}>
+              No jars packed from {lot.itemKind === "bulk" ? "this batch" : "these batches"} yet.
+            </p>
           ) : (
             <table>
               <thead>
@@ -179,7 +210,7 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
                       <Link href={`/trace/lot/${l.id}`}>{l.code}</Link>
                     </td>
                     <td>{l.itemName}</td>
-                    <td>{l.bestBefore ?? <span className="muted">not recorded</span>}</td>
+                    <td>{l.bestBefore ? fmtDate(l.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                     <td className="num">{l.balance.toString()}</td>
                   </tr>
                 ))}
@@ -191,7 +222,9 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
       <div className="card scroll">
         <h3 style={{ marginTop: 0 }}>Every destination</h3>
         {sorted.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No jars have left stock yet.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            No jars have left stock yet.
+          </p>
         ) : (
           <table>
             <thead>
@@ -208,7 +241,7 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
             <tbody>
               {sorted.map((d, i) => (
                 <tr key={`${d.outflowId}-${d.lotId}-${i}`}>
-                  <td>{d.occurredOn}</td>
+                  <td>{fmtDate(d.occurredOn, { year: true })}</td>
                   <td>{OUTFLOW[d.type] ?? d.type}</td>
                   <td>{who(d.customer, d.destination)}</td>
                   <td>{d.reference ?? "—"}</td>
@@ -233,9 +266,6 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           <BatchBackward batchId={lot.batchId} />
         </>
       )}
-      <p>
-        <Link href="/trace">← New search</Link>
-      </p>
     </>
   );
 }

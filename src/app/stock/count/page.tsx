@@ -3,26 +3,32 @@ import { loadPlanCatalog, loadStockPositions } from "@/db/planning";
 import { UNITS } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { saveOpeningCount } from "../actions";
+import { PageHeader, Empty } from "../../components/ui/header";
+import { GuardedForm } from "../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function CountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const [catalog, stock] = await Promise.all([loadPlanCatalog(db()), loadStockPositions(db())]);
-  const items = catalog.items.filter((i) => stock[i.id]?.onHand == null).sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "ingredient" ? -1 : 1));
+  const items = catalog.items
+    .filter((i) => stock[i.id]?.onHand == null)
+    .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "ingredient" ? -1 : 1));
 
   return (
     <>
-      <h1>Opening stock count</h1>
-      <p className="lead">
-        Enter what you have right now. Leave a field empty if you haven't counted it yet; enter 0 if you counted and have
-        none. You can come back for the rest.
-      </p>
+      <PageHeader
+        back={{ href: "/stock", label: "Stock" }}
+        title="Opening stock count"
+        lead="Enter what you have now. Leave a field empty if you haven't counted it; enter 0 if you have none. You can come back for the rest."
+      />
       <Flash params={params} />
       {items.length === 0 ? (
-        <p className="card">Every item has been counted.</p>
+        <Empty title="Every item has been counted">
+          <p>To fix a number, use a correction from the Stock page.</p>
+        </Empty>
       ) : (
-        <form action={saveOpeningCount}>
+        <GuardedForm action={saveOpeningCount}>
           <input type="hidden" name="key" value={crypto.randomUUID()} />
           <div className="card">
             <label htmlFor="countedOn">Counted on</label>
@@ -43,7 +49,14 @@ export default async function CountPage({ searchParams }: { searchParams: Promis
                     <td>{i.name}</td>
                     <td>
                       <div className="row" style={{ alignItems: "center", flexWrap: "nowrap" }}>
-                        <input name={`q:${i.id}`} type="number" min="0" step={i.stockUnit === "unit" ? 1 : "any"} inputMode="decimal" aria-label={`${i.name} quantity`} />
+                        <input
+                          name={`q:${i.id}`}
+                          type="number"
+                          min="0"
+                          step={i.stockUnit === "unit" ? 1 : "any"}
+                          inputMode="decimal"
+                          aria-label={`${i.name} quantity`}
+                        />
                         <span className="muted small">{UNITS[i.stockUnit].label}</span>
                       </div>
                     </td>
@@ -55,9 +68,11 @@ export default async function CountPage({ searchParams }: { searchParams: Promis
               </tbody>
             </table>
           </div>
-          <button type="submit">Save count</button>
-          <p className="small muted">Saving adds these quantities to stock. Counts can't be edited afterwards; mistakes are fixed with a correction so the history stays visible.</p>
-        </form>
+          <div className="savebar">
+            <button type="submit">Save count</button>
+            <span className="small muted">Counts can't be edited afterwards; mistakes are fixed with a correction so the history stays visible.</span>
+          </div>
+        </GuardedForm>
       )}
     </>
   );

@@ -6,8 +6,9 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { UNITS, dimensionOf, formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../../components/flash";
-import { DefaultSubmit, SettingsBack, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
+import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
 import { activateRecipe, discardRecipe, saveRecipe, startRecipe } from "../../actions";
+import { PageHeader } from "../../../components/ui/header";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,10 @@ export default async function RecipePage({
     db().select().from(t.items).where(eq(t.items.kind, "ingredient")),
     ids.length
       ? db()
-          .select({ v: t.productionBatches.recipeVersionId, n: sql<number>`count(*)::int` })
+          .select({
+            v: t.productionBatches.recipeVersionId,
+            n: sql<number>`count(*)::int`,
+          })
           .from(t.productionBatches)
           .where(inArray(t.productionBatches.recipeVersionId, ids))
           .groupBy(t.productionBatches.recipeVersionId)
@@ -55,11 +59,11 @@ export default async function RecipePage({
 
   return (
     <>
-      <SettingsBack href="/settings/recipes" label="Recipes" />
-      <h1>Recipe: {sauce.name}</h1>
-      <p className="lead">
-        Quantities for one reference batch, exactly as recorded. A change is made as a new version: batches already made keep the version they used.
-      </p>
+      <PageHeader
+        back={{ href: "/settings/recipes", label: "Recipes" }}
+        title={<>Recipe: {sauce.name}</>}
+        lead={<>Quantities for one reference batch, exactly as recorded. A change is made as a new version: batches already made keep the version they used.</>}
+      />
       <Flash params={sp} />
 
       {!draft && (
@@ -80,7 +84,16 @@ export default async function RecipePage({
             Draft v{draft.versionNo} <span className={`badge ${VERSION_STATUS.draft!.cls}`}>{VERSION_STATUS.draft!.label}</span>
           </h2>
           {sp.confirm === "1" ? (
-            <ConfirmActivate draftLines={linesOf(draft.id)} activeLines={active ? linesOf(active.id) : []} activeNo={active?.versionNo} draft={draft} activeRef={active?.batchReferenceKg} itemById={itemById} sauceId={sauce.id} back={back} />
+            <ConfirmActivate
+              draftLines={linesOf(draft.id)}
+              activeLines={active ? linesOf(active.id) : []}
+              activeNo={active?.versionNo}
+              draft={draft}
+              activeRef={active?.batchReferenceKg}
+              itemById={itemById}
+              sauceId={sauce.id}
+              back={back}
+            />
           ) : (
             <>
               <form action={saveRecipe} className="card">
@@ -128,7 +141,15 @@ export default async function RecipePage({
                               </select>
                             </td>
                             <td>
-                              <input name={`qty_${i}`} type="number" min="0" step="any" inputMode="decimal" defaultValue={l?.quantity ?? ""} aria-label={`Quantity, row ${i + 1}`} />
+                              <input
+                                name={`qty_${i}`}
+                                type="number"
+                                min="0"
+                                step="any"
+                                inputMode="decimal"
+                                defaultValue={l?.quantity ?? ""}
+                                aria-label={`Quantity, row ${i + 1}`}
+                              />
                             </td>
                             <td>
                               <select name={`unit_${i}`} defaultValue={l?.unit ?? ""} aria-label={`Unit, row ${i + 1}`} style={{ minWidth: 90 }}>
@@ -155,7 +176,7 @@ export default async function RecipePage({
                             </td>
                             <td>
                               {l && (
-                                <button type="submit" name="intent" value={`remove:${i}`} style={{ background: "var(--muted)", padding: "6px 12px" }}>
+                                <button type="submit" name="intent" value={`remove:${i}`} className="secondary sm">
                                   Remove
                                 </button>
                               )}
@@ -167,7 +188,7 @@ export default async function RecipePage({
                   </table>
                 </div>
                 <div className="row" style={{ marginTop: 8 }}>
-                  <button type="submit" name="intent" value="addrow" style={{ background: "var(--muted)" }}>
+                  <button type="submit" name="intent" value="addrow" className="secondary">
                     + Add row
                   </button>
                   <span className="small muted">Saves the draft and adds an empty row.</span>
@@ -180,7 +201,7 @@ export default async function RecipePage({
                   <button type="submit" name="intent" value="save">
                     Save draft
                   </button>
-                  <button type="submit" name="intent" value="activate" style={{ background: "var(--ok)" }}>
+                  <button type="submit" name="intent" value="activate">
                     Save and activate…
                   </button>
                 </div>
@@ -191,7 +212,7 @@ export default async function RecipePage({
               <form action={discardRecipe} className="row" style={{ alignItems: "center", marginBottom: 16 }}>
                 <input type="hidden" name="sauceId" value={sauce.id} />
                 <input type="hidden" name="versionId" value={draft.id} />
-                <button type="submit" style={{ background: "var(--bad)", padding: "6px 12px" }}>
+                <button type="submit" className="danger sm">
                   Discard draft
                 </button>
                 <span className="small muted">Throws this draft away. The active recipe stays as it is.</span>
@@ -227,7 +248,11 @@ export default async function RecipePage({
         <p className="card muted">No versions yet.</p>
       ) : (
         <VersionHistory
-          versions={versions.map((v) => ({ ...v, lines: linesOf(v.id).length, used: used.find((u) => u.v === v.id)?.n ?? 0 }))}
+          versions={versions.map((v) => ({
+            ...v,
+            lines: linesOf(v.id).length,
+            used: used.find((u) => u.v === v.id)?.n ?? 0,
+          }))}
           viewHref={(id) => (id === draft?.id ? `${back}#editor` : id === active?.id ? back : `${back}?v=${id}`)}
           usedLabel="Batches made"
           current={viewing?.id}
@@ -308,23 +333,24 @@ function ConfirmActivate({
       <p className="small muted" style={{ margin: "0 0 4px" }}>
         {activeNo ? `Changes compared with v${activeNo} (which will be retired):` : "This becomes the first active recipe."}
       </p>
-      {activeNo && (changes.length ? (
-        <ul style={{ marginTop: 0 }}>
-          {changes.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="small"><span className="badge warn">No changes</span> The draft is the same as v{activeNo}.</p>
-      ))}
+      {activeNo &&
+        (changes.length ? (
+          <ul style={{ marginTop: 0 }}>
+            {changes.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="small">
+            <span className="badge warn">No changes</span> The draft is the same as v{activeNo}.
+          </p>
+        ))}
       {draft.note && <p className="small">Note: {draft.note}</p>}
       <div className="row" style={{ alignItems: "center" }}>
         <form action={activateRecipe}>
           <input type="hidden" name="sauceId" value={sauceId} />
           <input type="hidden" name="versionId" value={draft.id} />
-          <button type="submit" style={{ background: "var(--ok)" }}>
-            Activate v{draft.versionNo}
-          </button>
+          <button type="submit">Activate v{draft.versionNo}</button>
         </form>
         <Link href={`${back}#editor`}>Back to editing</Link>
       </div>

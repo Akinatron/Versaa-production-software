@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { traceBatch } from "@/db/trace";
-import { ExpandGroup, expandCss } from "./expand-group";
+import { ExpandGroup } from "./expand-group";
+import { fmtDate } from "./ui/format";
 
 type Trace = NonNullable<Awaited<ReturnType<typeof traceBatch>>>;
 
@@ -11,10 +12,14 @@ type Trace = NonNullable<Awaited<ReturnType<typeof traceBatch>>>;
  */
 export function PackagingTable({ tr, editHref }: { tr: Trace; editHref?: (sessionId: string) => string }) {
   const sizes = tr.jarsBySize.filter((s) => s.filled > 0 || s.rejected > 0);
-  if (sizes.length === 0) return <p className="muted" style={{ margin: 0 }}>Nothing packed yet.</p>;
+  if (sizes.length === 0)
+    return (
+      <p className="muted" style={{ margin: 0 }}>
+        Nothing packed yet.
+      </p>
+    );
   return (
     <>
-      <style>{expandCss}</style>
       <table>
         <thead>
           <tr>
@@ -30,7 +35,9 @@ export function PackagingTable({ tr, editHref }: { tr: Trace; editHref?: (sessio
         {sizes.map((s) => {
           const lot = s.accepted > 0 ? tr.jarLots.find((l) => l.itemId === s.itemId) : undefined;
           const sessions = tr.sessions
-            .flatMap((x) => x.lines.filter((l) => l.product.id === s.productId && (l.line.filled > 0 || l.line.rejected > 0)).map((l) => ({ session: x, line: l.line })))
+            .flatMap((x) =>
+              x.lines.filter((l) => l.product.id === s.productId && (l.line.filled > 0 || l.line.rejected > 0)).map((l) => ({ session: x, line: l.line })),
+            )
             .sort((a, b) => a.session.packedOn.localeCompare(b.session.packedOn));
           return (
             <ExpandGroup
@@ -40,20 +47,27 @@ export function PackagingTable({ tr, editHref }: { tr: Trace; editHref?: (sessio
                 { content: s.filled, num: true },
                 { content: s.rejected, num: true },
                 { content: s.accepted, num: true },
-                { content: lot ? <Link href={`/stock/${lot.itemId}`}>{lot.code}</Link> : "—" },
-                { content: lot ? (lot.bestBefore ?? "not recorded") : "—" },
-                { content: lot ? `${lot.balance.toString()} jars` : "—", num: true },
+                {
+                  content: lot ? <Link href={`/stock/${lot.itemId}`}>{lot.code}</Link> : "—",
+                },
+                {
+                  content: lot ? (lot.bestBefore ? fmtDate(lot.bestBefore) : "not recorded") : "—",
+                },
+                {
+                  content: lot ? `${lot.balance.toString()} jars` : "—",
+                  num: true,
+                },
               ]}
             >
               {sessions.map(({ session, line }) => (
                 <tr key={line.id} className="exp-child">
                   <td>
-                    {session.packedOn}
+                    {fmtDate(session.packedOn)}
                     {session.note ? ` · ${session.note}` : ""}
                     {editHref && (
                       <>
                         {" "}
-                        · <Link href={editHref(session.id)}>Edit or delete</Link>
+                        · <Link href={editHref(session.id)}>Edit</Link>
                       </>
                     )}
                   </td>
@@ -70,8 +84,7 @@ export function PackagingTable({ tr, editHref }: { tr: Trace; editHref?: (sessio
         })}
       </table>
       <p className="small muted" style={{ marginBottom: 0 }}>
-        Accepted is what was packed and stays as it was. In stock now goes down as jars leave stock (sales, samples, corrections). Open a size (▸) to see each
-        packaging session.
+        Open a size to see each session. Accepted is what was packed; in stock now goes down as jars leave.
       </p>
     </>
   );
