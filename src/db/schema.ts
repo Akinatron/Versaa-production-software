@@ -186,6 +186,7 @@ export const movementType = pgEnum("movement_type", [
   "internal_use",
   "count_correction",
   "reversal",
+  "test",
 ]);
 
 /** The stock ledger. Rows are never updated or deleted. */
@@ -428,7 +429,7 @@ export const salesOrderLines = pgTable("sales_order_lines", {
   unitPrice: numeric("unit_price"),
 });
 
-export const outflowType = pgEnum("outflow_type", ["sale", "sample", "waste", "internal_use"]);
+export const outflowType = pgEnum("outflow_type", ["sale", "sample", "waste", "internal_use", "test"]);
 
 /** Jars actually leaving stock. Only type "sale" counts as sales. */
 export const outflows = pgTable("outflows", {

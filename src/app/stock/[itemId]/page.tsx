@@ -86,7 +86,7 @@ export default async function ItemStockPage({ params, searchParams }: { params: 
         {item.kind !== "finished" ? (
           <Link href={`/stock/adjust?mode=writeoff&item=${item.id}`}>Write some off</Link>
         ) : (
-          <Link href="/sales/outflow/new?type=waste">Record waste / sample / internal use of jars</Link>
+          <Link href="/outbound/new">Record jars leaving stock (Outbound)</Link>
         )}
       </div>
       <h2>Lots with stock</h2>

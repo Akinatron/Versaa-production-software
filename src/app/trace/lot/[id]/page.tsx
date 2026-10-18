@@ -33,7 +33,8 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
   const out = new Map<string, { type: string; who: string; jars: number }>();
   for (const d of destinations) {
     const named = who(d.customer, d.destination);
-    const w = named === "—" ? "No destination recorded" : named;
+    // Non-sales (own use, tests, gifts, waste) usually have no destination: name them by their reason.
+    const w = named !== "—" ? named : d.type === "sale" ? "No destination recorded" : (OUTFLOW[d.type] ?? d.type);
     const k = `${d.type}|${w}`;
     out.set(k, { type: d.type, who: w, jars: (out.get(k)?.jars ?? 0) + d.jars });
   }
@@ -119,7 +120,7 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
               <ul style={{ paddingLeft: 20 }}>
                 {[...out.values()].map((o) => (
                   <li key={`${o.type}|${o.who}`}>
-                    {o.who}: {jars(o.jars)} <span className="small muted">({OUTFLOW[o.type] ?? o.type})</span>
+                    {o.who}: {jars(o.jars)} {o.who !== OUTFLOW[o.type] && <span className="small muted">({OUTFLOW[o.type] ?? o.type})</span>}
                   </li>
                 ))}
               </ul>
