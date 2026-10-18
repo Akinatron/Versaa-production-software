@@ -76,6 +76,7 @@ export function Sidebar({ user, counts, signOut }: { user: { name: string }; cou
       entries: [
         { href: "/stock", label: "Stock", icon: "stock" },
         { href: "/trace", label: "Trace", icon: "trace" },
+        { href: "/history", label: "History", icon: "history" },
       ],
     },
     {

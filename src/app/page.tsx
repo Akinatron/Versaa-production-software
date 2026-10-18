@@ -9,6 +9,9 @@ import { RUN_STATUS } from "./components/labels";
 import { PageHeader } from "./components/ui/header";
 import { fmtDate, plural, relDate } from "./components/ui/format";
 import { SauceName } from "./components/sauce-name";
+import { currentUser } from "@/lib/session";
+import { listChanges } from "@/db/changes";
+import { fmtWhen, openHref, refLabel, ACTION_LABEL } from "./components/history-format";
 
 export const dynamic = "force-dynamic";
 
@@ -495,7 +498,48 @@ export default async function Home() {
             </table>
           )}
         </section>
+
+        <LatestChanges />
       </div>
     </>
+  );
+}
+
+/** What other people changed lately, so a correction made elsewhere doesn't go unnoticed. */
+async function LatestChanges() {
+  const me = await currentUser();
+  const rows = await listChanges(db(), { exceptUserId: me?.id ?? null, limit: 6 });
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Latest changes</h2>
+        <Link href="/history" className="more">
+          History
+        </Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="muted" style={{ margin: 0 }}>
+          Nobody else has changed anything yet.
+        </p>
+      ) : (
+        <ul className="worklist">
+          {rows.map((c) => (
+            <li key={c.id}>
+              <div className="what">
+                <span className={`badge ${ACTION_LABEL[c.action].cls}`}>{ACTION_LABEL[c.action].label}</span>{" "}
+                <Link href={openHref({ type: c.entityType, id: c.entityId })}>{refLabel({ type: c.entityType, id: c.entityId, code: c.entityCode })}</Link>
+                <div className="sub">
+                  {c.summary}
+                  {c.reason ? ` · “${c.reason}”` : ""}
+                </div>
+                <div className="sub">
+                  {fmtWhen(c.at)} · {c.userName ?? "someone"}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
