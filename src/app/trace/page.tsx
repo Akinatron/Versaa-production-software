@@ -38,7 +38,6 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title="Trace"
-        lead="Find where something came from and where it went. Start from an ingredient lot to see the batches and customers it reached, or from jars to see their batch, ingredients and suppliers."
       />
       <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
         <div style={{ flex: 1, minWidth: 220 }}>

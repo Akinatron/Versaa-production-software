@@ -75,7 +75,7 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
       <PageHeader
         back={item ? { href: `/stock/${item.id}`, label: item.name } : { href: "/stock", label: "Stock" }}
         title="Correct stock"
-        lead="Numbers are never overwritten. A correction or write-off is its own line with your reason, so the history always explains the number."
+        lead="Each correction is kept in the history with its reason."
       />
       <Flash params={params} />
       <nav className="tabs" aria-label="Kind of correction">

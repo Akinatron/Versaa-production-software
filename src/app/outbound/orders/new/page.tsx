@@ -19,7 +19,7 @@ export default async function NewSalesOrderPage({ searchParams }: { searchParams
       <PageHeader
         back={{ href: "/outbound", label: "Outbound" }}
         title="New sales order"
-        lead="An order holds jars so they aren't promised twice, but doesn't take them out of stock. Stock goes down when you deliver it."
+        lead="Holds the jars until you deliver. Stock goes down on delivery."
       />
       <Flash params={params} />
       <GuardedForm action={saveSalesOrder}>

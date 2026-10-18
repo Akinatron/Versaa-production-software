@@ -48,7 +48,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
       <PageHeader
         back={{ href: "/deliveries", label: "Deliveries" }}
         title="Record a delivery"
-        lead="Enter what actually arrived, even if it differs from the order. Only the accepted quantity goes into stock; refused goods stay pending on the order."
+        lead="Only the accepted quantity goes into stock."
       />
       <Flash params={params} />
 

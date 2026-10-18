@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Decimal from "decimal.js";
+import { OrderItems } from "./order-items";
 
 export interface PlannerOffer {
   supplierId: string;
@@ -221,14 +222,14 @@ export function OrderPlanner({
             return (
               <div key={sid} className="card" style={{ marginBottom: 0 }}>
                 <strong>{supplierName(sid)}</strong>
-                <ul className="small" style={{ paddingLeft: 18, margin: "6px 0" }}>
-                  {list.map((c) => (
-                    <li key={c.line.itemId}>
-                      {c.line.name}:{" "}
-                      {c.packs !== null ? `${c.packs} × ${c.packQty!.toString()} ${c.line.unitLabel}` : `${c.quantity.toString()} ${c.line.unitLabel}`}
-                    </li>
-                  ))}
-                </ul>
+                <div className="small" style={{ margin: "6px 0" }}>
+                  <OrderItems
+                    lines={list.map((c) => ({
+                      id: c.line.itemId,
+                      text: `${c.line.name}: ${c.packs !== null ? `${c.packs} × ${c.packQty!.toString()} ${c.line.unitLabel}` : `${c.quantity.toString()} ${c.line.unitLabel}`}`,
+                    }))}
+                  />
+                </div>
                 <span className="small">
                   Total {euro(total)}
                   {total === null && " (some prices missing)"}

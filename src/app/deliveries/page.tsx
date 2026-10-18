@@ -27,7 +27,6 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
     <>
       <PageHeader
         title="Deliveries"
-        lead="What actually arrived. Each line becomes a lot, so it can be traced into production."
         actions={
           <Link href="/deliveries/new" className="btn">
             Record a delivery

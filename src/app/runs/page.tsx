@@ -14,7 +14,6 @@ export default async function RunsPage() {
     <>
       <PageHeader
         title="Runs"
-        lead="Saved plans. Confirming a run reserves the stock it needs and creates its batches."
         actions={
           <Link href="/plan" className="btn">
             Plan a new run

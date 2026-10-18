@@ -37,7 +37,6 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title="Stock"
-        lead="Sum of recorded deliveries, counts and usage. Open an item to see its lots and history."
         actions={
           <Link href="/stock/adjust" className="btn secondary">
             Correct or write off

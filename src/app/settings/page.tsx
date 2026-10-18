@@ -115,7 +115,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Settings" lead="Recipes, packaging, products and planning figures. These change rarely; daily work happens elsewhere." />
+      <PageHeader title="Settings" />
       <Flash params={params} />
 
       <nav className="linklist card" aria-label="Settings">

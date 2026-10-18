@@ -17,3 +17,4 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 
 ## Avoid
 Coloured side borders on cards, gradients, emoji or arrow characters as icons, kicker labels above headings, modals, and more than one primary button per screen.
+Big-number "hero" stat tiles: key facts sit on one quiet line (`.stats`). Explanatory subtitles on pages people use every day: the title and the content say enough. Long lists inside table cells: fold them (`OrderItems`) and keep the full detail on the record's own page.

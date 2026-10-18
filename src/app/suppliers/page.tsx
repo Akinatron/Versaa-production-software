@@ -28,7 +28,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PageHeader title="Suppliers" lead="Who you buy from, what each one sells and at what price. Open a supplier to add items and prices." />
+      <PageHeader title="Suppliers" />
       <Flash params={params} />
       <div className="card scroll">
         {suppliers.length === 0 ? (

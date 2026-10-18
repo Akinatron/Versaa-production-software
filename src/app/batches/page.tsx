@@ -51,7 +51,7 @@ export default async function BatchesPage() {
 
   return (
     <>
-      <PageHeader title="Batches" lead="One batch is one pot of sauce, created when a run is confirmed. Open a batch for its summary, cost and closing." />
+      <PageHeader title="Batches" />
       <h2 style={{ marginTop: 0 }}>Open</h2>
       <div className="card scroll">
         {open.length === 0 ? (

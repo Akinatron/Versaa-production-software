@@ -33,7 +33,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           label: back ? "Back to the form" : "Outbound",
         }}
         title="Customers"
-        lead="Shops and people you sell to. Choosing a customer on an order lets you trace later which jars went to them."
       />
       <Flash params={params} />
 

@@ -30,7 +30,7 @@ export default async function PackagingPage() {
 
   return (
     <>
-      <PageHeader title="Packaging" lead="Cooked batches waiting to be put in jars." />
+      <PageHeader title="Packaging" />
       <div className="card scroll">
         {waiting.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>

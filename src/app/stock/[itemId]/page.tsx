@@ -86,7 +86,6 @@ export default async function ItemStockPage({
           label: "Stock",
         }}
         title={item.name}
-        lead={`Kept in ${unitWord}. Each delivery, count or batch is its own lot. Open a lot to trace where it went.`}
         actions={
           <>
             <Link href={`/stock/adjust?item=${item.id}`} className="btn secondary">
