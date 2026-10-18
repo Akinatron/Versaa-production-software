@@ -165,9 +165,7 @@ export default async function BatchPage({ params, searchParams }: { params: Prom
 
       {/* ------------------------------------------------ budget */}
       <h2>3. Cost of this batch</h2>
-      <div className="card scroll">
-        <BatchBudgetTable budget={budget} />
-      </div>
+      <BatchBudgetTable budget={budget} />
 
       {/* ------------------------------------------------ incidents */}
       <h2 id="incidents">4. Incidents</h2>

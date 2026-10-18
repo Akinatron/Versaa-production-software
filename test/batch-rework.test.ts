@@ -9,6 +9,7 @@ import { recordOutflow } from "@/db/sales";
 import { traceBatch } from "@/db/trace";
 import { observedYields } from "@/db/history";
 import { batchBudget } from "@/db/budget";
+import { markOrderSent } from "@/db/purchasing";
 import { freshDb, testDbUrl } from "./helpers";
 
 const suite = testDbUrl ? describe : describe.skip;
@@ -55,6 +56,7 @@ suite("batch: record, correct, edit packaging, cost", () => {
         { itemId: ids["ing-onions"]!, quantity: "20", unitPrice: "2" },
       ],
     });
+    await markOrderSent(db, po.id, { sentOn: "2026-10-17" });
     const poLines = await db.select().from(t.purchaseOrderLines).where(eq(t.purchaseOrderLines.purchaseOrderId, po.id));
     const r = await recordReceipt(db, {
       idempotencyKey: "rcv-onions",

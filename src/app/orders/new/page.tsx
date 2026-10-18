@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { loadPlanCatalog } from "@/db/planning";
@@ -11,7 +11,11 @@ export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, suppliers] = await Promise.all([loadPlanCatalog(db()), db().select().from(t.suppliers).where(eq(t.suppliers.active, true))]);
+  const [catalog, suppliers, runs] = await Promise.all([
+    loadPlanCatalog(db()),
+    db().select().from(t.suppliers).where(eq(t.suppliers.active, true)),
+    db().select().from(t.productionRuns).where(inArray(t.productionRuns.status, ["draft", "confirmed", "in_progress"])).orderBy(t.productionRuns.plannedFor),
+  ]);
   const prefill = (params.items ?? "")
     .split(",")
     .filter(Boolean)
@@ -25,11 +29,13 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <h1>New purchase order</h1>
-      <p className="lead">Record what you've ordered from a supplier. Stock goes up only when you record the delivery.</p>
+      <p className="lead">
+        Prepare an order for one supplier, for a run or just to restock. It is saved as a draft; mark it as sent once placed. Stock goes up only when you record the delivery.
+      </p>
       <Flash params={params} />
       {suppliers.length === 0 ? (
         <p className="card">
-          No suppliers yet. <Link href="/settings#suppliers">Add a supplier</Link> first.
+          No suppliers yet. <Link href="/suppliers">Add a supplier</Link> first.
         </p>
       ) : (
         <form action={saveOrder}>
@@ -42,6 +48,17 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="runId">For a run (optional)</label>
+              <select id="runId" name="runId" defaultValue={params.run ?? ""}>
+                <option value="">No run: restock</option>
+                {runs.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.code} ({r.plannedFor})
                   </option>
                 ))}
               </select>
@@ -61,7 +78,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 <tr>
                   <th>Item</th>
                   <th>Quantity</th>
-                  <th>Price per unit (optional)</th>
+                  <th>Price per unit (optional, € per kg, L or unit)</th>
                 </tr>
               </thead>
               <tbody>
@@ -80,9 +97,9 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 ))}
               </tbody>
             </table>
-            {prefill.length > 0 && <p className="small muted">Pre-filled with what the plan still needs. Adjust to pack sizes as needed.</p>}
+            <p className="small muted">Leave the price empty to use the supplier's saved price. Quantities that are whole packs are recorded as packs.</p>
           </div>
-          <button type="submit">Save order</button>
+          <button type="submit">Save draft order</button>
         </form>
       )}
     </>

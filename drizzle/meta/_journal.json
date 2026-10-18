@@ -45,6 +45,13 @@
       "breakpoints": true
     },
     {
+      "idx": 5,
+      "version": "7",
+      "when": 1792290000000,
+      "tag": "0005_suppliers_prices_orders",
+      "breakpoints": true
+    },
+    {
       "idx": 8,
       "version": "7",
       "when": 1792295000000,

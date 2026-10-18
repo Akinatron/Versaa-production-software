@@ -1,34 +1,34 @@
-import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { planForRun } from "@/db/operations";
+import { loadOrders, planBudget } from "@/db/purchasing";
 import type { PlanResult } from "@/domain/planner";
 import { Flash } from "../../components/flash";
-import { PlanView, orderLinkFor } from "../../components/plan-view";
-import { RUN_STATUS } from "../../components/labels";
+import { PlanView } from "../../components/plan-view";
 import { cancel, confirm } from "../actions";
 import { BatchRunSection } from "../../components/batch-run-section";
+import { BudgetTable } from "../../components/budget-table";
+import { budgetForTable } from "../../components/budget-format";
+import { RunOrdersTable } from "../../components/order-bits";
+import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
 
 export const dynamic = "force-dynamic";
 
+/** Step 1: what the run makes, its batches, its orders and its budget. */
 export default async function RunPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
   const flash = await searchParams;
-  const [run] = await db().select().from(t.productionRuns).where(eq(t.productionRuns.id, id));
-  if (!run) notFound();
+  const run = await loadRun(id);
   const [snapshot] = await db().select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, id));
   const live = await planForRun(db(), id);
   const frozen = snapshot ? (snapshot.data as PlanResult) : null;
-  const orderLink = orderLinkFor(live);
-  const status = RUN_STATUS[run.status]!;
+  const [orders, budget] = await Promise.all([loadOrders(db(), { runId: id }), planBudget(db(), live)]);
+  const shortCount = live.requirements.filter((r) => r.status === "short").length;
 
   return (
     <>
-      <h1>
-        {run.code} <span className={`badge ${status.cls}`}>{status.label}</span>
-      </h1>
-      <p className="lead">Production date {run.plannedFor}.</p>
+      <RunHeader run={run} step="run" />
       <Flash params={flash} />
 
       <div className="card row">
@@ -46,7 +46,6 @@ export default async function RunPage({ params, searchParams }: { params: Promis
             </button>
           </form>
         )}
-        {orderLink && <a href={orderLink}>Order what's missing →</a>}
         <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
           {run.status === "draft"
             ? "Confirming saves this forecast so it can be compared with what is actually produced, and reserves the ingredients and packaging so other runs don't count on them. Nothing is taken from stock yet."
@@ -56,20 +55,33 @@ export default async function RunPage({ params, searchParams }: { params: Promis
         </p>
       </div>
 
+      <PlanView result={frozen ?? live} only={["issues", "production"]} batchesTitle="Planned batches" />
+
       <BatchRunSection runId={run.id} runStatus={run.status} frozen={frozen} />
 
+      <h2>Orders for this run</h2>
+      <RunOrdersTable orders={orders} back={`/runs/${id}`} />
+
+      <h2>Budget</h2>
+      <BudgetTable
+        data={budgetForTable(budget, [
+          { key: "toBuy", label: "To buy" },
+          { key: "total", label: "Total cost" },
+        ])}
+        note={`Favourite supplier's current price. "To buy" is only what's missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock. All sauces are added together.`}
+      />
+
       {frozen && (
-        <>
-          <h2>Forecast saved at confirmation</h2>
+        <details className="card">
+          <summary>Forecast saved at confirmation</summary>
           <p className="small muted">This never changes, so you can compare it with the real result later.</p>
-          <details className="card">
-            <summary>Show saved forecast</summary>
-            <PlanView result={frozen} />
-          </details>
-          <h2>Current stock check</h2>
-        </>
+          <PlanView result={frozen} />
+        </details>
       )}
-      <PlanView result={live} />
+
+      <NextStep href={`/runs/${id}/stock`}>
+        Next: stock vs need{shortCount > 0 ? ` (${shortCount} item${shortCount === 1 ? "" : "s"} to buy)` : ""}
+      </NextStep>
     </>
   );
 }

@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { UNITS, type UnitCode } from "@/domain/quantity";
+import { loadOffers } from "@/db/suppliers";
 import { Flash } from "../../components/flash";
 import { SettingsBack } from "../../components/settings-versions";
 import { addItemAction, renameItemAction, setItemActiveAction } from "../actions";
@@ -20,6 +21,8 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       select l.item_id, p.name from packaging_lines l join packaging_versions v on v.id = l.packaging_version_id join products p on p.id = v.product_id
       where v.status = 'active'`),
   ]);
+  const suppliersOf = new Map<string, string[]>();
+  for (const o of await loadOffers(db(), {})) suppliersOf.set(o.itemId, [...(suppliersOf.get(o.itemId) ?? []), o.supplierName]);
   const usedBy = new Map<string, string[]>();
   for (const r of usedRows) usedBy.set(r.item_id, [...(usedBy.get(r.item_id) ?? []), r.name]);
 
@@ -85,6 +88,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th>Suppliers</th>
                     <th>Stock unit</th>
                     <th>Status</th>
                     <th>Used by (active)</th>
@@ -98,8 +102,14 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                     return (
                       <tr key={i.id} style={i.active ? undefined : { opacity: 0.7 }}>
                         <td>
-                          <Link href={`/stock/${i.id}`}>{i.name}</Link>
+                          <Link href={`/items/${i.id}`}>{i.name}</Link>
+                          <div className="small">
+                            <Link href={`/stock/${i.id}`} className="muted">
+                              stock
+                            </Link>
+                          </div>
                         </td>
+                        <td className="small">{suppliersOf.get(i.id)?.join(", ") ?? <span className="badge warn">none</span>}</td>
                         <td>{UNITS[i.stockUnit as UnitCode].label}</td>
                         <td>{i.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>
                         <td className="small">{used.length ? used.join(", ") : <span className="muted">—</span>}</td>

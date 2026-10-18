@@ -19,7 +19,7 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
     .select({ line: t.receiptLines, item: t.items, lot: t.lots })
     .from(t.receiptLines)
     .innerJoin(t.items, eq(t.receiptLines.itemId, t.items.id))
-    .innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id));
+    .leftJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id));
 
   return (
     <>
@@ -32,13 +32,20 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
       {receipts.length === 0 && <p className="card muted">No deliveries recorded yet.</p>}
       {receipts.map(({ r, supplier }) => (
         <div key={r.id} className="card scroll">
-          <strong>{r.receivedOn}</strong> · {supplier ?? "No supplier"}
+          <strong>
+            {r.receivedOn}
+            {r.receivedTime && ` ${r.receivedTime}`}
+          </strong>{" "}
+          · {supplier ?? "No supplier"}
           {r.deliveryRef && <span className="muted"> · delivery note {r.deliveryRef}</span>}
+          {r.note && <div className="small muted">{r.note}</div>}
           <table style={{ marginTop: 8 }}>
             <thead>
               <tr>
                 <th>Item</th>
-                <th className="num">Quantity</th>
+                <th className="num">Accepted</th>
+                <th className="num">Refused</th>
+                <th>Damage</th>
                 <th>Lot</th>
                 <th>Supplier batch</th>
                 <th>Best before</th>
@@ -53,9 +60,11 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
                       <Link href={`/stock/${item.id}`}>{item.name}</Link>
                     </td>
                     <td className="num">{formatQty(new Decimal(line.quantity), item.stockUnit as UnitCode)}</td>
-                    <td>{lot.code}</td>
-                    <td>{lot.supplierBatch ?? "—"}</td>
-                    <td>{lot.bestBefore ?? "—"}</td>
+                    <td className="num">{new Decimal(line.rejectedQty).gt(0) ? formatQty(new Decimal(line.rejectedQty), item.stockUnit as UnitCode) : "—"}</td>
+                    <td className="small">{line.damageNote ?? "—"}</td>
+                    <td>{lot ? <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link> : <span className="muted">none</span>}</td>
+                    <td>{lot?.supplierBatch ?? "—"}</td>
+                    <td>{lot?.bestBefore ?? "—"}</td>
                   </tr>
                 ))}
             </tbody>

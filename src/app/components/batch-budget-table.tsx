@@ -1,63 +1,51 @@
-import Decimal from "decimal.js";
-import type { BatchBudget, BudgetLine } from "@/db/budget";
+import type { BatchBudget, BudgetGroup, BudgetLine } from "@/db/budget";
+import { money } from "@/domain/pricing";
 import { formatQty, type UnitCode } from "@/domain/quantity";
-import { ExpandGroup, expandCss } from "./expand-group";
+import { BudgetTable, type BudgetTableData } from "./budget-table";
 
-const eur = (d: Decimal) => `€${d.toDecimalPlaces(2).toFixed(2)}`;
-
-function cost(known: Decimal, complete: boolean) {
-  if (complete) return eur(known);
-  return known.isZero() ? "unknown" : `${eur(known)} + unknown`;
-}
+const cost = (known: BudgetLine["knownCost"], missing: number) => (missing === 0 ? money(known) : `${money(known)} + ${missing} without price`);
 
 function price(l: BudgetLine) {
-  if (!l.unpricedQty.isZero() && l.unpricedQty.eq(l.quantity)) return "no price";
-  const priced = l.quantity.minus(l.unpricedQty);
-  const per = l.knownCost.div(priced);
-  const note = l.sources.has("fallback") ? " (latest order price)" : "";
-  return `${eur(per)} / ${l.unit}${l.lots > 1 ? " (average)" : ""}${note}`;
+  if (l.unpricedQty.eq(l.quantity)) return { text: "no price" };
+  const per = l.knownCost.div(l.quantity.minus(l.unpricedQty));
+  const from = l.sources.has("lot") && l.sources.has("favourite") ? "lot price and favourite supplier" : l.sources.has("favourite") ? "favourite supplier" : "lot price";
+  return { text: `${money(per)} / ${l.unit}${l.lots > 1 ? " (average)" : ""}`, source: from };
 }
 
-/** Real cost of a batch: Ingredients, Packaging and Total, each opening to its items. */
+function group(kind: "ingredient" | "packaging", g: BudgetGroup): BudgetTableData["groups"][number] {
+  const missing = g.lines.filter((l) => !l.unpricedQty.isZero()).length;
+  return {
+    kind,
+    rows: g.lines.map((l) => {
+      const p = price(l);
+      return {
+        itemId: l.itemId,
+        name: l.name,
+        priceText: p.text,
+        priceSource: p.source,
+        cells: {
+          used: {
+            qty: formatQty(l.quantity, l.unit as UnitCode),
+            cost: l.unpricedQty.isZero() ? money(l.knownCost) : l.knownCost.isZero() ? "no price" : `${money(l.knownCost)} + no price`,
+          },
+        },
+      };
+    }),
+    totals: { used: g.lines.length ? cost(g.knownCost, missing) : "—" },
+  };
+}
+
+/** Real cost of a batch in the same expandable table as the run budget. */
 export function BatchBudgetTable({ budget }: { budget: BatchBudget }) {
-  const groups: [string, BatchBudget["ingredients"]][] = [
-    ["Ingredients", budget.ingredients],
-    ["Packaging (jars, lids, labels)", budget.packaging],
-  ];
+  const missing = [...budget.ingredients.lines, ...budget.packaging.lines].filter((l) => !l.unpricedQty.isZero()).length;
   return (
-    <>
-      <style>{expandCss}</style>
-      <table>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th className="num">Quantity used</th>
-            <th className="num">Price</th>
-            <th className="num">Cost</th>
-          </tr>
-        </thead>
-        {groups.map(([label, g]) => (
-          <ExpandGroup
-            key={label}
-            hasChildren={g.lines.length > 0}
-            cells={[{ content: label }, { content: "" }, { content: "" }, { content: g.lines.length ? cost(g.knownCost, g.complete) : "nothing used yet", num: true }]}
-          >
-            {g.lines.map((l) => (
-              <tr key={l.itemId} className="exp-child">
-                <td>{l.name}</td>
-                <td className="num">{formatQty(l.quantity, l.unit as UnitCode)}</td>
-                <td className="num">{price(l)}</td>
-                <td className="num">{l.unpricedQty.isZero() ? eur(l.knownCost) : l.knownCost.isZero() ? "unknown" : `${eur(l.knownCost)} + unknown`}</td>
-              </tr>
-            ))}
-          </ExpandGroup>
-        ))}
-        <ExpandGroup hasChildren={false} cells={[{ content: "Total" }, { content: "" }, { content: "" }, { content: cost(budget.total.knownCost, budget.total.complete), num: true }]} />
-      </table>
-      <p className="small muted" style={{ marginBottom: 0 }}>
-        What this batch really used, at the price of the lot it came from (the price on its purchase order). A lot without a price, such as the opening count, uses the
-        latest price ordered for that item. &quot;Unknown&quot; means no price has been recorded yet.
-      </p>
-    </>
+    <BudgetTable
+      data={{
+        columns: [{ key: "used", label: "Used" }],
+        groups: [group("ingredient", budget.ingredients), group("packaging", budget.packaging)],
+        total: { used: cost(budget.total.knownCost, missing) },
+      }}
+      note="What this batch really used, at the price paid for the lot it came from. A lot without a price, such as the opening count, uses the favourite supplier's current price. Items without any price are counted separately, never as 0."
+    />
   );
 }

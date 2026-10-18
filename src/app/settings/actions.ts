@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { OperationError, addSupplier } from "@/db/operations";
+import { OperationError } from "@/db/operations";
 import {
   activatePackagingDraft,
   activateRecipeDraft,
@@ -84,15 +84,6 @@ export async function addRejectEstimate(form: FormData) {
   });
   refresh();
   redirect(withOk(path, `Reject estimate of ${data.percent}% saved.`));
-}
-
-// ---------------------------------------------------------------- suppliers
-
-export async function addSupplierAction(form: FormData) {
-  await attempt("/settings", () => addSupplier(db(), { name: str(form, "name"), contact: str(form, "contact") }));
-  revalidatePath("/settings");
-  revalidatePath("/orders/new");
-  redirect(withOk("/settings", `Supplier ${str(form, "name")} added.`) + "#suppliers");
 }
 
 // ---------------------------------------------------------------- recipes

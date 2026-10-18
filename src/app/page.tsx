@@ -70,6 +70,8 @@ export default async function Home() {
       group by p.name order by p.name`),
   ]);
 
+  const draftOrders = await d.execute<{ id: string; code: string; supplier: string }>(sql`
+    select o.id, o.code, s.name as supplier from purchase_orders o join suppliers s on s.id = o.supplier_id where o.status = 'draft' order by o.created_at`);
   const itemById = new Map(input.items.map((i) => [i.id, i]));
   const active = new Set([...activeItems].map((r) => r.id));
   const alerts: Alert[] = [];
@@ -143,10 +145,29 @@ export default async function Home() {
             {shortLines.length > 8 && <li>…and {shortLines.length - 8} more</li>}
           </ul>
           {buy.length ? (
-            <Link href={`/orders/new?items=${encodeURIComponent(buy.map((s) => `${s.itemId}:${s.toBuy.toString()}`).join(","))}`}>Order what's missing</Link>
+            <Link href={`/orders/plan?items=${encodeURIComponent(buy.map((s) => `${s.itemId}:${s.toBuy.toString()}`).join(","))}`}>Order what's missing</Link>
           ) : (
             "Everything short is already on order; check it arrives in time."
           )}
+        </>
+      ),
+    });
+  }
+
+  // Orders prepared but not sent.
+  const drafts = [...draftOrders];
+  if (drafts.length) {
+    alerts.push({
+      level: "warn",
+      text: (
+        <>
+          {drafts.length} draft order{drafts.length === 1 ? "" : "s"} not sent yet: {drafts.map((o, i) => (
+            <span key={o.id}>
+              {i > 0 && ", "}
+              <Link href={`/orders/${o.id}`}>{o.code}</Link> ({o.supplier})
+            </span>
+          ))}
+          . Mark each as sent once placed with the supplier.
         </>
       ),
     });

@@ -4,7 +4,6 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { loadPlanCatalog } from "@/db/planning";
 import { Flash } from "../components/flash";
-import { addSupplierAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,9 +73,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             : { cls: "ok", text: "All yields measured from recorded batches" },
     },
     {
-      href: "#suppliers",
+      href: "/suppliers",
       title: "Suppliers",
-      text: "Who you buy from. Used on purchase orders and deliveries.",
+      text: "Who you buy from, what each one sells, pack sizes and prices.",
       status: { cls: "", text: `${suppliers.length} supplier(s)` },
     },
   ];
@@ -99,32 +98,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         ))}
       </div>
 
-      <h2 id="suppliers">Suppliers</h2>
-      <div className="card">
-        {suppliers.length === 0 ? (
-          <p className="muted small">No suppliers yet.</p>
-        ) : (
-          <ul>
-            {suppliers.map((s) => (
-              <li key={s.id}>
-                {s.name}
-                {s.contact && <span className="muted small"> · {s.contact}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action={addSupplierAction} className="row">
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <label htmlFor="sname">Name (required)</label>
-            <input id="sname" name="name" type="text" required />
-          </div>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <label htmlFor="scontact">Contact (optional)</label>
-            <input id="scontact" name="contact" type="text" />
-          </div>
-          <button type="submit">Add supplier</button>
-        </form>
-      </div>
     </>
   );
 }
