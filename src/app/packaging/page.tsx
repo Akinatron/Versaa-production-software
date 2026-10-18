@@ -5,6 +5,7 @@ import * as t from "@/db/schema";
 import { BATCH_STATUS } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
 import { relDate } from "../components/ui/format";
+import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function PackagingPage() {
     .select({
       batch: t.productionBatches,
       sauce: t.sauces.name,
+      sauceColor: t.sauces.color,
       runCode: t.productionRuns.code,
       pending: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id} and c.confirmed_at is null)`,
       sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
@@ -62,7 +64,9 @@ export default async function PackagingPage() {
                         <strong>{r.batch.code}</strong>
                       </Link>
                     </td>
-                    <td>{r.sauce}</td>
+                    <td>
+                      <SauceName name={r.sauce} color={r.sauceColor} />
+                    </td>
                     <td>
                       <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
                     </td>

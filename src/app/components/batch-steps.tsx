@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BATCH_STATUS } from "./labels";
 import { PageHeader, Steps } from "./ui/header";
 import { fmtDate } from "./ui/format";
+import { SauceName } from "./sauce-name";
 
 type Step = "summary" | "production" | "packaging";
 
@@ -9,6 +10,7 @@ type Step = "summary" | "production" | "packaging";
 export function BatchSteps({
   batch,
   sauceName,
+  sauceColor,
   run,
   current,
   versionNo,
@@ -16,6 +18,7 @@ export function BatchSteps({
 }: {
   batch: { id: string; code: string; status: string };
   sauceName: string;
+  sauceColor?: string | null;
   run: { id: string; code: string; plannedFor: string };
   current: Step;
   versionNo: number;
@@ -49,7 +52,8 @@ export function BatchSteps({
         status={status}
         lead={
           <>
-            {sauceName} · recipe v{versionNo} · run <Link href={`/runs/${run.id}`}>{run.code}</Link> · {fmtDate(run.plannedFor, { weekday: true })}
+            <SauceName name={sauceName} color={sauceColor} chip /> · recipe v{versionNo} · run <Link href={`/runs/${run.id}`}>{run.code}</Link> ·{" "}
+            {fmtDate(run.plannedFor, { weekday: true })}
           </>
         }
         actions={actions}

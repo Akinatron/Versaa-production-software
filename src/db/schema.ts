@@ -51,6 +51,8 @@ export const sauces = pgTable("sauces", {
   name: text("name").notNull(),
   /** Short code used in batch numbers, e.g. TIK in TIK-20261020-01. */
   batchPrefix: text("batch_prefix"),
+  /** Colour key from SAUCE_COLORS, used to tell sauces apart on screen. */
+  color: text("color").notNull().default("slate"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });

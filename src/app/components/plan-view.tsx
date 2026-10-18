@@ -1,6 +1,9 @@
 import Decimal from "decimal.js";
 import type { CoverageStatus, PlanResult, Source } from "@/domain/planner";
 import { formatQty, type UnitCode } from "@/domain/quantity";
+import { db } from "@/db/client";
+import { sauceColorMaps } from "@/db/catalog";
+import { SauceName } from "./sauce-name";
 
 const STATUS: Record<CoverageStatus, { label: string; cls: string }> = {
   covered: { label: "Covered", cls: "ok" },
@@ -20,8 +23,9 @@ const q = (v: unknown, unit: UnitCode) => formatQty(D(v), unit);
 type Part = "issues" | "production" | "requirements";
 
 /** The plan; `only` shows just some parts (the run splits them over its steps). */
-export function PlanView({ result, only, batchesTitle = "Batches" }: { result: PlanResult; only?: Part[]; batchesTitle?: string }) {
+export async function PlanView({ result, only, batchesTitle = "Batches" }: { result: PlanResult; only?: Part[]; batchesTitle?: string }) {
   const show = (p: Part) => !only || only.includes(p);
+  const colors = await sauceColorMaps(db());
   return (
     <>
       {show("issues") && result.issues.some((i) => i.level === "blocker") && (
@@ -73,7 +77,9 @@ export function PlanView({ result, only, batchesTitle = "Batches" }: { result: P
               <tbody>
                 {result.products.map((p) => (
                   <tr key={p.productId}>
-                    <td>{p.name}</td>
+                    <td>
+                      <SauceName name={p.name} color={colors.byProduct.get(p.productId)} />
+                    </td>
                     <td className="num">{p.targetJars}</td>
                     <td className="num">{p.rejectRate ? `${D(p.rejectRate)!.mul(100).toString()}%` : "unknown"}</td>
                     <td className="num">{p.jarsToFill}</td>
@@ -107,7 +113,9 @@ export function PlanView({ result, only, batchesTitle = "Batches" }: { result: P
               <tbody>
                 {result.sauces.map((s) => (
                   <tr key={s.sauceId}>
-                    <td>{s.name}</td>
+                    <td>
+                      <SauceName name={s.name} color={colors.bySauce.get(s.sauceId)} />
+                    </td>
                     <td className="num">{q(s.litresNeeded, "L")}</td>
                     <td className="num">
                       {s.litresPerBatch ? q(s.litresPerBatch, "L") : "—"}{" "}

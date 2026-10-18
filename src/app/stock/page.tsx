@@ -8,12 +8,14 @@ import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../components/flash";
 import { jars } from "../components/trace-format";
 import { PageHeader } from "../components/ui/header";
+import { sauceColorMaps } from "@/db/catalog";
+import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, stock, avail, lotCounts] = await Promise.all([
+  const [catalog, stock, avail, lotCounts, colors] = await Promise.all([
     loadPlanCatalog(db()),
     loadStockPositions(db()),
     finishedAvailability(db()),
@@ -22,6 +24,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         (select count(*)::int from lots l where l.item_id = p.item_id
           and (select coalesce(sum(m.quantity), 0) from movements m where m.lot_id = l.id) > 0) as lots
       from products p`),
+    sauceColorMaps(db()),
   ]);
   const lotsByProduct = new Map([...lotCounts].map((r) => [r.product_id, r]));
   const finished = avail.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
@@ -121,7 +124,15 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                     const lc = lotsByProduct.get(a.productId);
                     return (
                       <tr key={a.productId}>
-                        <td>{lc ? <Link href={`/stock/${lc.item_id}`}>{a.name}</Link> : a.name}</td>
+                        <td>
+                          {lc ? (
+                            <Link href={`/stock/${lc.item_id}`}>
+                              <SauceName name={a.name} color={colors.byProduct.get(a.productId)} />
+                            </Link>
+                          ) : (
+                            <SauceName name={a.name} color={colors.byProduct.get(a.productId)} />
+                          )}
+                        </td>
                         <td className="num">{jars(a.onHand)}</td>
                         <td className="num">{jars(a.reserved)}</td>
                         <td className="num">{jars(a.available)}</td>

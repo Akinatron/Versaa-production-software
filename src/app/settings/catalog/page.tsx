@@ -11,8 +11,11 @@ import {
   setFormatFillAction,
   setProductActiveAction,
   setSauceActiveAction,
+  setSauceColorAction,
 } from "../actions";
 import { PageHeader } from "../../components/ui/header";
+import { SauceName } from "../../components/sauce-name";
+import { SAUCE_COLORS } from "@/domain/sauce-colors";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +67,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           <thead>
             <tr>
               <th>Sauce</th>
+              <th>Colour</th>
               <th>Batch numbers</th>
               <th>Recipe</th>
               <th>Status</th>
@@ -75,7 +79,26 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               const active = recipes.find((r) => r.sauceId === s.id && r.status === "active");
               return (
                 <tr key={s.id}>
-                  <td>{s.name}</td>
+                  <td>
+                    <SauceName name={s.name} color={s.color} />
+                  </td>
+                  <td>
+                    <form action={setSauceColorAction} className="swatches" aria-label={`Colour for ${s.name}`}>
+                      <input type="hidden" name="sauceId" value={s.id} />
+                      {SAUCE_COLORS.map((c) => (
+                        <button
+                          key={c.key}
+                          type="submit"
+                          name="color"
+                          value={c.key}
+                          className={`sc-${c.key}`}
+                          title={c.label}
+                          aria-label={c.label}
+                          aria-pressed={s.color === c.key}
+                        />
+                      ))}
+                    </form>
+                  </td>
                   <td>
                     <code>{s.batchPrefix}</code>-YYYYMMDD-01
                   </td>
@@ -191,7 +214,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               return (
                 <tr key={p.id}>
                   <td>
-                    {p.name}
+                    <SauceName name={p.name} color={s?.color} />
                     {blocked && <div className="small muted">Not planned: its {s && !s.active ? "sauce" : "size"} is retired.</div>}
                   </td>
                   <td>

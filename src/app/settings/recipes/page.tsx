@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { VERSION_STATUS, fmtDate } from "../../components/settings-versions";
 import { PageHeader } from "../../components/ui/header";
+import { SauceName } from "../../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function RecipesPage() {
               return (
                 <tr key={s.id}>
                   <td>
-                    {s.name} {!s.active && <span className="badge">Retired sauce</span>}
+                    <SauceName name={s.name} color={s.color} /> {!s.active && <span className="badge">Retired sauce</span>}
                   </td>
                   <td>{active ? `v${active.versionNo} · since ${fmtDate(active.activatedAt)}` : <span className="badge bad">No active recipe</span>}</td>
                   <td className="num">{active ? count(active.id) : "—"}</td>

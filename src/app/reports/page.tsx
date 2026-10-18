@@ -6,6 +6,7 @@ import type { PlanResult } from "@/domain/planner";
 import { OUTFLOW } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
+import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +30,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const [sales, other, batches, bySize, runs] = await Promise.all([
     d.execute<{
       sauce: string;
+      sauce_color: string;
       size: string;
       jars: number;
       priced: number;
       unpriced: number;
       revenue: string | null;
     }>(sql`
-      select s.name as sauce, f.name as size, sum(ol.jars)::int as jars,
+      select s.name as sauce, s.color as sauce_color, f.name as size, sum(ol.jars)::int as jars,
         sum(case when ol.unit_price is not null then ol.jars else 0 end)::int as priced,
         sum(case when ol.unit_price is null then ol.jars else 0 end)::int as unpriced,
         sum(ol.jars * ol.unit_price) as revenue
@@ -45,7 +47,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       join sauces s on s.id = p.sauce_id
       join formats f on f.id = p.format_id
       where o.type = 'sale' and o.occurred_on between ${from} and ${to}
-      group by s.name, f.name, f.capacity_ml
+      group by s.name, s.color, f.name, f.capacity_ml
       order by s.name, f.capacity_ml desc`),
     d.execute<{
       type: string;
@@ -64,6 +66,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       id: string;
       code: string;
       sauce: string;
+      sauce_color: string;
       closed_on: string;
       litres: string | null;
       version_no: number;
@@ -71,7 +74,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       rejected: number;
       accepted: number;
     }>(sql`
-      select b.id, b.code, s.name as sauce, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, (sum(l.filled * l.fill_ml) / 1000.0)::text as litres, v.version_no,
+      select b.id, b.code, s.name as sauce, s.color as sauce_color, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, (sum(l.filled * l.fill_ml) / 1000.0)::text as litres, v.version_no,
         coalesce(sum(l.filled), 0)::int as filled, coalesce(sum(l.rejected), 0)::int as rejected, coalesce(sum(l.accepted), 0)::int as accepted
       from production_batches b
       join sauces s on s.id = b.sauce_id
@@ -79,7 +82,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       left join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
       left join packaging_session_lines l on l.session_id = ps.id
       where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
-      group by b.id, s.name, v.version_no
+      group by b.id, s.name, s.color, v.version_no
       order by b.closed_at`),
     d.execute<{
       size: string;
@@ -226,7 +229,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {saleRows.map((r) => (
                   <tr key={`${r.sauce}-${r.size}`}>
-                    <td>{r.sauce}</td>
+                    <td>
+                      <SauceName name={r.sauce} color={r.sauce_color} />
+                    </td>
                     <td>{r.size}</td>
                     <td className="num">{r.jars}</td>
                     <td className="num">{r.priced > 0 ? money(new Decimal(r.revenue ?? 0)) : "unknown"}</td>
@@ -317,7 +322,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     <td>
                       <Link href={`/batches/${b.id}`}>{b.code}</Link>
                     </td>
-                    <td>{b.sauce}</td>
+                    <td>
+                      <SauceName name={b.sauce} color={b.sauce_color} />
+                    </td>
                     <td>v{b.version_no}</td>
                     <td>{fmtDate(b.closed_on)}</td>
                     <td className="num">{b.litres ? `${new Decimal(b.litres).toDecimalPlaces(3).toString()} L` : "—"}</td>

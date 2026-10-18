@@ -5,6 +5,7 @@ import * as t from "@/db/schema";
 import { BATCH_STATUS } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
+import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function BatchesPage() {
     .select({
       batch: t.productionBatches,
       sauce: t.sauces.name,
+      sauceColor: t.sauces.color,
       runCode: t.productionRuns.code,
       plannedFor: t.productionRuns.plannedFor,
       pending: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id} and c.confirmed_at is null)`,
@@ -28,6 +30,7 @@ export default async function BatchesPage() {
     .select({
       batch: t.productionBatches,
       sauce: t.sauces.name,
+      sauceColor: t.sauces.color,
       runCode: t.productionRuns.code,
     })
     .from(t.productionBatches)
@@ -80,7 +83,9 @@ export default async function BatchesPage() {
                         <strong>{r.batch.code}</strong>
                       </Link>
                     </td>
-                    <td>{r.sauce}</td>
+                    <td>
+                      <SauceName name={r.sauce} color={r.sauceColor} />
+                    </td>
                     <td>
                       <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
                       <div className="small muted">{fmtDate(r.batch.producedOn ?? r.plannedFor)}</div>
@@ -126,7 +131,9 @@ export default async function BatchesPage() {
                     <td>
                       <Link href={`/batches/${r.batch.id}`}>{r.batch.code}</Link>
                     </td>
-                    <td>{r.sauce}</td>
+                    <td>
+                      <SauceName name={r.sauce} color={r.sauceColor} />
+                    </td>
                     <td>
                       <Link href={`/runs/${r.batch.runId}`}>{r.runCode}</Link>
                     </td>

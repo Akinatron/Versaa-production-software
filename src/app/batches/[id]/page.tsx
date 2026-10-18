@@ -85,7 +85,7 @@ export default async function BatchPage({
 
   return (
     <>
-      <BatchSteps batch={batch} sauceName={sauce.name} run={run} current="summary" versionNo={recipe.versionNo} />
+      <BatchSteps batch={batch} sauceName={sauce.name} sauceColor={sauce.color} run={run} current="summary" versionNo={recipe.versionNo} />
       <Flash params={flash} />
       {nextStep && <ul className="issues">{nextStep}</ul>}
 
