@@ -263,12 +263,14 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 /* ---------------------------------------------------------------- steps and tabs */
 .steps { display: flex; gap: 0; margin: 0 0 24px; padding: 0; list-style: none; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .steps a, .steps span.step {
-  display: flex; align-items: center; gap: 8px; padding: 10px 14px 11px; margin-bottom: -1px;
+  position: relative; display: flex; align-items: center; gap: 8px; padding: 10px 14px 11px; margin-bottom: -1px;
   color: var(--muted); font-size: 0.925rem; font-weight: 550; white-space: nowrap;
   border-bottom: 2px solid transparent;
 }
 .steps a:hover { color: var(--text); text-decoration: none; border-bottom-color: var(--border-strong); }
-.steps [aria-current="page"] { color: var(--text); border-bottom-color: var(--primary); font-weight: 650; }
+.steps [aria-current="page"] { color: var(--text); border-bottom-color: transparent; font-weight: 650; }
+/* The active bar is its own layer so it can slide from the previous step (components/motion.tsx). */
+.steps [aria-current="page"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; background: var(--primary); transform-origin: left; }
 .steps .n {
   display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
   font-size: 0.75rem; font-weight: 700; background: var(--neutral-bg); color: var(--neutral);
@@ -277,9 +279,12 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 .steps .done .n { background: var(--primary-soft); color: var(--primary); }
 
 .tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 16px; flex-wrap: wrap; }
-.tabs a { padding: 6px 12px; border-radius: 6px; color: var(--muted); font-size: 0.875rem; font-weight: 550; }
+.tabs a { position: relative; isolation: isolate; padding: 6px 12px; border-radius: 6px; color: var(--muted); font-size: 0.875rem; font-weight: 550; }
 .tabs a:hover { color: var(--text); text-decoration: none; }
-.tabs a[aria-current="page"], .tabs a.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 650; }
+.tabs a[aria-current="page"], .tabs a.on { color: var(--text); font-weight: 650; }
+.tabs a[aria-current="page"]::before, .tabs a.on::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 6px; background: var(--surface); box-shadow: var(--shadow); transform-origin: left;
+}
 
 /* Big choice tiles: the first question of a flow ("why are the jars leaving?"). */
 .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; margin-bottom: 24px; }
@@ -419,6 +424,88 @@ button.exp-toggle:hover { background: none; color: var(--text); }
 .auth .box { width: 100%; max-width: 400px; }
 .auth .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; margin-bottom: 24px; color: var(--text); }
 
+/* ---------------------------------------------------------------- trace diagram (components/trace-flow.tsx) */
+.flow {
+  position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(148px, 1fr)); gap: 0 40px;
+  overflow-x: auto; padding: 18px 20px 20px; margin-bottom: 28px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.flow-links { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.flow-links path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; transition: stroke 150ms ease, opacity 150ms ease; }
+.flow-links path.hot { stroke: var(--primary); stroke-width: 2; }
+.flow.has-hot .flow-links path:not(.hot) { opacity: 0.25; }
+.flow-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.flow-col h3 { margin: 0 0 6px; font-size: 0.75rem; font-weight: 650; color: var(--muted); letter-spacing: 0.02em; }
+.flow-col > :nth-child(2) { margin-top: auto; } .flow-col > :last-child { margin-bottom: auto; }
+.flow-node {
+  position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1px; padding: 8px 11px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
+  font-size: 0.85rem; line-height: 1.3; transition: opacity 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+.flow-node strong { font-weight: 600; overflow-wrap: anywhere; }
+.flow-node span { color: var(--muted); font-size: 0.78rem; overflow-wrap: anywhere; }
+a.flow-node:hover { text-decoration: none; }
+.flow-node:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.flow-node.focus { border-color: var(--primary); background: var(--primary-soft); }
+.flow-node.hot { border-color: var(--primary); }
+.flow.has-hot .flow-node:not(.hot) { opacity: 0.4; }
+.flow-empty { margin: auto 0; font-size: 0.8rem; color: var(--faint); }
+
+/* ---------------------------------------------------------------- motion
+ * Motion only explains something: a page arriving, where you moved to, that an action was taken and how it went.
+ * Routine changes stay at 120–260 ms. Exits are instant. Reduced motion keeps the fades and drops the movement.
+ */
+:root { --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --rise: 6px; }
+@keyframes rise-in { from { opacity: 0; translate: 0 var(--rise); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes notice-in { from { opacity: 0; translate: 0 calc(var(--rise) * -1); } }
+@keyframes check-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes dot-pop { 0% { scale: 0.4; } 60% { scale: 1.3; } 100% { scale: 1; } }
+@keyframes spin { to { rotate: 360deg; } }
+
+/* A page arriving: its blocks rise in, a few at a time, never more than ~200 ms late. */
+main > * { animation: rise-in 260ms var(--ease-out) both; }
+main > :nth-child(2) { animation-delay: 30ms; } main > :nth-child(3) { animation-delay: 60ms; } main > :nth-child(4) { animation-delay: 90ms; }
+main > :nth-child(5) { animation-delay: 120ms; } main > :nth-child(n + 6) { animation-delay: 150ms; }
+/* The trace diagram builds itself left to right: each column's boxes arrive, then their links draw out to the next. */
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.flow-node { animation: rise-in 300ms var(--ease-out) both; animation-delay: calc(var(--i) * 150ms + var(--j) * 25ms); }
+.flow-links path { stroke-dasharray: 1; animation: draw 450ms var(--ease-out) both; animation-delay: calc(var(--i) * 150ms + 140ms); }
+/* Headers, steps and tabs stay put: they are the same frame from page to page, only the bar or pill moves. */
+main > .page-head, main > nav.steps, main > nav.tabs { animation: none; }
+
+/* The result of an action: the notice drops in; a success draws its tick, a problem pops its dot. */
+.issues li { animation: notice-in 240ms var(--ease-out) both; }
+.issues li.ok::before {
+  top: 14px; left: 11px; width: 15px; height: 15px; background: var(--ok);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  border-radius: 0; animation: check-draw 380ms 140ms var(--ease-out) both;
+}
+.issues li.bad::before, .issues li.warn::before { animation: dot-pop 320ms 120ms var(--ease-out) both; }
+
+/* Opening a fold: what was hidden fades in just below its summary. */
+details[open] > :not(summary) { animation: rise-in 200ms var(--ease-out); }
+
+/* Pressing a button: it gives a little, so the tap registers before the page answers. */
+button:active:not(:disabled), .btn:active { translate: 0 1px; }
+/* Sent and waiting for the server (set by components/motion.tsx): a spinner, and no second click. */
+button.is-pending, .btn.is-pending { position: relative; color: transparent !important; pointer-events: none; }
+button.is-pending::after, .btn.is-pending::after {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--on-primary); border-right-color: transparent; animation: spin 700ms linear infinite;
+}
+button.secondary.is-pending::after, button.ghost.is-pending::after, button.danger.is-pending::after, button.link.is-pending::after,
+.btn.secondary.is-pending::after, .btn.ghost.is-pending::after { border-color: var(--muted); border-right-color: transparent; }
+
+/* Mobile menu: the shade fades in under the sliding menu. */
+.scrim.open { animation: fade-in 200ms ease both; }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; }
+  :root { --rise: 0px; }
+  .flow-links path { animation: fade-in 200ms ease both; animation-delay: 0ms; }
+  .flow-node { animation-delay: 0ms; }
+  main > * { animation-delay: 0ms !important; }
+  .side { transition: none; }
+  button:active:not(:disabled), .btn:active { translate: none; }
+  button.is-pending::after, .btn.is-pending::after { animation-duration: 1.6s; }
 }
