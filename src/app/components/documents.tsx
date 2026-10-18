@@ -1,8 +1,8 @@
 import { DOC_KIND, type DocumentRow } from "@/db/documents";
-import { removeDocumentAction } from "../documents/actions";
+import { removeDocumentAction, restoreDocumentAction } from "../documents/actions";
 import { Icon } from "./ui/icons";
 import { fmtDate } from "./ui/format";
-import { ConfirmButton } from "./unsaved-guard";
+import { fmtWhen } from "./history-format";
 
 const SHOWN_INLINE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -51,16 +51,51 @@ export function DocList({
             </span>
           </div>
           {back && (
-            <form action={removeDocumentAction}>
-              <input type="hidden" name="id" value={d.id} />
-              <input type="hidden" name="back" value={back} />
-              <ConfirmButton message={`Remove "${d.fileName}"?`} className="ghost sm">
-                Remove
-              </ConfirmButton>
-            </form>
+            <details className="doc-remove">
+              <summary className="btn ghost sm">Remove</summary>
+              <form action={removeDocumentAction} className="row" style={{ alignItems: "center", marginTop: 6 }}>
+                <input type="hidden" name="id" value={d.id} />
+                <input type="hidden" name="back" value={back} />
+                <input name="reason" required placeholder="Why remove it?" aria-label={`Why remove ${d.fileName}?`} style={{ maxWidth: 220 }} />
+                <button type="submit" className="danger sm">
+                  Remove
+                </button>
+              </form>
+            </details>
           )}
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Files taken off, with the way to put one back. */
+export function RemovedDocs({ docs, back }: { docs: { doc: DocumentRow; by: string | null }[]; back: string }) {
+  if (docs.length === 0) return null;
+  return (
+    <details className="small" style={{ marginTop: 12 }}>
+      <summary>Removed files · {docs.length}</summary>
+      <ul className="doclist">
+        {docs.map(({ doc: d, by }) => (
+          <li key={d.id}>
+            <div className="what">
+              <span className="is-deleted">{d.fileName}</span>
+              <span className="sub">
+                {DOC_KIND[d.kind]} · removed {d.removedAt ? fmtWhen(d.removedAt) : ""}
+                {by ? ` by ${by}` : ""}
+              </span>
+            </div>
+            <form action={restoreDocumentAction} className="row" style={{ alignItems: "center" }}>
+              <input type="hidden" name="id" value={d.id} />
+              <input type="hidden" name="back" value={back} />
+              <input name="reason" required placeholder="Why put it back?" aria-label={`Why put back ${d.fileName}?`} style={{ maxWidth: 200 }} />
+              <button type="submit" className="secondary sm">
+                Put back
+              </button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

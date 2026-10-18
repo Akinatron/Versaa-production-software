@@ -17,6 +17,8 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 - The side menu shows counts of waiting work (batches to cook or pack, draft orders, deliveries on the way, orders to deliver).
 - One job, one place: a batch is one entry (Batches) with its steps Cook → Pack → Close under its own address, and opening it lands on the step it waits on. Don't split a job's steps across menu entries.
 - Motion (`components/motion.tsx` + the motion block in globals.css): only to explain. Pages rise in, the step bar and tab pill slide from the previous one, notices drop in, a pressed button shows a spinner until the server answers. 120–300 ms, ease-out, no bounce. Reduced motion keeps fades only.
+- History (`components/history.tsx`): a collapsed **History** card at the bottom of a record's page, an "Edited · last by …" mark under its title, a `DeletedNote` card on a deleted record with its Restore form, and `ReasonField` on every correct/delete/restore form. Deleted rows in lists are struck through (`.is-deleted`) and folded under "Deleted …".
+- Viewers: `body.viewer` hides every POST form except those marked `.keep` (sign out, sign in); the server refuses them anyway.
 - Trace diagram (`TraceFlow`): the lot trace opens with supplier → lot → batch → jar lots → destinations, drawn column by column; pointing at a box lights its path.
 
 ## Avoid

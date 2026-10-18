@@ -90,7 +90,13 @@ export async function recordStockCount(db: DB, input: { idempotencyKey: string; 
 /** Take stock out of a lot for waste, breakage, internal use or samples, with a reason. */
 export async function recordWriteOff(
   db: DB,
-  input: { idempotencyKey: string; type: "waste" | "internal_use" | "sample"; reason: string; occurredOn?: string; lines: { lotId: string; quantity: Decimal.Value }[] },
+  input: {
+    idempotencyKey: string;
+    type: "waste" | "internal_use" | "sample";
+    reason: string;
+    occurredOn?: string;
+    lines: { lotId: string; quantity: Decimal.Value }[];
+  },
 ) {
   const reason = input.reason.trim();
   if (!reason) throw new OperationError("Say what happened.");
@@ -131,12 +137,19 @@ export async function recordWriteOff(
 
 // ---------------------------------------------------------------- deleting and restoring
 
-const KIND: Record<string, string> = { count_correction: "Stock count", waste: "Write-off", internal_use: "Own use", sample: "Sample" };
+export const KIND: Record<string, string> = { count_correction: "Stock count", waste: "Write-off", internal_use: "Own use", sample: "Sample" };
 
 /** What an adjustment did, per lot, from its own movements (not the ones that undid it). */
 async function effect(tx: Tx, adjId: string) {
   return tx
-    .select({ lotId: t.movements.lotId, itemId: t.movements.itemId, quantity: sql<string>`sum(${t.movements.quantity})`, code: t.lots.code, name: t.items.name, unit: t.items.stockUnit })
+    .select({
+      lotId: t.movements.lotId,
+      itemId: t.movements.itemId,
+      quantity: sql<string>`sum(${t.movements.quantity})`,
+      code: t.lots.code,
+      name: t.items.name,
+      unit: t.items.stockUnit,
+    })
     .from(t.movements)
     .innerJoin(t.lots, eq(t.movements.lotId, t.lots.id))
     .innerJoin(t.items, eq(t.movements.itemId, t.items.id))
@@ -161,7 +174,12 @@ async function logAdjustment(tx: Tx, adj: typeof t.stockAdjustments.$inferSelect
     action,
     area: "stock",
     entity: { type: "stock_adjustment", id: adj.id, code: `${what} ${adj.occurredOn}` },
-    summary: action === "create" ? `${what}: ${adj.reason}` : action === "delete" ? `${what} of ${adj.occurredOn} deleted: stock put back as it was` : `${what} of ${adj.occurredOn} restored`,
+    summary:
+      action === "create"
+        ? `${what}: ${adj.reason}`
+        : action === "delete"
+          ? `${what} of ${adj.occurredOn} deleted: stock put back as it was`
+          : `${what} of ${adj.occurredOn} restored`,
     changes,
     reason: action === "create" ? null : reason,
     links,
@@ -210,7 +228,11 @@ export async function setAdjustmentDeleted(db: DB, input: { idempotencyKey: stri
     }
     await tx
       .update(t.stockAdjustments)
-      .set(input.deleted ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .set(
+        input.deleted
+          ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason }
+          : { deletedAt: null, deletedBy: null, deletedReason: null },
+      )
       .where(eq(t.stockAdjustments.id, adj.id));
     return { alreadyRecorded: false };
   });

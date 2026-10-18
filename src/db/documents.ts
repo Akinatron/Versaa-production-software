@@ -116,7 +116,11 @@ async function ownerRefs(db: DB | Tx, row: DocumentRow): Promise<Ref[]> {
   if (row.receiptId) {
     const [r] = await db.select().from(t.receipts).where(eq(t.receipts.id, row.receiptId));
     if (r) refs.push({ type: "receipt", id: r.id, code: r.deliveryRef || `Delivery ${r.receivedOn}` });
-    const lots = await db.select({ id: t.lots.id, code: t.lots.code }).from(t.receiptLines).innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id)).where(eq(t.receiptLines.receiptId, row.receiptId));
+    const lots = await db
+      .select({ id: t.lots.id, code: t.lots.code })
+      .from(t.receiptLines)
+      .innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id))
+      .where(eq(t.receiptLines.receiptId, row.receiptId));
     refs.push(...lots.map((l) => ({ type: "lot" as const, id: l.id, code: l.code })));
   }
   if (row.purchaseOrderId) {
@@ -187,6 +191,20 @@ export async function documentsFor(db: DB, f: { receiptIds?: string[]; purchaseO
     .from(t.documents)
     .where(and(isNull(t.documents.removedAt), or(...any)))
     .orderBy(t.documents.createdAt);
+}
+
+/** Files taken off these deliveries and/or orders, newest removal first, with who removed them. */
+export async function removedDocumentsFor(db: DB, f: { receiptIds?: string[]; purchaseOrderIds?: string[] }) {
+  const any: SQL[] = [];
+  if (f.receiptIds?.length) any.push(inArray(t.documents.receiptId, f.receiptIds));
+  if (f.purchaseOrderIds?.length) any.push(inArray(t.documents.purchaseOrderId, f.purchaseOrderIds));
+  if (any.length === 0) return [];
+  return db
+    .select({ doc: t.documents, by: t.users.name })
+    .from(t.documents)
+    .leftJoin(t.users, eq(t.documents.removedBy, t.users.id))
+    .where(and(sql`${t.documents.removedAt} is not null`, or(...any)))
+    .orderBy(desc(t.documents.removedAt));
 }
 
 /** A supplier's paperwork, newest first, with the delivery or order each belongs to. */

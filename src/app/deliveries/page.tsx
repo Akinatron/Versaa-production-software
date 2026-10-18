@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -15,10 +15,12 @@ export const dynamic = "force-dynamic";
 
 export default async function DeliveriesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
+  const showDeleted = params.deleted === "1";
   const receipts = await db()
     .select({ r: t.receipts, supplier: t.suppliers.name })
     .from(t.receipts)
     .leftJoin(t.suppliers, eq(t.receipts.supplierId, t.suppliers.id))
+    .where(showDeleted ? undefined : isNull(t.receipts.deletedAt))
     .orderBy(desc(t.receipts.receivedOn), desc(t.receipts.createdAt));
   const lines = await db()
     .select({ line: t.receiptLines, item: t.items, lot: t.lots })
@@ -38,6 +40,9 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
         }
       />
       <Flash params={params} />
+      <p className="small">
+        <Link href={showDeleted ? "/deliveries" : "/deliveries?deleted=1"}>{showDeleted ? "Hide deleted deliveries" : "Show deleted deliveries too"}</Link>
+      </p>
       {receipts.length === 0 && (
         <Empty title="No deliveries yet">
           <p>When goods arrive, record them here. Stock goes up and each line becomes a traceable lot.</p>
@@ -46,8 +51,8 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
       {receipts.map(({ r, supplier }) => (
         <section key={r.id} className="card scroll">
           <div className="card-head">
-            <h2>
-              {supplier ?? "No supplier"}
+            <h2 className={r.deletedAt ? "is-deleted" : undefined}>
+              <Link href={`/deliveries/${r.id}`}>{supplier ?? "No supplier"}</Link>
               <span className="muted small" style={{ fontWeight: 400 }}>
                 {" "}
                 {fmtDate(r.receivedOn, { weekday: true })}

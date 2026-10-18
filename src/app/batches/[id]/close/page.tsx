@@ -13,7 +13,9 @@ import { INCIDENT } from "../../../components/labels";
 import { BatchSteps } from "../../../components/batch-steps";
 import { PackagingTable } from "../../../components/packaging-table";
 import { BatchBudgetTable } from "../../../components/batch-budget-table";
-import { addIncident, close, markNotMade } from "../../actions";
+import { addIncident, bringBack, close, editBatch, editIncident, markNotMade, toggleIncident } from "../../actions";
+import { History, ReasonField } from "../../../components/history";
+import { fmtWhen } from "../../../components/history-format";
 import { fmtDate } from "../../../components/ui/format";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +69,14 @@ export default async function BatchPage({
     .from(t.productionBatches)
     .where(and(eq(t.productionBatches.runId, run.id), eq(t.productionBatches.sauceId, sauce.id), ne(t.productionBatches.status, "cancelled")));
 
+  const deletedIncidents = await db()
+    .select({ i: t.incidents, by: t.users.name })
+    .from(t.incidents)
+    .leftJoin(t.users, eq(t.incidents.deletedBy, t.users.id))
+    .where(and(eq(t.incidents.batchId, batch.id), sql`${t.incidents.deletedAt} is not null`))
+    .orderBy(desc(t.incidents.deletedAt));
+  const canRestore = batch.status === "cancelled" && run.status !== "closed" && run.status !== "cancelled";
+
   const packDates = [...new Set(tr.sessions.map((s) => s.packedOn))];
   const nothingRecorded = recorded.length === 0 && tr.sessions.length === 0;
 
@@ -96,6 +106,19 @@ export default async function BatchPage({
       />
       <Flash params={flash} />
       {nextStep && <ul className="issues">{nextStep}</ul>}
+      {canRestore && (
+        <form action={bringBack} className="card row" style={{ alignItems: "flex-end" }}>
+          <input type="hidden" name="batchId" value={batch.id} />
+          <div style={{ flex: "1 1 100%" }}>
+            <strong>Made it after all?</strong>
+            <div className="small muted">Bring the batch back on the plan. Its ingredients are reserved again and it can be cooked.</div>
+          </div>
+          <ReasonField id="restore-reason" label="Why bring it back?" placeholder="e.g. marked by mistake" />
+          <button type="submit" className="secondary">
+            Restore batch
+          </button>
+        </form>
+      )}
 
       {open && (
         <section className="card">
@@ -323,6 +346,28 @@ export default async function BatchPage({
         </p>
       </details>
 
+      {/* ------------------------------------------------ correct */}
+      {batch.status !== "cancelled" && (
+        <details className="card edit-only">
+          <summary>Correct the cooking date or note</summary>
+          <form action={editBatch} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
+            <input type="hidden" name="batchId" value={batch.id} />
+            <div>
+              <label htmlFor="b-produced">Cooked on</label>
+              <input id="b-produced" name="producedOn" type="date" defaultValue={batch.producedOn ?? ""} />
+            </div>
+            <div style={{ flex: "1 1 260px" }}>
+              <label htmlFor="b-note">Note</label>
+              <input id="b-note" name="note" defaultValue={batch.note ?? ""} />
+            </div>
+            <ReasonField id="b-reason" placeholder="e.g. typed the wrong day" />
+            <button type="submit" className="secondary">
+              Save
+            </button>
+          </form>
+        </details>
+      )}
+
       {/* ------------------------------------------------ incidents */}
       <details className="card" id="incidents" open={tr.incidents.length > 0}>
         <summary>
@@ -339,6 +384,44 @@ export default async function BatchPage({
                 <div className="what">
                   {i.note}
                   <div className="sub">{fmtDate(i.occurredOn)}</div>
+                  <details className="small edit-only" style={{ marginTop: 6 }}>
+                    <summary>Correct or delete</summary>
+                    <form action={editIncident} className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="incidentId" value={i.id} />
+                      <div>
+                        <label htmlFor={`it-${i.id}`}>Type</label>
+                        <select id={`it-${i.id}`} name="type" defaultValue={i.type}>
+                          {Object.entries(INCIDENT).map(([k, v]) => (
+                            <option key={k} value={k}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor={`id-${i.id}`}>Date</label>
+                        <input id={`id-${i.id}`} name="occurredOn" type="date" required defaultValue={i.occurredOn} />
+                      </div>
+                      <div style={{ flex: "1 1 220px" }}>
+                        <label htmlFor={`in-${i.id}`}>What happened</label>
+                        <input id={`in-${i.id}`} name="note" required defaultValue={i.note} />
+                      </div>
+                      <ReasonField id={`ir-${i.id}`} />
+                      <button type="submit" className="secondary">
+                        Save
+                      </button>
+                    </form>
+                    <form action={toggleIncident} className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="incidentId" value={i.id} />
+                      <input type="hidden" name="deleted" value="1" />
+                      <ReasonField id={`idel-${i.id}`} label="Why delete it?" placeholder="e.g. wrong batch" />
+                      <button type="submit" className="danger">
+                        Delete
+                      </button>
+                    </form>
+                  </details>
                 </div>
               </li>
             ))}
@@ -373,7 +456,37 @@ export default async function BatchPage({
         <p className="small muted" style={{ marginTop: 8 }}>
           A note for the batch record. It doesn&apos;t change stock; record lost jars as a write-off in Stock.
         </p>
+        {deletedIncidents.length > 0 && (
+          <details className="small edit-only" style={{ marginTop: 12 }}>
+            <summary>Deleted incidents · {deletedIncidents.length}</summary>
+            <ul className="worklist">
+              {deletedIncidents.map(({ i, by }) => (
+                <li key={i.id}>
+                  <span className="badge neutral">{INCIDENT[i.type] ?? i.type}</span>
+                  <div className="what">
+                    <span className="is-deleted">{i.note}</span>
+                    <div className="sub">
+                      Deleted {fmtWhen(i.deletedAt!)}
+                      {by ? ` by ${by}` : ""}
+                      {i.deletedReason ? `: “${i.deletedReason}”` : ""}
+                    </div>
+                    <form action={toggleIncident} className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="incidentId" value={i.id} />
+                      <input type="hidden" name="deleted" value="0" />
+                      <ReasonField id={`ires-${i.id}`} label="Why restore it?" />
+                      <button type="submit" className="secondary">
+                        Restore
+                      </button>
+                    </form>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </details>
+      <History of={{ type: "batch", id: batch.id }} />
     </>
   );
 }

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { cancelRun, confirmRun } from "@/db/operations";
+import { cancelRun, confirmRun, restoreRun } from "@/db/operations";
 import { ensureBatches } from "@/db/production";
 import { attempt, withOk } from "../components/flash";
 
@@ -16,9 +16,16 @@ export async function confirm(form: FormData) {
 
 export async function cancel(form: FormData) {
   const id = String(form.get("runId"));
-  await attempt(`/runs/${id}`, () => cancelRun(db(), id));
+  await attempt(`/runs/${id}`, () => cancelRun(db(), id, String(form.get("reason") ?? "")));
   revalidatePath("/runs");
   redirect(withOk(`/runs/${id}`, "Run cancelled. Its reserved stock is free again."));
+}
+
+export async function restore(form: FormData) {
+  const id = String(form.get("runId"));
+  await attempt(`/runs/${id}`, () => restoreRun(db(), id, String(form.get("reason") ?? "")));
+  revalidatePath("/runs");
+  redirect(withOk(`/runs/${id}`, "Draft run restored."));
 }
 
 export async function createBatches(form: FormData) {

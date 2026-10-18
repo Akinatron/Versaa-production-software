@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { finishedAvailability } from "@/db/sales";
@@ -34,7 +34,7 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
       })
       .from(t.outflows)
       .leftJoin(t.customers, eq(t.outflows.customerId, t.customers.id))
-      .where(reason ? eq(t.outflows.type, reason) : undefined)
+      .where(and(isNull(t.outflows.deletedAt), reason ? eq(t.outflows.type, reason) : undefined))
       .orderBy(desc(t.outflows.occurredOn), desc(t.outflows.createdAt))
       .limit(40),
     sauceColorMaps(db()),

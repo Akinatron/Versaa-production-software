@@ -47,7 +47,10 @@ export interface OrderLine {
 
 /** Build order lines from input, applying the supplier's current pack size and price. */
 async function resolveLines(tx: Tx, supplierId: string, lines: OrderLine[]) {
-  const items = await itemsById(tx, lines.map((l) => l.itemId));
+  const items = await itemsById(
+    tx,
+    lines.map((l) => l.itemId),
+  );
   const offers = new Map((await loadOffers(tx, { supplierId, itemIds: [...items.keys()] })).map((o) => [o.itemId, o]));
   const out: (typeof t.purchaseOrderLines.$inferInsert)[] = [];
   for (const line of lines) {
@@ -143,7 +146,9 @@ export interface PlannedOrderLine extends OrderLine {
  * supplier are skipped (not ordered).
  */
 export async function createOrdersFromPlan(db: DB, input: { idempotencyKey: string; runId?: string | null; lines: PlannedOrderLine[] }) {
-  const chosen = input.lines.filter((l) => l.supplierId && ((l.packs ?? 0) > 0 || (l.quantity != null && String(l.quantity).trim() !== "" && Number(l.quantity) > 0)));
+  const chosen = input.lines.filter(
+    (l) => l.supplierId && ((l.packs ?? 0) > 0 || (l.quantity != null && String(l.quantity).trim() !== "" && Number(l.quantity) > 0)),
+  );
   if (chosen.length === 0) throw new OperationError("Nothing to order: choose a supplier and a quantity for at least one item.");
   const bySupplier = new Map<string, PlannedOrderLine[]>();
   for (const l of chosen) bySupplier.set(l.supplierId, [...(bySupplier.get(l.supplierId) ?? []), l]);
@@ -192,7 +197,11 @@ export async function updateDraftOrder(
     if (po.status === "cancelled") throw new OperationError("This order is cancelled. Restore it first to change it.");
     const draft = po.status === "draft";
     const reason = draft ? input.reason?.trim() || null : needReason(input.reason, "Say why the order is corrected");
-    const header = { expectedOn: isDate(input.expectedOn) ? input.expectedOn! : null, reference: input.reference?.trim() || null, note: input.note?.trim() || null };
+    const header = {
+      expectedOn: isDate(input.expectedOn) ? input.expectedOn! : null,
+      reference: input.reference?.trim() || null,
+      note: input.note?.trim() || null,
+    };
     const changes: FieldChange[] = diff([
       ["Expected", po.expectedOn, header.expectedOn],
       ["Reference", po.reference, header.reference],
@@ -200,7 +209,10 @@ export async function updateDraftOrder(
     ]);
     await tx.update(t.purchaseOrders).set(header).where(eq(t.purchaseOrders.id, po.id));
     const current = await tx.select().from(t.purchaseOrderLines).where(eq(t.purchaseOrderLines.purchaseOrderId, po.id));
-    const items = await itemsById(tx, current.map((l) => l.itemId));
+    const items = await itemsById(
+      tx,
+      current.map((l) => l.itemId),
+    );
     const arrived = new Map(
       [
         ...(await tx.execute<{ line_id: string; accepted: string; n: number }>(sql`
@@ -243,8 +255,10 @@ export async function updateDraftOrder(
       const price = rawPrice === "" ? null : new Decimal(rawPrice.replace(",", "."));
       if (price && (price.isNaN() || price.lt(0))) throw new OperationError(`${item.name}: price can't be negative.`);
       const priceChanged = change.unitPrice !== undefined && (price === null ? line.unitPrice !== null : line.unitPrice === null || !price.eq(line.unitPrice));
-      if (!quantity.eq(line.quantity)) changes.push({ label: item.name, before: qtyText(line.quantity, item.stockUnit), after: qtyText(quantity, item.stockUnit) });
-      if (priceChanged) changes.push({ label: `${item.name} price`, before: priceText(line.unitPrice, item.stockUnit), after: priceText(price, item.stockUnit) });
+      if (!quantity.eq(line.quantity))
+        changes.push({ label: item.name, before: qtyText(line.quantity, item.stockUnit), after: qtyText(quantity, item.stockUnit) });
+      if (priceChanged)
+        changes.push({ label: `${item.name} price`, before: priceText(line.unitPrice, item.stockUnit), after: priceText(price, item.stockUnit) });
       await tx
         .update(t.purchaseOrderLines)
         .set({
@@ -288,7 +302,10 @@ export async function markOrderSent(db: DB, purchaseOrderId: string, input: { se
       area: "purchasing",
       entity: { type: "purchase_order", id: po.id, code: po.code },
       summary: `Order ${po.code} marked as sent`,
-      changes: diff([["Sent", null, sentOn], ["Expected", po.expectedOn, updated!.expectedOn]]),
+      changes: diff([
+        ["Sent", null, sentOn],
+        ["Expected", po.expectedOn, updated!.expectedOn],
+      ]),
       links: await orderRefs(tx, po),
     });
     return { po: updated!, alreadySent: false };
@@ -412,7 +429,10 @@ export async function recordReceipt(
     const [existing] = await tx.select().from(t.receipts).where(eq(t.receipts.idempotencyKey, input.idempotencyKey));
     if (existing) return { receipt: existing, alreadyRecorded: true };
 
-    const items = await itemsById(tx, input.lines.filter((l) => l.itemId).map((l) => l.itemId));
+    const items = await itemsById(
+      tx,
+      input.lines.filter((l) => l.itemId).map((l) => l.itemId),
+    );
     const lines = input.lines
       .filter((l) => l.itemId)
       .map((l) => {
@@ -560,8 +580,12 @@ async function usedIn(tx: Tx, lotId: string) {
       left join production_batches b2 on b2.id = s.batch_id
       left join outflows o on m.doc_type = 'outflow' and o.id = m.doc_id
       left join stock_adjustments a on m.doc_type = 'stock_adjustment' and a.id = m.doc_id
-    where m.lot_id = ${lotId} and m.quantity < 0`);
-  return [...rows].map((r) => r.code).filter(Boolean).slice(0, 6).join(", ");
+    where m.lot_id = ${lotId} and m.quantity < 0 and m.doc_type is distinct from 'receipt'`);
+  return [...rows]
+    .map((r) => r.code)
+    .filter(Boolean)
+    .slice(0, 6)
+    .join(", ");
 }
 
 export interface ReceiptLineChange {
@@ -598,7 +622,11 @@ export async function correctReceipt(
     const [r] = await tx.select().from(t.receipts).where(eq(t.receipts.id, input.receiptId));
     if (!r) throw new OperationError("Delivery not found.");
     if (r.deletedAt) throw new OperationError("This delivery was deleted. Restore it first.");
-    const [done] = await tx.select({ id: t.movements.id }).from(t.movements).where(sql`${t.movements.idempotencyKey} like ${input.idempotencyKey + ":%"}`).limit(1);
+    const [done] = await tx
+      .select({ id: t.movements.id })
+      .from(t.movements)
+      .where(sql`${t.movements.idempotencyKey} like ${input.idempotencyKey + ":%"}`)
+      .limit(1);
     if (done) return { alreadyRecorded: true };
 
     const header = { receivedOn: input.receivedOn, receivedTime: time, deliveryRef: input.deliveryRef?.trim() || null, note: input.note?.trim() || null };
@@ -609,10 +637,20 @@ export async function correctReceipt(
       ["Note", r.note, header.note],
     ]);
     const lines = await tx.select().from(t.receiptLines).where(eq(t.receiptLines.receiptId, r.id));
-    const items = await itemsById(tx, lines.map((l) => l.itemId));
-    const moves: { lotId: string; itemId: string; diff: Decimal }[] = [];
+    const items = await itemsById(
+      tx,
+      lines.map((l) => l.itemId),
+    );
+    const moves: { lineId: string; itemId: string; diff: Decimal }[] = [];
     const errors: string[] = [];
-    const plan: { line: typeof lines[number]; accepted: Decimal; rejected: Decimal; damageNote: string | null; supplierBatch?: string | null; bestBefore?: string | null }[] = [];
+    const plan: {
+      line: (typeof lines)[number];
+      accepted: Decimal;
+      rejected: Decimal;
+      damageNote: string | null;
+      supplierBatch?: string | null;
+      bestBefore?: string | null;
+    }[] = [];
     for (const c of input.lines) {
       const line = lines.find((l) => l.id === c.lineId);
       if (!line) continue;
@@ -626,15 +664,18 @@ export async function correctReceipt(
         const left = await lotBalance(tx, line.lotId);
         if (left.lt(d.neg())) {
           const [lot] = await tx.select().from(t.lots).where(eq(t.lots.id, line.lotId));
-          errors.push(`${item.name}: lot ${lot?.code} only has ${left} ${item.stockUnit} left (used in ${await usedIn(tx, line.lotId)}), so it can't go down by ${d.neg()}.`);
+          errors.push(
+            `${item.name}: lot ${lot?.code} only has ${left} ${item.stockUnit} left (used in ${await usedIn(tx, line.lotId)}), so it can't go down by ${d.neg()}.`,
+          );
           continue;
         }
       }
       if (!d.isZero()) {
         changes.push({ label: `${item.name} accepted`, before: qtyText(line.quantity, item.stockUnit), after: qtyText(accepted, item.stockUnit) });
-        moves.push({ lotId: line.lotId ?? "", itemId: item.id, diff: d });
+        moves.push({ lineId: line.id, itemId: item.id, diff: d });
       }
-      if (!rejected.eq(line.rejectedQty)) changes.push({ label: `${item.name} refused`, before: qtyText(line.rejectedQty, item.stockUnit), after: qtyText(rejected, item.stockUnit) });
+      if (!rejected.eq(line.rejectedQty))
+        changes.push({ label: `${item.name} refused`, before: qtyText(line.rejectedQty, item.stockUnit), after: qtyText(rejected, item.stockUnit) });
       const damageNote = c.damageNote === undefined ? line.damageNote : c.damageNote?.trim() || null;
       if (damageNote !== line.damageNote) changes.push({ label: `${item.name} damage note`, before: line.damageNote, after: damageNote });
       if (c.bestBefore && !isDate(c.bestBefore)) throw new OperationError(`${item.name}: best-before isn't a valid date.`);
@@ -690,7 +731,7 @@ export async function correctReceipt(
         };
         await tx.update(t.lots).set(upd).where(eq(t.lots.id, lotId));
       }
-      const move = moves.find((m) => m.itemId === item.id);
+      const move = moves.find((m) => m.lineId === p.line.id);
       if (move && lotId) {
         await tx.insert(t.movements).values({
           lotId,
@@ -736,7 +777,10 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
     if (!r) throw new OperationError("Delivery not found.");
     if (!!r.deletedAt === input.deleted) return { alreadyRecorded: true };
     const lines = await tx.select().from(t.receiptLines).where(eq(t.receiptLines.receiptId, r.id));
-    const items = await itemsById(tx, lines.map((l) => l.itemId));
+    const items = await itemsById(
+      tx,
+      lines.map((l) => l.itemId),
+    );
     const errors: string[] = [];
     if (input.deleted) {
       for (const l of lines) {
@@ -744,7 +788,9 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
         const left = await lotBalance(tx, l.lotId);
         if (left.lt(l.quantity)) {
           const [lot] = await tx.select().from(t.lots).where(eq(t.lots.id, l.lotId));
-          errors.push(`${items.get(l.itemId)?.name}: part of lot ${lot?.code} has already been used (${await usedIn(tx, l.lotId)}). Correct the quantity instead, or undo those first.`);
+          errors.push(
+            `${items.get(l.itemId)?.name}: part of lot ${lot?.code} has already been used (${await usedIn(tx, l.lotId)}). Correct the quantity instead, or undo those first.`,
+          );
         }
       }
     }
@@ -778,7 +824,11 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
     const actor = currentActor();
     await tx
       .update(t.receipts)
-      .set(input.deleted ? { deletedAt: new Date(), deletedBy: actor?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .set(
+        input.deleted
+          ? { deletedAt: new Date(), deletedBy: actor?.id ?? null, deletedReason: reason }
+          : { deletedAt: null, deletedBy: null, deletedReason: null },
+      )
       .where(eq(t.receipts.id, r.id));
     for (const poId of await receiptOrders(tx, r.id)) await refreshOrderStatus(tx, poId);
     return { alreadyRecorded: false };
@@ -810,7 +860,11 @@ export async function updateLot(db: DB, input: { lotId: string; reason: string; 
       const [b] = await tx.select().from(t.productionBatches).where(eq(t.productionBatches.id, lot.batchId));
       if (b) links.push({ type: "batch", id: b.id, code: b.code }, { type: "run", id: b.runId });
     }
-    const [rl] = await tx.select({ r: t.receipts }).from(t.receiptLines).innerJoin(t.receipts, eq(t.receiptLines.receiptId, t.receipts.id)).where(eq(t.receiptLines.lotId, lot.id));
+    const [rl] = await tx
+      .select({ r: t.receipts })
+      .from(t.receiptLines)
+      .innerJoin(t.receipts, eq(t.receiptLines.receiptId, t.receipts.id))
+      .where(eq(t.receiptLines.lotId, lot.id));
     if (rl) links.push({ type: "receipt", id: rl.r.id, code: receiptCode(rl.r) });
     await logChange(tx, {
       action: "update",
@@ -868,7 +922,12 @@ export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: strin
     })
     .from(t.purchaseOrderLines)
     .innerJoin(t.items, eq(t.purchaseOrderLines.itemId, t.items.id))
-    .where(inArray(t.purchaseOrderLines.purchaseOrderId, orders.map((o) => o.po.id)));
+    .where(
+      inArray(
+        t.purchaseOrderLines.purchaseOrderId,
+        orders.map((o) => o.po.id),
+      ),
+    );
   return orders.map(({ po, supplier, runCode }) => {
     const open = po.status === "sent" || po.status === "partly_received" || po.status === "draft";
     const own = lines
@@ -921,7 +980,10 @@ export async function orderPlan(db: DB, plan: PlanResult, runId?: string | null)
       .groupBy(t.purchaseOrderLines.itemId);
     for (const r of rows) drafts.set(r.itemId, new Decimal(r.qty));
   }
-  const offers = await offersByItem(db, short.map((r) => r.itemId));
+  const offers = await offersByItem(
+    db,
+    short.map((r) => r.itemId),
+  );
   return short
     .map((r) => {
       const inDrafts = drafts.get(r.itemId) ?? new Decimal(0);
@@ -948,7 +1010,10 @@ export const RUN_BUDGET_COLUMNS = ["toBuy", "total"] as const;
  * "total": everything the run needs, including what is already in stock.
  */
 export async function planBudget(db: DB, plan: PlanResult) {
-  const offers = await offersByItem(db, plan.requirements.map((r) => r.itemId));
+  const offers = await offersByItem(
+    db,
+    plan.requirements.map((r) => r.itemId),
+  );
   const lines: BudgetLineInput[] = plan.requirements.map((r) => {
     const fav = favourite(offers.get(r.itemId) ?? []);
     const up = unitPrice(fav);

@@ -532,3 +532,5 @@ button.secondary.is-pending::after, button.ghost.is-pending::after, button.dange
 
 /* An account that may only view sees no forms that change anything (the server refuses them too). */
 .viewer form[method="POST" i]:not(.keep), .viewer form[method="post"]:not(.keep), .viewer .edit-only { display: none !important; }
+.doc-remove > summary { list-style: none; cursor: pointer; }
+.doc-remove > summary::-webkit-details-marker { display: none; }

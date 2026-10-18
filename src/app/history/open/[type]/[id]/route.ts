@@ -16,6 +16,10 @@ async function pathFor(type: EntityType, id: string): Promise<string> {
       const [s] = await d.select({ batchId: t.packagingSessions.batchId }).from(t.packagingSessions).where(eq(t.packagingSessions.id, id));
       return s ? `/batches/${s.batchId}/pack` : "/batches";
     }
+    case "batch_consumption" as EntityType: {
+      const [c] = await d.select({ batchId: t.batchConsumption.batchId }).from(t.batchConsumption).where(eq(t.batchConsumption.id, id));
+      return c ? `/batches/${c.batchId}/cook` : "/batches";
+    }
     case "incident": {
       const [i] = await d.select().from(t.incidents).where(eq(t.incidents.id, id));
       if (i?.batchId) return `/batches/${i.batchId}/close#incidents`;

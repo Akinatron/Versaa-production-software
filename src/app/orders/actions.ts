@@ -12,6 +12,7 @@ import {
   markOrderSent,
   updateDraftOrder,
 } from "@/db/operations";
+import { restorePurchaseOrder } from "@/db/purchasing";
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 
@@ -81,10 +82,16 @@ export async function updateDraftAction(form: FormData) {
     unitPrice: r.price,
   }));
   await attempt(`/orders/${id}`, () =>
-    updateDraftOrder(db(), id, { expectedOn: str(form, "expectedOn") || null, reference: str(form, "reference"), note: str(form, "note"), lines }),
+    updateDraftOrder(db(), id, {
+      expectedOn: str(form, "expectedOn") || null,
+      reference: str(form, "reference"),
+      note: str(form, "note"),
+      reason: str(form, "reason"),
+      lines,
+    }),
   );
   refresh();
-  redirect(withOk(`/orders/${id}`, "Draft saved."));
+  redirect(withOk(`/orders/${id}`, str(form, "correcting") ? "Order corrected." : "Draft saved."));
 }
 
 export async function closeOrderAction(form: FormData) {
@@ -97,7 +104,14 @@ export async function closeOrderAction(form: FormData) {
 export async function cancelOrder(form: FormData) {
   const id = str(form, "poId");
   const back = backTo(form, "/orders");
-  await attempt(back, () => cancelPurchaseOrder(db(), id));
+  await attempt(back, () => cancelPurchaseOrder(db(), id, str(form, "reason")));
   refresh();
   redirect(withOk(back, "Order cancelled."));
+}
+
+export async function restoreOrder(form: FormData) {
+  const id = str(form, "poId");
+  await attempt(`/orders/${id}`, () => restorePurchaseOrder(db(), id, str(form, "reason")));
+  refresh();
+  redirect(withOk(`/orders/${id}`, "Order restored."));
 }
