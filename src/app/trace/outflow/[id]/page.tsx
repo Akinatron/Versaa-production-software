@@ -5,7 +5,7 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { traceOutflow } from "@/db/trace";
-import { OUTFLOW } from "../../../components/labels";
+import { OUTFLOW, outflowBadge } from "../../../components/labels";
 import { BatchBackward } from "../../../components/trace-backward";
 import { who } from "../../../components/trace-format";
 
@@ -25,7 +25,7 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
   return (
     <>
       <h1>
-        {out.code} <span className={`badge ${out.type === "sale" ? "ok" : out.type === "waste" ? "bad" : "warn"}`}>{OUTFLOW[out.type] ?? out.type}</span>
+        {out.code} <span className={`badge ${outflowBadge(out.type)}`}>{OUTFLOW[out.type] ?? out.type}</span>
       </h1>
       <p className="lead">{out.type === "sale" ? "Jars sold and delivered." : "Jars that left stock. This is not a sale."}</p>
 
@@ -44,7 +44,7 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
         </div>
         <div>
           <div className="small muted">Sales order</div>
-          {order ? <Link href={`/sales/${order.id}`}>{order.code}</Link> : "none (recorded directly)"}
+          {order ? <Link href={`/outbound/orders/${order.id}`}>{order.code}</Link> : "none (recorded directly)"}
         </div>
         {out.note && (
           <div style={{ gridColumn: "1 / -1" }}>
@@ -100,7 +100,7 @@ export default async function OutflowTracePage({ params }: { params: Promise<{ i
         batchIds.map((b) => <BatchBackward key={b} batchId={b} />)
       )}
       <p>
-        <Link href="/sales">← Sales</Link> · <Link href="/trace">Trace something else</Link>
+        <Link href="/outbound">← Outbound</Link> · <Link href="/trace">Trace something else</Link>
       </p>
     </>
   );

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { db } from "@/db/client";
 import { finishedAvailability } from "@/db/sales";
-import { Flash } from "../../components/flash";
-import { saveSalesOrder } from "../actions";
-import { activeProducts, customerList, todayIso } from "../data";
+import { Flash } from "../../../components/flash";
+import { saveSalesOrder } from "../../actions";
+import { activeProducts, customerList, todayIso } from "../../data";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export default async function NewSalesOrderPage({ searchParams }: { searchParams
                 ))}
             </select>
             <div className="small">
-              <Link href="/sales/customers?back=/sales/new">Add a customer</Link>
+              <Link href="/outbound/customers?back=/outbound/orders/new">Add a customer</Link>
             </div>
           </div>
           <div>

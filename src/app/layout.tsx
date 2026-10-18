@@ -16,7 +16,7 @@ const LINKS = [
   ["/deliveries", "Deliveries"],
   ["/suppliers", "Suppliers"],
   ["/stock", "Stock"],
-  ["/sales", "Sales"],
+  ["/outbound", "Outbound"],
   ["/trace", "Trace"],
   ["/reports", "Reports"],
   ["/settings", "Settings"],

@@ -5,11 +5,11 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { finishedAvailability } from "@/db/sales";
-import { Flash } from "../../components/flash";
-import { OUTFLOW, SALES_STATUS } from "../../components/labels";
-import { jars, who } from "../../components/trace-format";
-import { cancelOrder, deliverOrder } from "../actions";
-import { fefoPreview, finishedLots, todayIso } from "../data";
+import { Flash } from "../../../components/flash";
+import { OUTFLOW, SALES_STATUS } from "../../../components/labels";
+import { jars, who } from "../../../components/trace-format";
+import { cancelOrder, deliverOrder } from "../../actions";
+import { fefoPreview, finishedLots, todayIso } from "../../data";
 
 export const dynamic = "force-dynamic";
 
@@ -209,7 +209,7 @@ export default async function SalesOrderPage({ params, searchParams }: { params:
         </>
       )}
       <p>
-        <Link href="/sales">← Back to sales</Link>
+        <Link href="/outbound">← Back to outbound</Link>
       </p>
     </>
   );

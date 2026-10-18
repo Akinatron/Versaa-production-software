@@ -19,7 +19,7 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
     if (hit?.kind === "batch") redirect(`/batches/${hit.id}`);
     if (hit?.kind === "outflow") redirect(`/trace/outflow/${hit.id}`);
     const [so] = await db().select({ id: t.salesOrders.id }).from(t.salesOrders).where(sql`upper(${t.salesOrders.code}) = upper(${q})`);
-    if (so) redirect(`/sales/${so.id}`);
+    if (so) redirect(`/outbound/orders/${so.id}`);
   }
   const lots = q ? await searchLots(db(), q) : [];
   const codes = await batchCodes(lots.map((l) => l.batchId));

@@ -11,7 +11,7 @@ import { allocate, itemOnHand, reservedForSales } from "./ledger";
  * - A sales order is a promise: it reserves jars but doesn't take them out.
  * - Delivering it is the one moment stock goes down, so a sale is never
  *   deducted twice.
- * - Samples, waste and internal use also take jars out, but are not sales.
+ * - Own use, tests, samples/gifts and waste also take jars out, but are not sales.
  * - Every jar leaves from a specific batch lot (earliest best-before first
  *   unless you pick), and nothing can go out that isn't there.
  */
@@ -149,7 +149,7 @@ export interface OutflowLineInput {
   lots?: { lotId: string; jars: number }[];
 }
 
-/** Jars going out without a sales order: a direct sale, sample, waste or internal use. */
+/** Jars going out without a sales order: a direct sale, own use, test, sample/gift or waste. */
 export async function recordOutflow(
   db: DB,
   input: {
@@ -173,8 +173,7 @@ export async function recordOutflow(
   });
 }
 
-const PREFIX: Record<OutflowType, string> = { sale: "OUT", sample: "SMP", waste: "WST", internal_use: "INT" };
-const MOVEMENT: Record<OutflowType, "sale" | "sample" | "waste" | "internal_use"> = { sale: "sale", sample: "sample", waste: "waste", internal_use: "internal_use" };
+const PREFIX: Record<OutflowType, string> = { sale: "OUT", sample: "SMP", waste: "WST", internal_use: "INT", test: "TST" };
 
 async function writeOutflow(
   tx: Tx,
@@ -249,7 +248,7 @@ async function writeOutflow(
         lotId: a.lotId,
         itemId: p.itemId,
         quantity: a.quantity.neg().toString(),
-        type: MOVEMENT[input.type],
+        type: input.type,
         occurredAt: new Date(`${input.occurredOn}T12:00:00Z`),
         docType: "outflow",
         docId: outflow!.id,

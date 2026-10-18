@@ -1,6 +1,6 @@
 # Versaa Production Software
 
-Operations app for Versaa: production planning, purchasing, inventory, production, packaging, traceability and sales.
+Operations app for Versaa: production planning, purchasing, inventory, production, packaging, traceability and outbound (sales and every other stock exit).
 
 ## What works now
 
@@ -13,7 +13,7 @@ Everyone signs in with their own email and password. The first time the app open
 - **Suppliers** (`/suppliers`) and item cards (`/items/…`): which suppliers sell each ingredient and packaging item, in favourite order, with the price per pack as they sell it (e.g. 12 € per 25 kg sack). The link is one record shown on both cards; changing a price keeps the old one with its date.
 - **Orders** and **Deliveries**: orders start as drafts and "Mark as sent" stores the date they went out. An order can be for a run or a plain restock. Deliveries record, per line, what was accepted (becomes a lot with its supplier batch and best-before) and what was refused, plus damage notes, an optional time and a note. Refused goods count as not received; close the order by hand if they won't be replaced.
 - **Stock** (`/stock`): ingredients, packaging, bulk sauce awaiting packaging and finished jars, per lot with origin and full history. Opening count, count corrections and write-offs (always with a reason).
-- **Sales** (`/sales`): sales orders reserve jars; delivering takes them out once, from specific batch lots. Samples, waste and internal use are recorded too but don't count as sales.
+- **Outbound** (`/outbound`, formerly Sales): every jar that leaves stock. "Record a stock exit" starts by choosing the reason: Sale, Own use, Test, Sample / gift or Waste / loss. Sales keep customer, price and order (sales orders reserve jars; delivering takes them out once, from specific batch lots). The other reasons only ask for product, lot, jars, date and note. All of them take jars out of stock and stay traceable; only sales count in the sales reports. Old `/sales` links redirect.
 - **Trace** (`/trace`): search any lot, batch, delivery note or supplier batch. Forward: where an ingredient lot went, which jars are still in stock and who received the rest (recall summary). Backward: from a sale or jar lot to the batch, its ingredient lots and suppliers.
 - **Reports** (`/reports`): sales by sauce and size for a period (revenue only from recorded prices, never called profit), other outflows, production and rejects, plan vs actual per run, and CSV downloads (movements, lots, sales, batches).
 - **Settings** (`/settings`): recipes and packaging lists edited as new versions (old batches keep the version they used), ingredients and packaging items, sauces, sizes and products, yields and reject rates, suppliers.

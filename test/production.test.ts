@@ -221,6 +221,26 @@ suite("production, packaging, sales and traceability", () => {
     expect((await findByCode(db, "kip-20261020-01"))?.kind).toBe("batch");
   });
 
+  it("outbound: own use, tests, gifts and waste take jars out by reason, stay traceable and aren't sales", async () => {
+    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const before = (await finishedAvailability(db)).find((x) => x.productId === big)!.onHand;
+    const { outflow } = await recordOutflow(db, { idempotencyKey: "test-1", type: "test", note: "Shelf-life check", occurredOn: "2026-10-24", lines: [{ productId: big, jars: 1 }] });
+    await recordOutflow(db, { idempotencyKey: "test-1", type: "test", occurredOn: "2026-10-24", lines: [{ productId: big, jars: 1 }] });
+    await recordOutflow(db, { idempotencyKey: "own-1", type: "internal_use", occurredOn: "2026-10-24", lines: [{ productId: big, jars: 1 }] });
+    await expect(recordOutflow(db, { idempotencyKey: "waste-0", type: "waste", lines: [{ productId: big, jars: 1 }] })).rejects.toThrow(/why/);
+    expect(outflow.code).toBe("TST-20261024-001");
+
+    const after = (await finishedAvailability(db)).find((x) => x.productId === big)!.onHand;
+    expect(before.minus(after).toString()).toBe("2");
+    const moves = await db.select().from(t.movements).where(and(eq(t.movements.docType, "outflow"), eq(t.movements.docId, outflow.id)));
+    expect(moves.map((m) => [m.type, m.quantity])).toEqual([["test", "-1"]]);
+
+    const back = await traceOutflow(db, outflow.id);
+    expect(back!.lines.map((l) => l.batchCode)).toEqual(["KIP-20261020-01"]);
+    const sold = await db.execute<{ jars: number }>(sql`select coalesce(sum(ol.jars), 0)::int as jars from outflow_lines ol join outflows o on o.id = ol.outflow_id where o.type = 'sale'`);
+    expect(sold[0]!.jars).toBe(20);
+  });
+
   it("stock counts and write-offs post corrections with a reason, never edit the number", async () => {
     const [lot] = await db.select().from(t.lots).where(eq(t.lots.code, "OPEN-20261017-001"));
     const before = new Decimal((await db.execute<{ q: string }>(sql`select sum(quantity) as q from movements where lot_id = ${lot!.id}`))[0]!.q);

@@ -37,7 +37,7 @@ export async function saveStockCount(form: FormData) {
   if (s(form, "found") !== "") lines.push({ itemId, counted: s(form, "found"), bestBefore: s(form, "foundBestBefore") || null });
   const r = await attempt(back, () => recordStockCount(db(), { idempotencyKey: s(form, "key"), countedOn: s(form, "countedOn"), reason: s(form, "reason"), lines }));
   revalidatePath("/stock");
-  revalidatePath("/sales");
+  revalidatePath("/outbound");
   redirect(
     withOk(
       `/stock/${itemId}`,

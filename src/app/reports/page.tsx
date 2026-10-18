@@ -175,15 +175,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         )}
       </div>
 
-      <h2>Other outflows</h2>
+      <h2>Other stock exits (not sales)</h2>
       <div className="card scroll">
         {[...other].length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No samples, waste or internal use in this period.</p>
+          <p className="muted" style={{ margin: 0 }}>No own use, tests, samples or waste in this period.</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Type</th>
+                <th>Reason</th>
                 <th>Product</th>
                 <th className="num">Jars</th>
                 <th className="num">Times</th>
@@ -393,7 +393,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {[
               ["movements", "Stock movements", "the full ledger: every quantity in or out, with item, lot, reason and document"],
               ["lots", "Lots", "every lot with its origin (supplier or batch) and what is left"],
-              ["sales", "Sales & outflows", "every jar that left: type, date, customer, product, lot, batch, price"],
+              ["sales", "Outbound (all stock exits)", "every jar that left stock: reason, date, customer, product, lot, batch, price"],
               ["batches", "Batches", "every batch with recipe version, dates, measured output and jars"],
             ].map(([name, title, text]) => (
               <tr key={name}>
