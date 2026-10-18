@@ -6,7 +6,8 @@ import { loadOrders, planBudget } from "@/db/purchasing";
 import type { PlanResult } from "@/domain/planner";
 import { Flash } from "../../components/flash";
 import { PlanView } from "../../components/plan-view";
-import { cancel, confirm } from "../actions";
+import { cancel, confirm, restore } from "../actions";
+import { EditedMark, History, ReasonField } from "../../components/history";
 import { BatchRunSection } from "../../components/batch-run-section";
 import { BudgetTable } from "../../components/budget-table";
 import { budgetForTable } from "../../components/budget-format";
@@ -36,12 +37,9 @@ export default async function RunPage({
   const actions = (
     <>
       {(run.status === "draft" || run.status === "confirmed") && (
-        <form action={cancel}>
-          <input type="hidden" name="runId" value={run.id} />
-          <button type="submit" className="danger">
-            Cancel run
-          </button>
-        </form>
+        <a href="#cancel" className="btn secondary edit-only">
+          {run.status === "draft" ? "Discard" : "Cancel run"}
+        </a>
       )}
       {run.status === "draft" && (
         <form action={confirm}>
@@ -55,7 +53,21 @@ export default async function RunPage({
   return (
     <>
       <RunHeader run={run} step="run" actions={actions} />
+      <EditedMark of={{ type: "run", id: run.id }} />
       <Flash params={flash} />
+      {run.status === "cancelled" && !run.confirmedAt && (
+        <form action={restore} className="card row" style={{ alignItems: "flex-end" }}>
+          <input type="hidden" name="runId" value={run.id} />
+          <div style={{ flex: "1 1 100%" }}>
+            <strong>This draft was discarded.</strong>
+            <div className="small muted">Restore it to keep planning with it.</div>
+          </div>
+          <ReasonField id="run-restore" label="Why restore it?" />
+          <button type="submit" className="secondary">
+            Restore draft
+          </button>
+        </form>
+      )}
 
       {run.status === "draft" && (
         <ul className="issues">
@@ -94,6 +106,25 @@ export default async function RunPage({
           <PlanView result={frozen} />
         </details>
       )}
+
+      {(run.status === "draft" || run.status === "confirmed") && (
+        <details className="card edit-only" id="cancel">
+          <summary>{run.status === "draft" ? "Discard this draft" : "Cancel this run"}</summary>
+          <form action={cancel} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
+            <input type="hidden" name="runId" value={run.id} />
+            <p className="small muted" style={{ flex: "1 1 100%", margin: 0 }}>
+              {run.status === "draft"
+                ? "The draft is kept on record and can be restored."
+                : "Its batches are cancelled and its reserved stock is freed. A cancelled run can't come back; you would plan it again."}
+            </p>
+            <ReasonField id="run-cancel" optional={run.status === "draft"} placeholder="e.g. the order was cancelled" />
+            <button type="submit" className="danger">
+              {run.status === "draft" ? "Discard draft" : "Cancel run"}
+            </button>
+          </form>
+        </details>
+      )}
+      <History of={{ type: "run", id: run.id }} open={false} />
 
       <NextStep href={`/runs/${id}/stock`}>
         Stock vs need

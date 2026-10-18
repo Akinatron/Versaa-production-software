@@ -4,6 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, today, type Tx } from "./base";
 import { allocate, itemOnHand, reservedForSales } from "./ledger";
+import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
  * Sales and other outflows of finished jars.
@@ -23,6 +24,7 @@ export async function addCustomer(db: DB, input: { name: string; contact?: strin
   const name = input.name.trim();
   if (!name) throw new OperationError("Customer name is required.");
   const [row] = await db.insert(t.customers).values({ name, contact: input.contact?.trim() || null, notes: input.notes?.trim() || null }).returning();
+  await logChange(db, { action: "create", area: "sales", entity: { type: "customer", id: row!.id, code: name }, summary: `Added customer ${name}` });
   return row!;
 }
 
@@ -97,17 +99,137 @@ export async function createSalesOrder(
       await tx.insert(t.salesOrderLines).values({ salesOrderId: order!.id, productId: p.id, jars: l.jars, unitPrice: price(l.unitPrice) });
       await tx.insert(t.reservations).values({ salesOrderId: order!.id, itemId: p.itemId, quantity: String(l.jars) });
     }
+    await logChange(tx, {
+      action: "create",
+      area: "sales",
+      entity: { type: "sales_order", id: order!.id, code: order!.code },
+      summary: `Sales order ${order!.code} for ${await customerName(tx, order!)}`,
+      changes: lines.map((l) => ({ label: products.get(l.productId)!.name, after: `${l.jars} jars` })),
+      links: order!.customerId ? [{ type: "customer", id: order!.customerId }] : [],
+    });
     return { order: order!, alreadyRecorded: false };
   });
 }
 
-export async function cancelSalesOrder(db: DB, salesOrderId: string) {
+async function customerName(tx: Tx, o: { customerId: string | null; destination: string | null }) {
+  if (o.customerId) {
+    const [c] = await tx.select({ name: t.customers.name }).from(t.customers).where(eq(t.customers.id, o.customerId));
+    if (c) return c.name;
+  }
+  return o.destination ?? "customer";
+}
+
+const orderRef = (o: { id: string; code: string }): Ref => ({ type: "sales_order", id: o.id, code: o.code });
+
+export async function cancelSalesOrder(db: DB, salesOrderId: string, reason?: string | null) {
   return db.transaction(async (tx) => {
     const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, salesOrderId));
     if (!o) throw new OperationError("Order not found.");
     if (o.status !== "pending") throw new OperationError(`This order is already ${o.status}.`);
+    const why = needReason(reason, "Say why the order is cancelled");
     await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, o.id), isNull(t.reservations.releasedAt)));
     await tx.update(t.salesOrders).set({ status: "cancelled" }).where(eq(t.salesOrders.id, o.id));
+    await logChange(tx, {
+      action: "cancel",
+      area: "sales",
+      entity: orderRef(o),
+      summary: `Sales order ${o.code} cancelled: its jars are free again`,
+      changes: diff([["Status", "To deliver", "Cancelled"]]),
+      reason: why,
+      links: o.customerId ? [{ type: "customer", id: o.customerId }] : [],
+    });
+  });
+}
+
+/** A cancelled order back to "to deliver", reserving its jars again. */
+export async function restoreSalesOrder(db: DB, salesOrderId: string, reason?: string | null) {
+  const why = needReason(reason, "Say why the order is restored");
+  return db.transaction(async (tx) => {
+    const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, salesOrderId));
+    if (!o) throw new OperationError("Order not found.");
+    if (o.status !== "cancelled") throw new OperationError("Only a cancelled order can be restored.");
+    await reserveOrder(tx, o.id);
+    await tx.update(t.salesOrders).set({ status: "pending" }).where(eq(t.salesOrders.id, o.id));
+    await logChange(tx, {
+      action: "restore",
+      area: "sales",
+      entity: orderRef(o),
+      summary: `Sales order ${o.code} restored: its jars are reserved again`,
+      changes: diff([["Status", "Cancelled", "To deliver"]]),
+      reason: why,
+      links: o.customerId ? [{ type: "customer", id: o.customerId }] : [],
+    });
+  });
+}
+
+/** Release whatever an order still reserves and reserve its lines afresh. */
+async function reserveOrder(tx: Tx, orderId: string) {
+  await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, orderId), isNull(t.reservations.releasedAt)));
+  const lines = await tx.select({ jars: t.salesOrderLines.jars, itemId: t.products.itemId }).from(t.salesOrderLines).innerJoin(t.products, eq(t.salesOrderLines.productId, t.products.id)).where(eq(t.salesOrderLines.salesOrderId, orderId));
+  for (const l of lines) await tx.insert(t.reservations).values({ salesOrderId: orderId, itemId: l.itemId, quantity: String(l.jars) });
+}
+
+/** Change an order that hasn't been delivered: customer, dates, reference and lines. Its reservation follows. */
+export async function updateSalesOrder(
+  db: DB,
+  input: {
+    salesOrderId: string;
+    reason: string;
+    customerId?: string | null;
+    destination?: string | null;
+    reference?: string | null;
+    orderedOn: string;
+    deliverBy?: string | null;
+    lines: SalesLineInput[];
+  },
+) {
+  const why = needReason(input.reason, "Say why the order is changed");
+  const lines = input.lines.filter((l) => l.productId && l.jars !== 0);
+  if (!lines.length) throw new OperationError("Add at least one product, or cancel the order.");
+  for (const l of lines) if (!Number.isInteger(l.jars) || l.jars < 0) throw new OperationError("Jars must be whole numbers.");
+  if (!input.customerId && !input.destination?.trim()) throw new OperationError("Choose a customer or write a destination.");
+  if (!isDate(input.orderedOn)) throw new OperationError("Enter the order date.");
+  const deliverBy = input.deliverBy?.trim() || null;
+  if (deliverBy && !isDate(deliverBy)) throw new OperationError("The delivery date isn't a valid date.");
+  if (deliverBy && deliverBy < input.orderedOn) throw new OperationError("The delivery date can't be before the order date.");
+  return db.transaction(async (tx) => {
+    const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, input.salesOrderId));
+    if (!o) throw new OperationError("Order not found.");
+    if (o.status !== "pending") throw new OperationError(`This order is ${o.status}, so it can't be changed.${o.status === "delivered" ? " Correct its delivery instead." : ""}`);
+    const old = await tx.select().from(t.salesOrderLines).where(eq(t.salesOrderLines.salesOrderId, o.id));
+    const products = await productsById(tx, [...new Set([...old.map((l) => l.productId), ...lines.map((l) => l.productId)])]);
+    for (const l of lines) if (!products.get(l.productId)) throw new OperationError("Unknown product.");
+    const header = { customerId: input.customerId || null, destination: input.destination?.trim() || null, reference: input.reference?.trim() || null, orderedOn: input.orderedOn, deliverBy };
+    const changes: FieldChange[] = diff([
+      ["Customer", await customerName(tx, o), await customerName(tx, header)],
+      ["Reference", o.reference, header.reference],
+      ["Ordered", o.orderedOn, header.orderedOn],
+      ["Deliver by", o.deliverBy, header.deliverBy],
+    ]);
+    const lineText = (ls: { productId: string; jars: number; unitPrice?: Decimal.Value | null }[]) => {
+      const m = new Map<string, string>();
+      for (const l of ls) m.set(l.productId, `${l.jars} jars${l.unitPrice != null && String(l.unitPrice) !== "" ? ` at ${new Decimal(l.unitPrice)} €` : ""}`);
+      return m;
+    };
+    const before = lineText(old);
+    const after = lineText(lines);
+    for (const id of new Set([...before.keys(), ...after.keys()])) {
+      if (before.get(id) !== after.get(id)) changes.push({ label: products.get(id)?.name ?? "Product", before: before.get(id) ?? null, after: after.get(id) ?? null });
+    }
+    if (!changes.length) return;
+    await tx.update(t.salesOrders).set(header).where(eq(t.salesOrders.id, o.id));
+    await tx.delete(t.salesOrderLines).where(eq(t.salesOrderLines.salesOrderId, o.id));
+    await tx.insert(t.salesOrderLines).values(lines.map((l) => ({ salesOrderId: o.id, productId: l.productId, jars: l.jars, unitPrice: price(l.unitPrice) })));
+    await reserveOrder(tx, o.id);
+    await logChange(tx, {
+      action: "update",
+      area: "sales",
+      entity: orderRef(o),
+      summary: `Sales order ${o.code} changed`,
+      changes,
+      reason: why,
+      links: [o.customerId, header.customerId].filter((x): x is string => !!x).map((id) => ({ type: "customer" as const, id })),
+    });
   });
 }
 
@@ -140,6 +262,7 @@ export async function deliverSalesOrder(
     });
     await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, o.id), isNull(t.reservations.releasedAt)));
     await tx.update(t.salesOrders).set({ status: "delivered" }).where(eq(t.salesOrders.id, o.id));
+    await logOutflow(tx, outflow, "create", `Sales order ${o.code} delivered as ${outflow.code}`);
     return { outflow, alreadyRecorded: false };
   });
 }
@@ -173,6 +296,7 @@ export async function recordOutflow(
     if (existing) return { outflow: existing, alreadyRecorded: true };
     await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
     const outflow = await writeOutflow(tx, { ...input, occurredOn: input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today() });
+    await logOutflow(tx, outflow, "create", `${OUTFLOW[outflow.type]} recorded: ${outflow.code}`);
     return { outflow, alreadyRecorded: false };
   });
 }
@@ -262,4 +386,147 @@ async function writeOutflow(
     }
   }
   return outflow!;
+}
+
+// ---------------------------------------------------------------- correcting outflows
+
+export const OUTFLOW: Record<OutflowType, string> = { sale: "Sale", sample: "Sample / gift", waste: "Waste / loss", internal_use: "Own use", test: "Test" };
+
+async function outflowLinesText(tx: Tx, outflowId: string) {
+  return tx
+    .select({ line: t.outflowLines, product: t.products, lot: t.lots })
+    .from(t.outflowLines)
+    .innerJoin(t.products, eq(t.outflowLines.productId, t.products.id))
+    .innerJoin(t.lots, eq(t.outflowLines.lotId, t.lots.id))
+    .where(eq(t.outflowLines.outflowId, outflowId));
+}
+
+async function outflowRefs(tx: Tx, o: typeof t.outflows.$inferSelect) {
+  const lines = await outflowLinesText(tx, o.id);
+  const refs: Ref[] = lines.map((l) => ({ type: "lot", id: l.lot.id, code: l.lot.code }));
+  for (const batchId of new Set(lines.map((l) => l.lot.batchId).filter((x): x is string => !!x))) {
+    const [b] = await tx.select({ id: t.productionBatches.id, code: t.productionBatches.code }).from(t.productionBatches).where(eq(t.productionBatches.id, batchId));
+    if (b) refs.push({ type: "batch", id: b.id, code: b.code });
+  }
+  if (o.salesOrderId) {
+    const [so] = await tx.select({ id: t.salesOrders.id, code: t.salesOrders.code }).from(t.salesOrders).where(eq(t.salesOrders.id, o.salesOrderId));
+    if (so) refs.push(orderRef(so));
+  }
+  if (o.customerId) refs.push({ type: "customer", id: o.customerId });
+  return { refs, lines };
+}
+
+async function logOutflow(tx: Tx, o: typeof t.outflows.$inferSelect, action: "create" | "delete" | "restore", summary: string, reason?: string | null) {
+  const { refs, lines } = await outflowRefs(tx, o);
+  return logChange(tx, {
+    action,
+    area: "sales",
+    entity: { type: "outflow", id: o.id, code: o.code },
+    summary,
+    changes: lines.map((l) => ({
+      label: `${l.product.name} (${l.lot.code})`,
+      before: action === "create" ? null : action === "delete" ? `${l.line.jars} jars out` : "back in stock",
+      after: action === "delete" ? "back in stock" : `${l.line.jars} jars out`,
+    })),
+    reason,
+    links: refs,
+  });
+}
+
+/**
+ * Delete an outflow: its jars go back into the lots they left, and it stays
+ * on record marked as deleted. If it delivered a sales order, the order is
+ * "to deliver" again with its jars reserved. Restoring takes the same jars
+ * out of the same lots again, if they are still there.
+ */
+export async function setOutflowDeleted(db: DB, input: { idempotencyKey: string; outflowId: string; deleted: boolean; reason: string }) {
+  const reason = needReason(input.reason, input.deleted ? "Say why this is deleted" : "Say why this is restored");
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
+    const [o] = await tx.select().from(t.outflows).where(eq(t.outflows.id, input.outflowId));
+    if (!o) throw new OperationError("Not found.");
+    if (!!o.deletedAt === input.deleted) return { alreadyRecorded: true };
+    const lines = await outflowLinesText(tx, o.id);
+    const [so] = o.salesOrderId ? await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, o.salesOrderId)) : [];
+    if (!input.deleted) {
+      const problems: string[] = [];
+      for (const l of lines) {
+        const [row] = await tx.execute<{ q: string | null }>(sql`select sum(quantity) as q from movements where lot_id = ${l.lot.id}`);
+        if (new Decimal(row?.q ?? 0).lt(l.line.jars)) problems.push(`${l.product.name}: lot ${l.lot.code} only has ${row?.q ?? 0} jars left.`);
+      }
+      if (problems.length) throw new OperationError(`Those jars aren't in stock any more, so this can't be restored. ${problems.join(" ")}`);
+      if (so && so.status !== "pending") throw new OperationError(`Sales order ${so.code} is ${so.status} now, so this delivery can't come back.`);
+    } else if (so && so.status !== "delivered") {
+      throw new OperationError(`Sales order ${so.code} is ${so.status}; it can't go back to "to deliver".`);
+    }
+    const changeId = await logOutflow(
+      tx,
+      o,
+      input.deleted ? "delete" : "restore",
+      input.deleted ? `${o.code} deleted: its jars are back in stock${so ? `, ${so.code} is to deliver again` : ""}` : `${o.code} restored: its jars are out again${so ? `, ${so.code} delivered` : ""}`,
+      reason,
+    );
+    let i = 0;
+    for (const l of lines) {
+      await tx.insert(t.movements).values({
+        lotId: l.lot.id,
+        itemId: l.product.itemId,
+        quantity: String(input.deleted ? l.line.jars : -l.line.jars),
+        type: input.deleted ? "reversal" : o.type,
+        occurredAt: new Date(),
+        docType: "outflow",
+        docId: o.id,
+        reason: `${o.code} ${input.deleted ? "deleted" : "restored"}: ${reason}`,
+        idempotencyKey: `${input.idempotencyKey}:${i++}`,
+        changeId,
+      });
+    }
+    if (so) {
+      if (input.deleted) {
+        await reserveOrder(tx, so.id);
+        await tx.update(t.salesOrders).set({ status: "pending" }).where(eq(t.salesOrders.id, so.id));
+      } else {
+        await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, so.id), isNull(t.reservations.releasedAt)));
+        await tx.update(t.salesOrders).set({ status: "delivered" }).where(eq(t.salesOrders.id, so.id));
+      }
+    }
+    await tx
+      .update(t.outflows)
+      .set(input.deleted ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .where(eq(t.outflows.id, o.id));
+    return { alreadyRecorded: false };
+  });
+}
+
+/** Correct the details of an outflow (date, who it went to, reference, note). To change jars, delete it and record it again. */
+export async function updateOutflow(
+  db: DB,
+  input: { outflowId: string; reason: string; occurredOn: string; customerId?: string | null; destination?: string | null; reference?: string | null; note?: string | null },
+) {
+  const why = needReason(input.reason, "Say why this is corrected");
+  if (!isDate(input.occurredOn)) throw new OperationError("Enter the date.");
+  return db.transaction(async (tx) => {
+    const [o] = await tx.select().from(t.outflows).where(eq(t.outflows.id, input.outflowId));
+    if (!o) throw new OperationError("Not found.");
+    if (o.deletedAt) throw new OperationError("This was deleted. Restore it first.");
+    if (o.type === "waste" && !input.note?.trim()) throw new OperationError("Say why the jars are written off.");
+    const upd = {
+      occurredOn: input.occurredOn,
+      customerId: input.customerId === undefined ? o.customerId : input.customerId || null,
+      destination: input.destination === undefined ? o.destination : input.destination?.trim() || null,
+      reference: input.reference === undefined ? o.reference : input.reference?.trim() || null,
+      note: input.note === undefined ? o.note : input.note?.trim() || null,
+    };
+    const changes = diff([
+      ["Date", o.occurredOn, upd.occurredOn],
+      ["Customer", o.customerId ? await customerName(tx, o) : null, upd.customerId ? await customerName(tx, upd) : null],
+      ["Destination", o.destination, upd.destination],
+      ["Reference", o.reference, upd.reference],
+      ["Note", o.note, upd.note],
+    ]);
+    if (!changes.length) return;
+    await tx.update(t.outflows).set(upd).where(eq(t.outflows.id, o.id));
+    const { refs } = await outflowRefs(tx, o);
+    await logChange(tx, { action: "update", area: "sales", entity: { type: "outflow", id: o.id, code: o.code }, summary: `${o.code} corrected`, changes, reason: why, links: refs });
+  });
 }

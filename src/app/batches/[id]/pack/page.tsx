@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { traceBatch } from "@/db/trace";
@@ -9,8 +9,10 @@ import { BatchSteps } from "../../../components/batch-steps";
 import { BatchPackRow } from "../../../components/batch-pack-row";
 import { PackagingTable } from "../../../components/packaging-table";
 import { ConfirmButton, GuardedForm } from "../../../components/unsaved-guard";
-import { deletePack, editPack, recordPack } from "../../pack-actions";
+import { deletePack, editPack, recordPack, restorePack } from "../../pack-actions";
 import { fmtDate } from "../../../components/ui/format";
+import { History, ReasonField } from "../../../components/history";
+import { fmtWhen } from "../../../components/history-format";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +63,12 @@ export default async function PackagingBatchPage({
           })),
       ]
     : [];
+  const deleted = await db()
+    .select({ s: t.packagingSessions, by: t.users.name })
+    .from(t.packagingSessions)
+    .leftJoin(t.users, eq(t.packagingSessions.deletedBy, t.users.id))
+    .where(and(eq(t.packagingSessions.batchId, batch.id), sql`${t.packagingSessions.deletedAt} is not null`))
+    .orderBy(desc(t.packagingSessions.deletedAt));
   const editLot = editing ? tr.jarLots.find((l) => editing.lines.some((x) => x.line.finishedLotId === l.id && l.bestBefore)) : undefined;
 
   return (
@@ -75,7 +83,7 @@ export default async function PackagingBatchPage({
         progress={{ cooked: pending === 0, packed: tr.sessions.length > 0 }}
         actions={
           open && tr.sessions.length > 0 && !editing ? (
-            <Link href={`/batches/${batch.id}/close`} className="btn secondary">
+            <Link href={`/batches/${batch.id}/close`} className="btn secondary edit-only">
               Finished packing: close batch
             </Link>
           ) : undefined
@@ -133,6 +141,7 @@ export default async function PackagingBatchPage({
               <label htmlFor="e-note">Note (optional)</label>
               <input id="e-note" name="note" defaultValue={editing.note ?? ""} />
             </div>
+            <ReasonField id="e-reason" label="Why the correction?" placeholder="e.g. miscounted the rejects" />
             <div className="form-actions">
               <button type="submit">Save changes</button>
               <Link href={`/batches/${batch.id}/pack`} className="btn secondary">
@@ -150,10 +159,7 @@ export default async function PackagingBatchPage({
               kept.
             </p>
             <div className="row">
-              <div style={{ flex: "1 1 260px" }}>
-                <label htmlFor="del-reason">Why? (optional)</label>
-                <input id="del-reason" name="reason" placeholder="e.g. recorded twice" />
-              </div>
+              <ReasonField id="del-reason" placeholder="e.g. recorded twice" />
               <ConfirmButton message={`Delete the packaging session of ${fmtDate(editing.packedOn)}?`} className="danger">
                 Delete session
               </ConfirmButton>
@@ -163,7 +169,7 @@ export default async function PackagingBatchPage({
       )}
 
       {open && !editing && (
-        <>
+        <div className="edit-only">
           <h2 style={tr.sessions.length === 0 ? { marginTop: 0 } : undefined}>
             {tr.sessions.length === 0 ? "Record the jars packed" : "Record another session"}
           </h2>
@@ -196,7 +202,42 @@ export default async function PackagingBatchPage({
               <button type="submit">Save packaging session</button>
             </div>
           </GuardedForm>
-        </>
+        </div>
+      )}
+      {deleted.length > 0 && (
+        <details className="card">
+          <summary>
+            <strong>Deleted sessions</strong> <span className="muted small">· {deleted.length}</span>
+          </summary>
+          <p className="small muted">
+            Kept for traceability. Restoring one puts its figures back: its jars go into stock again and its materials are used again.
+          </p>
+          <ul className="worklist">
+            {deleted.map(({ s, by }) => (
+              <li key={s.id}>
+                <div className="what">
+                  <span className="is-deleted">Packaging of {fmtDate(s.packedOn)}</span>
+                  <div className="sub">
+                    Deleted {fmtWhen(s.deletedAt!)}
+                    {by ? ` by ${by}` : ""}
+                    {s.deletedReason ? `: “${s.deletedReason}”` : ""}
+                  </div>
+                  {editable && (
+                    <form action={restorePack} className="row" style={{ marginTop: 8 }}>
+                      <input type="hidden" name="batchId" value={batch.id} />
+                      <input type="hidden" name="sessionId" value={s.id} />
+                      <input type="hidden" name="key" value={crypto.randomUUID()} />
+                      <ReasonField id={`res-${s.id}`} label="Why restore it?" />
+                      <button type="submit" className="secondary">
+                        Restore
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {!open && (
         <p className="small muted">
@@ -205,6 +246,7 @@ export default async function PackagingBatchPage({
             : "This batch was marked as not made."}
         </p>
       )}
+      <History of={{ type: "batch", id: batch.id }} />
     </>
   );
 }

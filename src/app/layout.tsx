@@ -54,13 +54,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const counts = await navCounts();
   return (
     <html lang="en">
-      <body>
+      <body className={user.role === "viewer" ? "viewer" : undefined}>
         <div className="app">
           <Sidebar
             user={{ name: user.name }}
             counts={counts}
             signOut={
-              <form action={logout}>
+              <form action={logout} className="keep">
                 <button type="submit">Sign out</button>
               </form>
             }

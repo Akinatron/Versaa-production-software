@@ -14,6 +14,9 @@ import { DocList } from "../../../components/documents";
 import { DocUpload } from "../../../components/doc-upload";
 import { TraceFlow } from "../../../components/trace-flow";
 import { lotFlow } from "../../../components/trace-flow-data";
+import { Flash } from "../../../components/flash";
+import { EditedMark, History, ReasonField } from "../../../components/history";
+import { editLot } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +27,15 @@ const KIND: Record<string, string> = {
   bulk: "Bulk sauce",
 };
 
-export default async function LotTracePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LotTracePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const flash = await searchParams;
   const tr = await traceForward(db(), id);
   if (!tr) notFound();
   const { lot, batches, jarLots, destinations, jarsInStock, jarsOut } = tr;
@@ -80,6 +90,8 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           </>
         }
       />
+      <EditedMark of={{ type: "lot", id: lot.id }} />
+      <Flash params={flash} />
 
       {flow && <TraceFlow columns={flow.columns} edges={flow.edges} />}
 
@@ -317,6 +329,27 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           <BatchBackward batchId={lot.batchId} />
         </>
       )}
+      <details className="card edit-only" style={{ marginTop: 32 }}>
+        <summary>Correct the best-before{isMade ? "" : " or supplier batch"}</summary>
+        <form action={editLot} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
+          <input type="hidden" name="lotId" value={lot.id} />
+          {!isMade && (
+            <div>
+              <label htmlFor="l-batch">Supplier batch</label>
+              <input id="l-batch" name="supplierBatch" defaultValue={lot.supplierBatch ?? ""} />
+            </div>
+          )}
+          <div>
+            <label htmlFor="l-bb">Best before</label>
+            <input id="l-bb" name="bestBefore" type="date" defaultValue={lot.bestBefore ?? ""} />
+          </div>
+          <ReasonField id="l-reason" placeholder="e.g. misread the label" />
+          <button type="submit" className="secondary">
+            Save
+          </button>
+        </form>
+      </details>
+      <History of={{ type: "lot", id: lot.id }} />
     </>
   );
 }

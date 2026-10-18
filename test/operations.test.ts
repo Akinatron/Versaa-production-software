@@ -162,7 +162,7 @@ suite("recording operations", () => {
 
   it("cancelling a run releases its reservations", async () => {
     const runs = await db.select().from(t.productionRuns).where(eq(t.productionRuns.status, "confirmed"));
-    await cancelRun(db, runs[0]!.id);
+    await cancelRun(db, runs[0]!.id, "Not needed");
     const stock = await loadStockPositions(db);
     expect(stock[ids["ing-onions"]!]!.reservedEarlier.toString()).toBe("0");
     const input = await loadPlanInput(db, {});

@@ -10,11 +10,12 @@ import { UNITS, formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { PO_STATUS } from "../../components/labels";
 import { MarkSentForm } from "../../components/order-bits";
-import { cancelOrder, closeOrderAction, updateDraftAction } from "../actions";
+import { cancelOrder, closeOrderAction, restoreOrder, updateDraftAction } from "../actions";
+import { EditedMark, History, ReasonField } from "../../components/history";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
-import { documentsFor } from "@/db/documents";
-import { DocList } from "../../components/documents";
+import { documentsFor, removedDocumentsFor } from "@/db/documents";
+import { DocList, RemovedDocs } from "../../components/documents";
 import { DocUpload } from "../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +43,108 @@ export default async function OrderPage({
         .where(inArray(t.receiptLines.purchaseOrderLineId, lineIds))
         .orderBy(t.receipts.receivedOn)
     : [];
-  const deliveries = [...new Map(receipts.map(({ r }) => [r.id, r])).values()];
+  const deliveries = [...new Map(receipts.filter(({ r }) => !r.deletedAt).map(({ r }) => [r.id, r])).values()];
   const docs = await documentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
+  const removedDocs = await removedDocumentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
   const invoices = docs.filter((d) => d.kind === "invoice");
   const open = po.status === "sent" || po.status === "partly_received";
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
+  const editForm = (correcting: boolean) => (
+    <form action={updateDraftAction}>
+      <input type="hidden" name="poId" value={po.id} />
+      {correcting && <input type="hidden" name="correcting" value="1" />}
+      <div className="card scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Price per unit (€)</th>
+              <th className="num">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l, i) => (
+              <tr key={l.line.id}>
+                <td>
+                  {l.item.name}
+                  {l.line.neededQty && (
+                    <div className="small muted">
+                      needed {l.line.neededQty} {u(l.item.stockUnit)}
+                    </div>
+                  )}
+                  <input type="hidden" name={`line_${i}`} value={l.line.id} />
+                </td>
+                <td>
+                  {l.line.packQty ? (
+                    <div
+                      className="row"
+                      style={{
+                        gap: 6,
+                        alignItems: "center",
+                        flexWrap: "nowrap",
+                      }}
+                    >
+                      <input name={`packs_${i}`} type="number" min={0} step={1} defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
+                      <span className="small">
+                        × {l.line.packQty} {u(l.item.stockUnit)}
+                      </span>
+                      <input type="hidden" name={`qty_${i}`} value={l.line.quantity} />
+                    </div>
+                  ) : (
+                    <div
+                      className="row"
+                      style={{
+                        gap: 6,
+                        alignItems: "center",
+                        flexWrap: "nowrap",
+                      }}
+                    >
+                      <input name={`qty_${i}`} type="number" min={0} step="any" defaultValue={l.line.quantity} aria-label="Quantity" />
+                      <span className="small">{u(l.item.stockUnit)}</span>
+                      <input type="hidden" name={`packs_${i}`} value="" />
+                    </div>
+                  )}
+                </td>
+                <td>
+                  <input name={`price_${i}`} type="number" min={0} step="any" defaultValue={l.line.unitPrice ?? ""} aria-label="Price per unit" />
+                </td>
+                <td className="num">{l.line.unitPrice ? money(new Decimal(l.line.quantity).mul(l.line.unitPrice)) : "no price"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="small muted">
+          {correcting
+            ? "A line can't go below what has already arrived. Set a quantity to 0 to remove a line nothing arrived for."
+            : "Set a quantity to 0 to remove the line."}
+        </p>
+      </div>
+      <div className="card grid">
+        <div>
+          <label htmlFor="expectedOn">Expected delivery</label>
+          <input id="expectedOn" name="expectedOn" type="date" defaultValue={po.expectedOn ?? ""} />
+        </div>
+        <div>
+          <label htmlFor="reference">Supplier reference</label>
+          <input id="reference" name="reference" type="text" defaultValue={po.reference ?? ""} />
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label htmlFor="note">Note</label>
+          <textarea id="note" name="note" rows={2} defaultValue={po.note ?? ""} />
+        </div>
+      </div>
+      {correcting && (
+        <div className="card">
+          <ReasonField id="po-reason" label="Why the correction?" placeholder="e.g. supplier changed the price" />
+        </div>
+      )}
+      <div className="form-actions">
+        <button type="submit">{correcting ? "Save correction" : "Save draft"}</button>
+      </div>
+    </form>
+  );
 
   return (
     <>
@@ -73,13 +170,27 @@ export default async function OrderPage({
         }
         actions={
           open ? (
-            <Link href={`/deliveries/new?po=${po.id}`} className="btn">
+            <Link href={`/deliveries/new?po=${po.id}`} className="btn edit-only">
               Record delivery
             </Link>
           ) : undefined
         }
       />
+      <EditedMark of={{ type: "purchase_order", id: po.id }} />
       <Flash params={flash} />
+      {po.status === "cancelled" && (
+        <form action={restoreOrder} className="card row" style={{ alignItems: "flex-end" }}>
+          <input type="hidden" name="poId" value={po.id} />
+          <div style={{ flexBasis: "100%" }}>
+            <strong>This order was cancelled.</strong>
+            <div className="small muted">Restore it to bring it back as {po.orderedOn ? "sent" : "a draft"}.</div>
+          </div>
+          <ReasonField id="po-restore" label="Why restore it?" />
+          <button type="submit" className="secondary">
+            Restore order
+          </button>
+        </form>
+      )}
 
       {po.status === "draft" && (
         <div className="card">
@@ -92,100 +203,7 @@ export default async function OrderPage({
       )}
 
       {po.status === "draft" ? (
-        <form action={updateDraftAction}>
-          <input type="hidden" name="poId" value={po.id} />
-          <div className="card scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Quantity</th>
-                  <th>Price per unit (€)</th>
-                  <th className="num">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l, i) => (
-                  <tr key={l.line.id}>
-                    <td>
-                      {l.item.name}
-                      {l.line.neededQty && (
-                        <div className="small muted">
-                          needed {l.line.neededQty} {u(l.item.stockUnit)}
-                        </div>
-                      )}
-                      <input type="hidden" name={`line_${i}`} value={l.line.id} />
-                    </td>
-                    <td>
-                      {l.line.packQty ? (
-                        <div
-                          className="row"
-                          style={{
-                            gap: 6,
-                            alignItems: "center",
-                            flexWrap: "nowrap",
-                          }}
-                        >
-                          <input
-                            name={`packs_${i}`}
-                            type="number"
-                            min={0}
-                            step={1}
-                            defaultValue={l.line.packs ?? ""}
-                            aria-label="Packs"
-                            style={{ maxWidth: 80 }}
-                          />
-                          <span className="small">
-                            × {l.line.packQty} {u(l.item.stockUnit)}
-                          </span>
-                          <input type="hidden" name={`qty_${i}`} value={l.line.quantity} />
-                        </div>
-                      ) : (
-                        <div
-                          className="row"
-                          style={{
-                            gap: 6,
-                            alignItems: "center",
-                            flexWrap: "nowrap",
-                          }}
-                        >
-                          <input name={`qty_${i}`} type="number" min={0} step="any" defaultValue={l.line.quantity} aria-label="Quantity" />
-                          <span className="small">{u(l.item.stockUnit)}</span>
-                          <input type="hidden" name={`packs_${i}`} value="" />
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <input name={`price_${i}`} type="number" min={0} step="any" defaultValue={l.line.unitPrice ?? ""} aria-label="Price per unit" />
-                    </td>
-                    <td className="num">{l.line.unitPrice ? money(new Decimal(l.line.quantity).mul(l.line.unitPrice)) : "no price"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="small muted">Set a quantity to 0 to remove the line.</p>
-          </div>
-          <div className="card grid">
-            <div>
-              <label htmlFor="expectedOn">Expected delivery</label>
-              <input id="expectedOn" name="expectedOn" type="date" defaultValue={po.expectedOn ?? ""} />
-            </div>
-            <div>
-              <label htmlFor="reference">Supplier reference</label>
-              <input id="reference" name="reference" type="text" defaultValue={po.reference ?? ""} />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="note">Note</label>
-              <textarea id="note" name="note" rows={2} defaultValue={po.note ?? ""} />
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="submit">Save draft</button>
-            <button type="submit" formAction={cancelOrder} className="danger">
-              Cancel order
-            </button>
-          </div>
-        </form>
+        editForm(false)
       ) : (
         <div className="card scroll">
           <table>
@@ -228,6 +246,13 @@ export default async function OrderPage({
           </p>
         </div>
       )}
+      {po.status !== "draft" && po.status !== "cancelled" && (
+        <details className="card edit-only">
+          <summary>Correct this order</summary>
+          <p className="small muted">Change quantities, prices, the expected date or the reference. The change and its reason go in the history.</p>
+          {editForm(true)}
+        </details>
+      )}
       {po.note && po.status !== "draft" && (
         <p className="card small" style={{ whiteSpace: "pre-wrap" }}>
           {po.note}
@@ -267,6 +292,7 @@ export default async function OrderPage({
                 </div>
               );
             })}
+            <RemovedDocs docs={removedDocs} back={back} />
             {deliveries.length === 0 && po.status !== "draft" && (
               <p className="small muted" style={{ margin: "14px 0 0" }}>
                 Delivery notes are added with each delivery.
@@ -296,10 +322,13 @@ export default async function OrderPage({
                   const item = lines.find((l) => l.line.id === rl.purchaseOrderLineId)!.item;
                   const unit = item.stockUnit as UnitCode;
                   return (
-                    <tr key={rl.id}>
+                    <tr key={rl.id} className={r.deletedAt ? "is-deleted" : undefined}>
                       <td>
-                        {fmtDate(r.receivedOn)}
-                        {r.receivedTime && ` ${r.receivedTime}`}
+                        <Link href={`/deliveries/${r.id}`}>
+                          {fmtDate(r.receivedOn)}
+                          {r.receivedTime && ` ${r.receivedTime}`}
+                        </Link>
+                        {r.deletedAt && <span className="badge neutral"> deleted</span>}
                         {r.note && <div className="small muted">{r.note}</div>}
                       </td>
                       <td>{item.name}</td>
@@ -316,37 +345,39 @@ export default async function OrderPage({
         </>
       )}
 
-      {open && (
-        <>
-          <details className="card" style={{ marginTop: 32 }}>
-            <summary>{po.status === "partly_received" ? "Close this order" : "Cancel this order"}</summary>
-            {po.status === "partly_received" ? (
-              <form action={closeOrderAction} className="row">
-                <input type="hidden" name="poId" value={po.id} />
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <label htmlFor="cnote">Why (optional)</label>
-                  <input id="cnote" name="note" type="text" placeholder="e.g. refused sack won't be replaced" />
-                </div>
-                <button type="submit" className="secondary">
-                  Close order
-                </button>
-                <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-                  Closing stops waiting for what hasn't arrived. What arrived stays in stock and on record.
-                </p>
-              </form>
-            ) : (
-              <form action={cancelOrder} className="row">
-                <input type="hidden" name="poId" value={po.id} />
-                <input type="hidden" name="back" value={back} />
-                <button type="submit" className="danger">
-                  Cancel order
-                </button>
-                <span className="small muted">Nothing has arrived yet, so the order can be cancelled.</span>
-              </form>
-            )}
-          </details>
-        </>
+      {(open || po.status === "draft") && (
+        <details className="card edit-only" style={{ marginTop: 32 }}>
+          <summary>{po.status === "partly_received" ? "Close this order" : "Cancel this order"}</summary>
+          {po.status === "partly_received" ? (
+            <form action={closeOrderAction} className="row">
+              <input type="hidden" name="poId" value={po.id} />
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <label htmlFor="cnote">Why (optional)</label>
+                <input id="cnote" name="note" type="text" placeholder="e.g. refused sack won't be replaced" />
+              </div>
+              <button type="submit" className="secondary">
+                Close order
+              </button>
+              <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
+                Closing stops waiting for what hasn&apos;t arrived. What arrived stays in stock and on record.
+              </p>
+            </form>
+          ) : (
+            <form action={cancelOrder} className="row" style={{ alignItems: "flex-end" }}>
+              <input type="hidden" name="poId" value={po.id} />
+              <input type="hidden" name="back" value={back} />
+              <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
+                Nothing has arrived yet, so the order can be cancelled. It stays on record and can be restored.
+              </p>
+              <ReasonField id="po-cancel" optional={po.status === "draft"} placeholder="e.g. found it cheaper elsewhere" />
+              <button type="submit" className="danger">
+                Cancel order
+              </button>
+            </form>
+          )}
+        </details>
       )}
+      <History of={{ type: "purchase_order", id: po.id }} />
     </>
   );
 }

@@ -6,7 +6,17 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { OperationError } from "@/db/base";
-import { addCustomer, cancelSalesOrder, createSalesOrder, deliverSalesOrder, recordOutflow } from "@/db/sales";
+import {
+  addCustomer,
+  cancelSalesOrder,
+  createSalesOrder,
+  deliverSalesOrder,
+  recordOutflow,
+  restoreSalesOrder,
+  setOutflowDeleted,
+  updateOutflow,
+  updateSalesOrder,
+} from "@/db/sales";
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 import { OUTFLOW_REASONS, type OutflowReason } from "../components/labels";
@@ -53,12 +63,17 @@ export async function saveSalesOrder(form: FormData) {
     });
   });
   refresh();
-  redirect(withOk(`/outbound/orders/${r.order.id}`, r.alreadyRecorded ? "That order was already saved." : `Order ${r.order.code} saved. The jars are now promised; stock goes down when you deliver.`));
+  redirect(
+    withOk(
+      `/outbound/orders/${r.order.id}`,
+      r.alreadyRecorded ? "That order was already saved." : `Order ${r.order.code} saved. The jars are now promised; stock goes down when you deliver.`,
+    ),
+  );
 }
 
 export async function cancelOrder(form: FormData) {
   const id = str(form, "orderId");
-  await attempt(`/outbound/orders/${id}`, () => cancelSalesOrder(db(), id));
+  await attempt(`/outbound/orders/${id}`, () => cancelSalesOrder(db(), id, str(form, "reason")));
   refresh();
   redirect(withOk(`/outbound/orders/${id}`, "Order cancelled. Its jars are free again."));
 }
@@ -76,13 +91,16 @@ export async function deliverOrder(form: FormData) {
         if (k.startsWith(prefix) && String(v).trim() !== "") chosen.push({ lotId: k.slice(prefix.length), jars: wholeJars(String(v).trim(), "Lot") });
       }
       const picked = chosen.filter((c) => c.jars > 0);
-      if (!picked.length) throw new OperationError("You chose to pick lots yourself but didn't enter jars for any lot. Enter them, or use earliest best-before first.");
+      if (!picked.length)
+        throw new OperationError("You chose to pick lots yourself but didn't enter jars for any lot. Enter them, or use earliest best-before first.");
       lots[productId] = picked;
     }
     return deliverSalesOrder(db(), { idempotencyKey: str(form, "key"), salesOrderId: id, deliveredOn: str(form, "deliveredOn"), lots });
   });
   refresh();
-  redirect(withOk(`/outbound/orders/${id}`, r.alreadyRecorded ? "That delivery was already recorded." : `Delivered as ${r.outflow.code}. The jars have left stock.`));
+  redirect(
+    withOk(`/outbound/orders/${id}`, r.alreadyRecorded ? "That delivery was already recorded." : `Delivered as ${r.outflow.code}. The jars have left stock.`),
+  );
 }
 
 export async function saveOutflow(form: FormData) {
@@ -102,7 +120,8 @@ export async function saveOutflow(form: FormData) {
       const p = products.find((x) => x.id === l.product);
       if (l.lot) {
         const lot = lotRows.find((x) => x.id === l.lot);
-        if (!lot || !p || lot.itemId !== p.itemId) throw new OperationError(`Lot ${lot?.code ?? ""} is not ${p?.name ?? "that product"}. Pick a lot of the same product, or leave the lot empty.`);
+        if (!lot || !p || lot.itemId !== p.itemId)
+          throw new OperationError(`Lot ${lot?.code ?? ""} is not ${p?.name ?? "that product"}. Pick a lot of the same product, or leave the lot empty.`);
       }
       return { productId: l.product!, jars, unitPrice: isSale ? l.price || null : null, lots: l.lot ? [{ lotId: l.lot, jars }] : undefined };
     });
@@ -120,4 +139,62 @@ export async function saveOutflow(form: FormData) {
   });
   refresh();
   redirect(withOk("/outbound", r.alreadyRecorded ? "That was already recorded." : `Recorded ${r.outflow.code}. The jars have left stock.`));
+}
+
+export async function restoreOrder(form: FormData) {
+  const id = str(form, "orderId");
+  await attempt(`/outbound/orders/${id}`, () => restoreSalesOrder(db(), id, str(form, "reason")));
+  refresh();
+  redirect(withOk(`/outbound/orders/${id}`, "Order restored. Its jars are promised again."));
+}
+
+export async function editOrder(form: FormData) {
+  const id = str(form, "orderId");
+  await attempt(`/outbound/orders/${id}?edit=1`, async () => {
+    const lines = rows(form, ["product", "jars", "price"])
+      .filter((l) => l.product && l.jars !== "")
+      .map((l) => ({ productId: l.product!, jars: wholeJars(l.jars!, "Order line"), unitPrice: l.price || null }))
+      .filter((l) => l.jars > 0);
+    return updateSalesOrder(db(), {
+      salesOrderId: id,
+      reason: str(form, "reason"),
+      customerId: str(form, "customerId") || null,
+      destination: str(form, "destination") || null,
+      reference: str(form, "reference") || null,
+      orderedOn: str(form, "orderedOn"),
+      deliverBy: str(form, "deliverBy") || null,
+      lines,
+    });
+  });
+  refresh();
+  redirect(withOk(`/outbound/orders/${id}`, "Order corrected."));
+}
+
+const outflowPath = (id: string) => `/trace/outflow/${id}`;
+
+export async function editOutflow(form: FormData) {
+  const id = str(form, "outflowId");
+  await attempt(outflowPath(id), () =>
+    updateOutflow(db(), {
+      outflowId: id,
+      reason: str(form, "reason"),
+      occurredOn: str(form, "occurredOn"),
+      customerId: form.has("customerId") ? str(form, "customerId") || null : undefined,
+      destination: form.has("destination") ? str(form, "destination") || null : undefined,
+      reference: form.has("reference") ? str(form, "reference") || null : undefined,
+      note: str(form, "note") || null,
+    }),
+  );
+  refresh();
+  revalidatePath(outflowPath(id));
+  redirect(withOk(outflowPath(id), "Corrected."));
+}
+
+export async function toggleOutflow(form: FormData) {
+  const id = str(form, "outflowId");
+  const deleted = str(form, "deleted") === "1";
+  await attempt(outflowPath(id), () => setOutflowDeleted(db(), { idempotencyKey: str(form, "key"), outflowId: id, deleted, reason: str(form, "reason") }));
+  refresh();
+  revalidatePath(outflowPath(id));
+  redirect(withOk(outflowPath(id), deleted ? "Deleted. The jars are back in stock; the record is kept." : "Restored. The jars have left stock again."));
 }

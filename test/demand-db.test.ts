@@ -37,7 +37,7 @@ suite("plan from sales orders (database)", () => {
   it("orders minus jars coming from confirmed runs; later, cancelled and draft don't count", async () => {
     await createSalesOrder(db, { idempotencyKey: "so-2", destination: "Shop", orderedOn: "2026-10-18", deliverBy: "2026-12-01", lines: [{ productId: ids["Liberiaanse Kip 700 ml"]!, jars: 20 }] });
     const gone = await createSalesOrder(db, { idempotencyKey: "so-3", destination: "Shop", orderedOn: "2026-10-18", lines: [{ productId: ids["Liberiaanse Kip 700 ml"]!, jars: 99 }] });
-    await cancelSalesOrder(db, gone.order.id);
+    await cancelSalesOrder(db, gone.order.id, "Customer cancelled");
 
     const run = await createRun(db, { idempotencyKey: "run-1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 30 } });
     await confirmRun(db, run.id);

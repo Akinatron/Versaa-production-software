@@ -101,7 +101,7 @@ suite("delivery notes and invoices", () => {
     expect(sup.find((s) => s.doc.kind === "invoice")!.poCode).toBe(po.code);
 
     // Removing hides it but keeps the record and the file.
-    await removeDocument(db, note!.id);
+    await removeDocument(db, note!.id, null, "Wrong photo");
     expect(await documentById(db, note!.id)).toBeNull();
     expect(await documentsFor(db, { receiptIds: [r1.receipt.id] })).toHaveLength(0);
     const [kept] = await db.select().from(t.documents).where(eq(t.documents.id, note!.id));

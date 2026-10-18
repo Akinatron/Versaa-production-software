@@ -13,6 +13,7 @@ import { OfferForm, PriceHistory, PriceText } from "../../components/supplier-of
 import { linkAction, setSupplierActiveAction, updateSupplierAction } from "../actions";
 import { loadOrders } from "@/db/purchasing";
 import { PageHeader } from "../../components/ui/header";
+import { History } from "../../components/history";
 import { fmtDate } from "../../components/ui/format";
 import { supplierDocuments } from "@/db/documents";
 import { DocList } from "../../components/documents";
@@ -246,6 +247,7 @@ export default async function SupplierPage({
           {supplier.active ? "Mark as not in use" : "Bring back into use"}
         </button>
       </form>
+      <History of={{ type: "supplier", id }} />
     </>
   );
 }

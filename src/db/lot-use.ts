@@ -143,6 +143,8 @@ export async function applySplit(
     takeReason: string;
     giveReason: string;
     keyPrefix: string;
+    /** The history entry that caused these movements, when it is a correction. */
+    changeId?: string | null;
   },
 ) {
   let i = 0;
@@ -160,6 +162,7 @@ export async function applySplit(
       docId: a.docId,
       reason: diff.gt(0) ? a.takeReason : a.giveReason,
       idempotencyKey: `${a.keyPrefix}:${i++}`,
+      changeId: a.changeId ?? null,
     });
   }
   return i;

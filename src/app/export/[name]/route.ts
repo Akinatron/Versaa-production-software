@@ -63,7 +63,7 @@ const exports: Record<string, Export> = {
         p.name as product, l.code as lot, b.code as batch, ol.jars, ol.unit_price::text as unit_price,
         (ol.jars * ol.unit_price)::text as line_value, o.note
       from outflow_lines ol
-      join outflows o on o.id = ol.outflow_id
+      join outflows o on o.id = ol.outflow_id and o.deleted_at is null
       join products p on p.id = ol.product_id
       join lots l on l.id = ol.lot_id
       left join production_batches b on b.id = l.batch_id

@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <h1>Sign in</h1>
       <p className="lead">Use the email and password your team account was made with.</p>
       <Flash params={params} />
-      <form action={login} className="card">
+      <form action={login} className="card keep">
         <input type="hidden" name="next" value={params.next ?? "/"} />
         <div className="field">
           <label htmlFor="email">Email</label>

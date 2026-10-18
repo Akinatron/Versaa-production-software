@@ -37,7 +37,7 @@ export async function updateSupplierAction(form: FormData) {
 export async function setSupplierActiveAction(form: FormData) {
   const id = str(form, "supplierId");
   const active = str(form, "active") === "1";
-  await setSupplierActive(db(), id, active);
+  await attempt(`/suppliers/${id}`, () => setSupplierActive(db(), id, active));
   refresh();
   redirect(withOk(`/suppliers/${id}`, active ? "Supplier is back in use." : "Supplier marked as not in use. Its history is kept."));
 }

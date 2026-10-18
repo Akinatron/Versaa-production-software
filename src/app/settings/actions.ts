@@ -11,6 +11,8 @@ import {
   activateRecipeDraft,
   addFormat,
   addItem,
+  addRejectFigure,
+  addYieldFigure,
   addProduct,
   addSauce,
   discardPackagingDraft,
@@ -56,12 +58,7 @@ export async function addYieldEstimate(form: FormData) {
   const parsed = yieldForm.safeParse(Object.fromEntries(form));
   if (!parsed.success) redirect(`${path}?error=${encodeURIComponent("Enter litres per batch, more than 0.")}`);
   const data = parsed.data;
-  await db().insert(t.yieldFigures).values({
-    sauceId: data.sauceId,
-    litresPerBatch: String(data.litresPerBatch),
-    source: "estimate",
-    note: data.note || null,
-  });
+  await attempt(path, () => addYieldFigure(db(), { sauceId: data.sauceId, litresPerBatch: data.litresPerBatch, note: data.note || null }));
   refresh();
   redirect(withOk(path, `Estimate of ${data.litresPerBatch} L per batch saved.`));
 }
@@ -77,12 +74,7 @@ export async function addRejectEstimate(form: FormData) {
   const parsed = rejectForm.safeParse(Object.fromEntries(form));
   if (!parsed.success) redirect(`${path}?error=${encodeURIComponent("Enter a reject percentage between 0 and 99.")}`);
   const data = parsed.data;
-  await db().insert(t.rejectFigures).values({
-    productId: data.productId,
-    rate: String(data.percent / 100),
-    source: "estimate",
-    note: data.note || null,
-  });
+  await attempt(path, () => addRejectFigure(db(), { productId: data.productId, percent: data.percent, note: data.note || null }));
   refresh();
   redirect(withOk(path, `Reject estimate of ${data.percent}% saved.`));
 }

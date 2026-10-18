@@ -10,6 +10,7 @@ import { MOVEMENT } from "../../components/labels";
 import { LotOrigin, lotQty } from "../../components/trace-format";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
+import { History } from "../../components/history";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +131,7 @@ export default async function ItemStockPage({
           {lotTable(empty)}
         </details>
       )}
-      <h2>History</h2>
+      <h2>Stock movements</h2>
       <div className="card scroll">
         {history.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
@@ -155,8 +156,8 @@ export default async function ItemStockPage({
                     })}
                   </td>
                   <td>
-                    {m.docType === "outflow" && m.docId ? (
-                      <Link href={`/trace/outflow/${m.docId}`}>{MOVEMENT[m.type] ?? m.type}</Link>
+                    {m.docType && m.docId ? (
+                      <Link href={`/history/open/${m.docType}/${m.docId}`}>{MOVEMENT[m.type] ?? m.type}</Link>
                     ) : (
                       (MOVEMENT[m.type] ?? m.type)
                     )}
@@ -175,6 +176,7 @@ export default async function ItemStockPage({
           </table>
         )}
       </div>
+      <History of={{ type: "item", id: itemId }} />
     </>
   );
 }

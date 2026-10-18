@@ -49,6 +49,7 @@ export async function editPack(form: FormData) {
       packedOn: str(form, "packedOn"),
       bestBefore: str(form, "bestBefore") || null,
       note: str(form, "note") || null,
+      reason: str(form, "reason"),
       lines: jarLines(form),
     }),
   );
@@ -62,4 +63,13 @@ export async function deletePack(form: FormData) {
     changePackaging(db(), { idempotencyKey: str(form, "key"), sessionId, delete: true, reason: str(form, "reason") || null }),
   );
   done(batchId, "Packaging session deleted. Its jars were taken out of stock and its materials put back; the record is kept for traceability.");
+}
+
+export async function restorePack(form: FormData) {
+  const batchId = str(form, "batchId");
+  const sessionId = str(form, "sessionId");
+  await attempt(`/batches/${batchId}/pack`, async () =>
+    changePackaging(db(), { idempotencyKey: str(form, "key"), sessionId, restore: true, reason: str(form, "reason") }),
+  );
+  done(batchId, "Packaging session restored. Its jars are back in stock and its materials were used again.");
 }

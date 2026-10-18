@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { attachDocuments, removeDocument, type DocumentKind } from "@/db/documents";
+import { attachDocuments, removeDocument, restoreDocument, type DocumentKind } from "@/db/documents";
 import { filesFrom } from "./files-from";
 import { currentUser } from "@/lib/session";
 import { attempt, withOk } from "../components/flash";
@@ -43,7 +43,14 @@ export async function uploadDocumentsAction(form: FormData) {
 export async function removeDocumentAction(form: FormData) {
   const back = safeBack(form.get("back"));
   const me = await currentUser();
-  await removeDocument(db(), String(form.get("id") ?? ""), me?.id);
+  await attempt(back, () => removeDocument(db(), String(form.get("id") ?? ""), me?.id, String(form.get("reason") ?? "")));
   revalidatePaperwork();
   redirect(withOk(back, "File removed."));
+}
+
+export async function restoreDocumentAction(form: FormData) {
+  const back = safeBack(form.get("back"));
+  await attempt(back, () => restoreDocument(db(), String(form.get("id") ?? ""), String(form.get("reason") ?? "")));
+  revalidatePaperwork();
+  redirect(withOk(back, "File put back."));
 }

@@ -4,6 +4,10 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
+import { diff, logChange } from "./changes";
+
+export type Role = (typeof t.userRole.enumValues)[number];
+export const ROLE_LABEL: Record<Role, string> = { viewer: "Viewer", editor: "Editor", admin: "Admin" };
 
 /*
  * Team logins: email + password, kept in the app's own database so it works
@@ -41,7 +45,7 @@ export async function countUsers(db: DB) {
 }
 
 /** Add a team member. The very first account can only be made while there are none. */
-export async function createUser(db: DB, input: { email: string; name: string; password: string }, opts: { firstOnly?: boolean } = {}) {
+export async function createUser(db: DB, input: { email: string; name: string; password: string; role?: Role }, opts: { firstOnly?: boolean } = {}) {
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new OperationError("Enter a valid email address.");
@@ -55,20 +59,49 @@ export async function createUser(db: DB, input: { email: string; name: string; p
     }
     const [dup] = await tx.select({ id: t.users.id }).from(t.users).where(eq(t.users.email, email));
     if (dup) throw new OperationError(`${email} already has an account.`);
-    const [user] = await tx.insert(t.users).values({ email, name, passwordHash: await hashPassword(input.password) }).returning();
+    // The first account runs the app; everyone else starts as a viewer unless chosen otherwise.
+    const role: Role = opts.firstOnly ? "admin" : (input.role ?? "viewer");
+    const [user] = await tx.insert(t.users).values({ email, name, role, passwordHash: await hashPassword(input.password) }).returning();
+    if (!opts.firstOnly)
+      await logChange(tx, { action: "create", area: "settings", entity: { type: "user", id: user!.id, code: name }, summary: `Account made for ${name} (${ROLE_LABEL[role]})` });
     return user!;
   });
 }
 
 export async function setUserActive(db: DB, userId: string, active: boolean) {
-  await db.update(t.users).set({ active }).where(eq(t.users.id, userId));
+  const [u] = await db.update(t.users).set({ active }).where(eq(t.users.id, userId)).returning();
   if (!active) await db.delete(t.sessions).where(eq(t.sessions.userId, userId));
+  if (u) await logChange(db, { action: "status", area: "settings", entity: { type: "user", id: u.id, code: u.name }, summary: active ? `${u.name}'s account switched back on` : `${u.name}'s account switched off` });
 }
 
 export async function setPassword(db: DB, userId: string, password: string) {
   checkPassword(password);
-  await db.update(t.users).set({ passwordHash: await hashPassword(password) }).where(eq(t.users.id, userId));
+  const [u] = await db.update(t.users).set({ passwordHash: await hashPassword(password) }).where(eq(t.users.id, userId)).returning();
   await db.delete(t.sessions).where(eq(t.sessions.userId, userId));
+  if (u) await logChange(db, { action: "update", area: "settings", entity: { type: "user", id: u.id, code: u.name }, summary: `${u.name}'s password changed` });
+}
+
+/** Change what a team member may do. There is always at least one admin left. */
+export async function setUserRole(db: DB, userId: string, role: Role) {
+  if (!(t.userRole.enumValues as readonly string[]).includes(role)) throw new OperationError("Choose a role.");
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(4444)`);
+    const [u] = await tx.select().from(t.users).where(eq(t.users.id, userId));
+    if (!u) throw new OperationError("Account not found.");
+    if (u.role === role) return;
+    if (u.role === "admin") {
+      const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(t.users).where(and(eq(t.users.role, "admin"), eq(t.users.active, true)));
+      if ((row?.n ?? 0) <= 1) throw new OperationError("This is the only admin. Make someone else an admin first.");
+    }
+    await tx.update(t.users).set({ role }).where(eq(t.users.id, u.id));
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "user", id: u.id, code: u.name },
+      summary: `${u.name} is now ${ROLE_LABEL[role].toLowerCase() === "admin" ? "an admin" : `a ${ROLE_LABEL[role].toLowerCase()}`}`,
+      changes: diff([["Role", ROLE_LABEL[u.role], ROLE_LABEL[role]]]),
+    });
+  });
 }
 
 /** Check email + password and open a session. Returns the cookie token. */

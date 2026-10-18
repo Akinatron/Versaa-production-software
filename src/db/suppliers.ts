@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
+import { diff, logChange } from "./changes";
 import { favourite, unitPrice, type Offer } from "@/domain/pricing";
 
 /*
@@ -32,15 +33,42 @@ const optDecimal = (v: Decimal.Value | null | undefined, what: string): Decimal 
 export async function updateSupplier(db: DB, supplierId: string, input: { name: string; contact?: string | null; notes?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new OperationError("Supplier name is required.");
-  await db
-    .update(t.suppliers)
-    .set({ name, contact: input.contact?.trim() || null, notes: input.notes?.trim() || null })
-    .where(eq(t.suppliers.id, supplierId));
+  const [before] = await db.select().from(t.suppliers).where(eq(t.suppliers.id, supplierId));
+  if (!before) throw new OperationError("Supplier not found.");
+  const after = { name, contact: input.contact?.trim() || null, notes: input.notes?.trim() || null };
+  const changes = diff([
+    ["Name", before.name, after.name],
+    ["Contact", before.contact, after.contact],
+    ["Notes", before.notes, after.notes],
+  ]);
+  if (!changes.length) return;
+  await db.update(t.suppliers).set(after).where(eq(t.suppliers.id, supplierId));
+  await logChange(db, { action: "update", area: "purchasing", entity: { type: "supplier", id: supplierId, code: name }, summary: `Details of ${name} changed`, changes });
 }
 
 export async function setSupplierActive(db: DB, supplierId: string, active: boolean) {
-  await db.update(t.suppliers).set({ active }).where(eq(t.suppliers.id, supplierId));
+  const [s] = await db.update(t.suppliers).set({ active }).where(eq(t.suppliers.id, supplierId)).returning();
+  if (s)
+    await logChange(db, {
+      action: "status",
+      area: "purchasing",
+      entity: { type: "supplier", id: s.id, code: s.name },
+      summary: active ? `${s.name} back in use` : `${s.name} marked as not in use`,
+    });
 }
+
+async function linkRefs(tx: Exec, supplierId: string, itemId: string) {
+  const [sup] = await tx.select().from(t.suppliers).where(eq(t.suppliers.id, supplierId));
+  const [item] = await tx.select().from(t.items).where(eq(t.items.id, itemId));
+  return { sup, item, links: [{ type: "item" as const, id: itemId, code: item?.name }] };
+}
+
+const offerText = (o: { packQty: Decimal | string | null; packName?: string | null; price: Decimal | string | null } | undefined | null) => {
+  if (!o) return null;
+  const pack = o.packQty != null ? `${o.packName ? `${o.packName} of ` : "pack of "}${new Decimal(o.packQty)}` : null;
+  const price = o.price != null ? `${new Decimal(o.price)} €` : null;
+  return [price, pack ? `per ${pack}` : null].filter(Boolean).join(" ") || null;
+};
 
 // ---------------------------------------------------------------- links and prices
 
@@ -91,6 +119,15 @@ export async function linkSupplierItem(
         .returning() as [typeof link];
     }
     if (offer.packQty !== null || offer.price !== null) await addPriceIfChanged(tx, link.id, offer);
+    const r = await linkRefs(tx, input.supplierId, input.itemId);
+    await logChange(tx, {
+      action: "create",
+      area: "purchasing",
+      entity: { type: "supplier", id: input.supplierId, code: r.sup?.name },
+      summary: `${r.sup?.name ?? "Supplier"} now sells ${r.item?.name ?? "item"}`,
+      changes: diff([["Price", null, offerText(offer)]]),
+      links: r.links,
+    });
     return link;
   });
 }
@@ -138,7 +175,30 @@ export async function setOffer(db: DB, supplierItemId: string, input: OfferInput
         })
         .where(eq(t.supplierItems.id, supplierItemId));
     }
-    return addPriceIfChanged(tx, supplierItemId, offer);
+    const [prev] = await tx
+      .select()
+      .from(t.supplierItemPrices)
+      .where(eq(t.supplierItemPrices.supplierItemId, supplierItemId))
+      .orderBy(sql`${t.supplierItemPrices.createdAt} desc`)
+      .limit(1);
+    const changed = await addPriceIfChanged(tx, supplierItemId, offer);
+    const changes = diff([
+      ["Price", offerText(prev), changed ? offerText(offer) : offerText(prev)],
+      ...(input.supplierCode !== undefined ? [["Supplier code", link.supplierCode, input.supplierCode?.trim() || null] as [string, unknown, unknown]] : []),
+      ...(input.note !== undefined ? [["Note", link.note, input.note?.trim() || null] as [string, unknown, unknown]] : []),
+    ]);
+    if (changes.length) {
+      const r = await linkRefs(tx, link.supplierId, link.itemId);
+      await logChange(tx, {
+        action: "update",
+        area: "purchasing",
+        entity: { type: "supplier", id: link.supplierId, code: r.sup?.name },
+        summary: `${r.item?.name ?? "Item"} from ${r.sup?.name ?? "supplier"} changed`,
+        changes,
+        links: r.links,
+      });
+    }
+    return changed;
   });
 }
 
@@ -149,6 +209,14 @@ export async function unlinkSupplierItem(db: DB, supplierItemId: string) {
     if (!link) throw new OperationError("Supplier link not found.");
     await tx.update(t.supplierItems).set({ active: false }).where(eq(t.supplierItems.id, supplierItemId));
     await renumber(tx, link.itemId);
+    const r = await linkRefs(tx, link.supplierId, link.itemId);
+    await logChange(tx, {
+      action: "delete",
+      area: "purchasing",
+      entity: { type: "supplier", id: link.supplierId, code: r.sup?.name },
+      summary: `${r.sup?.name ?? "Supplier"} no longer sells ${r.item?.name ?? "item"}`,
+      links: r.links,
+    });
   });
 }
 
@@ -170,7 +238,20 @@ export async function moveSupplierRank(db: DB, supplierItemId: string, to: "up" 
     const [link] = await tx.select().from(t.supplierItems).where(eq(t.supplierItems.id, supplierItemId));
     if (!link || !link.active) throw new OperationError("Supplier link not found.");
     await renumber(tx, link.itemId);
-    if (to === "first") return renumber(tx, link.itemId, link.id);
+    const r = await linkRefs(tx, link.supplierId, link.itemId);
+    const log = () =>
+      logChange(tx, {
+        action: "update",
+        area: "purchasing",
+        entity: { type: "item", id: link.itemId, code: r.item?.name },
+        summary: to === "first" ? `${r.sup?.name} made the favourite supplier of ${r.item?.name}` : `${r.sup?.name} moved ${to} in the suppliers of ${r.item?.name}`,
+        links: [{ type: "supplier", id: link.supplierId, code: r.sup?.name }],
+      });
+    if (to === "first") {
+      await renumber(tx, link.itemId, link.id);
+      await log();
+      return;
+    }
     const links = await tx
       .select()
       .from(t.supplierItems)
@@ -181,6 +262,7 @@ export async function moveSupplierRank(db: DB, supplierItemId: string, to: "up" 
     if (j < 0 || j >= links.length) return;
     await tx.update(t.supplierItems).set({ rank: links[j]!.rank }).where(eq(t.supplierItems.id, links[i]!.id));
     await tx.update(t.supplierItems).set({ rank: links[i]!.rank }).where(eq(t.supplierItems.id, links[j]!.id));
+    await log();
   });
 }
 

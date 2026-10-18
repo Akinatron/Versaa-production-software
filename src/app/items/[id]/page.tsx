@@ -10,6 +10,7 @@ import { Flash } from "../../components/flash";
 import { OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
 import { linkAction, moveRankAction } from "../../suppliers/actions";
 import { PageHeader } from "../../components/ui/header";
+import { History } from "../../components/history";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +155,7 @@ export default async function ItemPage({
           </p>
         </form>
       )}
+      <History of={{ type: "item", id }} />
     </>
   );
 }

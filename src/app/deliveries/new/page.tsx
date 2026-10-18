@@ -30,7 +30,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
         .select({
           line: t.purchaseOrderLines,
           item: t.items,
-          received: sql<string>`(select coalesce(sum(quantity), 0) from receipt_lines r where r.purchase_order_line_id = ${t.purchaseOrderLines.id})`,
+          received: sql<string>`(select coalesce(sum(r.quantity), 0) from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null where r.purchase_order_line_id = ${t.purchaseOrderLines.id})`,
         })
         .from(t.purchaseOrderLines)
         .innerJoin(t.items, eq(t.purchaseOrderLines.itemId, t.items.id))

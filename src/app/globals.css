@@ -509,3 +509,28 @@ button.secondary.is-pending::after, button.ghost.is-pending::after, button.dange
   button:active:not(:disabled), .btn:active { translate: none; }
   button.is-pending::after, .btn.is-pending::after { animation-duration: 1.6s; }
 }
+
+/* ---------------------------------------------------------------- history */
+.tabs button { position: relative; isolation: isolate; padding: 6px 12px; border-radius: 6px; color: var(--muted); font-size: 0.875rem; font-weight: 550; background: none; border: 0; box-shadow: none; min-height: 0; cursor: pointer; }
+.tabs button:hover { color: var(--text); background: none; }
+.tabs button.on { color: var(--text); font-weight: 650; background: var(--surface); box-shadow: var(--shadow); }
+.changes { list-style: none; margin: 0; padding: 0; }
+.change { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.change:last-child { border-bottom: 0; }
+.change-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.change-code { font-weight: 600; font-size: 0.9rem; }
+.change-summary { min-width: 0; }
+.change-fields { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.875rem; display: grid; gap: 2px; }
+.change-fields .was { color: var(--muted); }
+.change-meta { margin-top: 4px; }
+.edited-mark { display: inline-block; font-size: 0.8rem; color: var(--muted); }
+.edited-mark:hover { color: var(--text); }
+.deleted-note { border-color: color-mix(in srgb, var(--bad) 35%, var(--border)); background: color-mix(in srgb, var(--bad-bg) 45%, var(--surface)); }
+.is-deleted, tr.is-deleted td { color: var(--muted); text-decoration: line-through; }
+.history-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+.history-filters > div { flex: 0 1 180px; }
+
+/* An account that may only view sees no forms that change anything (the server refuses them too). */
+.viewer form[method="POST" i]:not(.keep), .viewer form[method="post"]:not(.keep), .viewer .edit-only { display: none !important; }
+.doc-remove > summary { list-style: none; cursor: pointer; }
+.doc-remove > summary::-webkit-details-marker { display: none; }

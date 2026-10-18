@@ -23,8 +23,11 @@ const safeNext = (v: FormDataEntryValue | null) => {
 
 export async function login(form: FormData) {
   const next = safeNext(form.get("next"));
-  const { token, expiresAt } = await attempt(`/login?next=${encodeURIComponent(next)}`, () =>
-    signIn(db(), String(form.get("email") ?? ""), String(form.get("password") ?? "")),
+  const { token, expiresAt } = await attempt(
+    `/login?next=${encodeURIComponent(next)}`,
+    () => signIn(db(), String(form.get("email") ?? ""), String(form.get("password") ?? "")),
+    // Anyone may sign in, also over a viewer's session.
+    { role: "viewer" },
   );
   await startSession(token, expiresAt);
   redirect(next);

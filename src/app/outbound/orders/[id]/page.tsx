@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -8,11 +8,12 @@ import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../../../components/flash";
 import { OUTFLOW, SALES_STATUS } from "../../../components/labels";
 import { jars, who } from "../../../components/trace-format";
-import { cancelOrder, deliverOrder } from "../../actions";
-import { fefoPreview, finishedLots, todayIso } from "../../data";
+import { cancelOrder, deliverOrder, editOrder, restoreOrder } from "../../actions";
+import { activeProducts, customerList, fefoPreview, finishedLots, todayIso } from "../../data";
+import { EditedMark, History, ReasonField } from "../../../components/history";
 import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
-import { ConfirmButton } from "../../../components/unsaved-guard";
+import { ConfirmButton, GuardedForm } from "../../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,10 @@ export default async function SalesOrderPage({
     .innerJoin(t.products, eq(t.salesOrderLines.productId, t.products.id))
     .where(eq(t.salesOrderLines.salesOrderId, o.id));
   const status = SALES_STATUS[o.status]!;
-  const [outflow] = await db().select().from(t.outflows).where(eq(t.outflows.salesOrderId, o.id));
+  const [outflow] = await db()
+    .select()
+    .from(t.outflows)
+    .where(and(eq(t.outflows.salesOrderId, o.id), isNull(t.outflows.deletedAt)));
   const outLines = outflow
     ? await db()
         .select({
@@ -60,6 +64,12 @@ export default async function SalesOrderPage({
       name: l.product,
       jars: (need.get(l.l.productId)?.jars ?? 0) + l.l.jars,
     });
+  const [products, customers] = pending ? await Promise.all([activeProducts(), customerList()]) : [[], []];
+  const editRows = [
+    ...lines.map((l) => ({ productId: l.l.productId, jars: String(l.l.jars), price: l.l.unitPrice ?? "" })),
+    { productId: "", jars: "", price: "" },
+    { productId: "", jars: "", price: "" },
+  ];
   const priced = lines.filter((l) => l.l.unitPrice !== null);
   const revenue = priced.reduce((s, l) => s.plus(new Decimal(l.l.unitPrice!).mul(l.l.jars)), new Decimal(0));
 
@@ -72,12 +82,13 @@ export default async function SalesOrderPage({
         lead={`Sales order ${o.code}, ordered ${fmtDate(o.orderedOn)}${o.deliverBy ? `, to deliver by ${fmtDate(o.deliverBy)}` : ""}${o.reference ? `, customer reference ${o.reference}` : ""}.`}
         actions={
           pending ? (
-            <a href="#deliver" className="btn">
+            <a href="#deliver" className="btn edit-only">
               Deliver
             </a>
           ) : null
         }
       />
+      <EditedMark of={{ type: "sales_order", id: o.id }} />
       <Flash params={flash} />
 
       <div className="card scroll">
@@ -111,6 +122,19 @@ export default async function SalesOrderPage({
         <ul className="issues">
           <li className="info">This order was cancelled. Its jars were released and stock never changed.</li>
         </ul>
+      )}
+      {o.status === "cancelled" && (
+        <form action={restoreOrder} className="card row" style={{ alignItems: "flex-end" }}>
+          <input type="hidden" name="orderId" value={o.id} />
+          <div style={{ flexBasis: "100%" }}>
+            <strong>Restore this order?</strong>
+            <div className="small muted">It goes back to waiting for delivery and its jars are promised again.</div>
+          </div>
+          <ReasonField id="so-restore" label="Why restore it?" />
+          <button type="submit" className="secondary">
+            Restore order
+          </button>
+        </form>
       )}
 
       {outflow && (
@@ -147,7 +171,9 @@ export default async function SalesOrderPage({
 
       {pending && (
         <>
-          <h2 id="deliver">Deliver this order</h2>
+          <h2 id="deliver" className="edit-only">
+            Deliver this order
+          </h2>
           <form action={deliverOrder}>
             <input type="hidden" name="key" value={crypto.randomUUID()} />
             <input type="hidden" name="orderId" value={o.id} />
@@ -252,16 +278,94 @@ export default async function SalesOrderPage({
             })}
             <div className="form-actions">
               <ConfirmButton message="Deliver this order now? The jars leave stock and it is recorded as a sale.">Deliver now</ConfirmButton>
-              <span className="small muted">Takes the jars out of stock, releases the hold and records the sale. It can&apos;t be undone from here.</span>
+              <span className="small muted">
+                Takes the jars out of stock, releases the hold and records the sale. If it was a mistake, delete the delivery from its page afterwards.
+              </span>
             </div>
           </form>
-          <details className="card" style={{ marginTop: 32 }}>
-            <summary>Cancel this order</summary>
-            <form action={cancelOrder} className="row" style={{ alignItems: "center" }}>
+          <details className="card edit-only" style={{ marginTop: 32 }} open={flash.edit === "1"}>
+            <summary>Correct this order</summary>
+            <GuardedForm action={editOrder}>
               <input type="hidden" name="orderId" value={o.id} />
-              <span className="small muted" style={{ flex: 1 }}>
-                Cancelling frees the promised jars. Stock doesn&apos;t change because nothing was taken out.
+              <div className="grid" style={{ marginTop: 12 }}>
+                <div>
+                  <label htmlFor="e-customer">Customer</label>
+                  <select id="e-customer" name="customerId" defaultValue={o.customerId ?? ""}>
+                    <option value="">None</option>
+                    {customers
+                      .filter((c) => c.active || c.id === o.customerId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="e-destination">Destination</label>
+                  <input id="e-destination" name="destination" defaultValue={o.destination ?? ""} />
+                </div>
+                <div>
+                  <label htmlFor="e-reference">Customer reference</label>
+                  <input id="e-reference" name="reference" defaultValue={o.reference ?? ""} />
+                </div>
+                <div>
+                  <label htmlFor="e-orderedOn">Order date</label>
+                  <input id="e-orderedOn" name="orderedOn" type="date" required defaultValue={o.orderedOn} />
+                </div>
+                <div>
+                  <label htmlFor="e-deliverBy">Deliver by</label>
+                  <input id="e-deliverBy" name="deliverBy" type="date" defaultValue={o.deliverBy ?? ""} />
+                </div>
+              </div>
+              <div className="scroll" style={{ marginTop: 16 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Jars</th>
+                      <th>Price per jar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editRows.map((r, i) => (
+                      <tr key={i}>
+                        <td>
+                          <select name={`product_${i}`} defaultValue={r.productId} aria-label="Product">
+                            <option value="">Choose…</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input name={`jars_${i}`} type="number" min="0" step="1" inputMode="numeric" defaultValue={r.jars} aria-label="Jars" />
+                        </td>
+                        <td>
+                          <input name={`price_${i}`} type="number" min="0" step="0.01" inputMode="decimal" defaultValue={r.price} aria-label="Price per jar" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="small muted">Set jars to 0 to take a line off. The promised jars are updated to match.</p>
+              </div>
+              <div className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
+                <ReasonField id="so-reason" label="Why the correction?" placeholder="e.g. customer asked for 12 more" />
+                <button type="submit">Save correction</button>
+              </div>
+            </GuardedForm>
+          </details>
+          <details className="card edit-only">
+            <summary>Cancel this order</summary>
+            <form action={cancelOrder} className="row" style={{ alignItems: "flex-end" }}>
+              <input type="hidden" name="orderId" value={o.id} />
+              <span className="small muted" style={{ flexBasis: "100%" }}>
+                Cancelling frees the promised jars. Stock doesn&apos;t change because nothing was taken out. It can be restored.
               </span>
+              <ReasonField id="so-cancel" placeholder="e.g. customer called it off" />
               <button type="submit" className="danger">
                 Cancel order
               </button>
@@ -269,6 +373,7 @@ export default async function SalesOrderPage({
           </details>
         </>
       )}
+      <History of={{ type: "sales_order", id: o.id }} />
     </>
   );
 }

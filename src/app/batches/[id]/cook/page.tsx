@@ -11,6 +11,7 @@ import { BatchSteps } from "../../../components/batch-steps";
 import { recordIngredientsAction } from "../../cook-actions";
 import { IngredientsForm, type IngredientLine } from "./ingredients-form";
 import { fmtDate } from "../../../components/ui/format";
+import { History } from "../../../components/history";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,8 @@ export default async function ProductionBatchPage({
   const tr = await traceBatch(db(), id).catch(() => null);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
-  const open = batch.status !== "closed" && batch.status !== "cancelled";
+  const open = batch.status !== "cancelled";
+  const closed = batch.status === "closed";
 
   const ingredients = await db()
     .select()
@@ -105,6 +107,11 @@ export default async function ProductionBatchPage({
       <Flash params={flash} />
       {open ? (
         <>
+          {closed && (
+            <ul className="issues">
+              <li className="warn">This batch is closed. You can still correct what was used: stock moves by the difference, and the reason goes in the history.</li>
+            </ul>
+          )}
           <p className="muted">
             Planned quantities are filled in. Change any that differ (0 if none was used) and press <strong>Record</strong>.{" "}
             {pending > 0 ? (
@@ -129,8 +136,9 @@ export default async function ProductionBatchPage({
             producedOn={batch.producedOn ?? run.plannedFor}
             lines={lines}
             extras={extras}
+            correcting={closed || lines.some((l) => l.recorded)}
           />
-          {pending === 0 && (
+          {pending === 0 && !closed && (
             <div className="form-actions" style={{ justifyContent: "flex-end" }}>
               <Link href={`/batches/${batch.id}/pack`} className="btn">
                 Next: pack
@@ -141,7 +149,7 @@ export default async function ProductionBatchPage({
       ) : (
         <>
           <p className="small muted">
-            {batch.status === "closed" ? "This batch is closed, so its ingredients can't be changed any more." : "This batch was marked as not made."}{" "}
+            This batch was marked as not made.{" "}
             Production date: {batch.producedOn ? fmtDate(batch.producedOn) : "not recorded"}.
           </p>
           <div className="card scroll">
@@ -168,6 +176,7 @@ export default async function ProductionBatchPage({
           </div>
         </>
       )}
+      <History of={{ type: "batch", id: batch.id }} />
     </>
   );
 }
