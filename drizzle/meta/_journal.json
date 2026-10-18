@@ -50,6 +50,13 @@
       "when": 1792290000000,
       "tag": "0005_suppliers_prices_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792295000000,
+      "tag": "0008_batch_rework",
+      "breakpoints": true
     }
   ]
 }

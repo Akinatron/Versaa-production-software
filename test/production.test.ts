@@ -5,7 +5,7 @@ import type { DB } from "@/db/client";
 import * as t from "@/db/schema";
 import { loadPlanCatalog, loadStockPositions } from "@/db/planning";
 import { addSupplier, confirmRun, createRun, recordOpeningCount, recordReceipt } from "@/db/operations";
-import { closeBatch, recordBatchOutput, recordConsumption, recordIncident, recordPackaging, undoConsumption } from "@/db/production";
+import { closeBatch, recordConsumption, recordIncident, recordPackaging } from "@/db/production";
 import { addCustomer, cancelSalesOrder, createSalesOrder, deliverSalesOrder, finishedAvailability, recordOutflow } from "@/db/sales";
 import { recordStockCount, recordWriteOff } from "@/db/adjustments";
 import { traceBatch, traceForward, traceOutflow, findByCode } from "@/db/trace";
@@ -88,15 +88,21 @@ suite("production, packaging, sales and traceability", () => {
     expect(run!.status).toBe("in_progress");
   });
 
-  it("can't use more than is in stock, and undo puts stock back", async () => {
+  it("can't use more than is in stock; recording again corrects by the difference", async () => {
     await expect(
       recordConsumption(db, { idempotencyKey: "use-garlic-too-much", batchId, itemId: ids["ing-garlic"]!, quantity: "500" }),
     ).rejects.toThrow(/Not enough Garlic/);
+    const garlic = async () => (await loadStockPositions(db))[ids["ing-garlic"]!]!.onHand!.toString();
     await recordConsumption(db, { idempotencyKey: "use-garlic", batchId, itemId: ids["ing-garlic"]!, quantity: "1" });
-    await undoConsumption(db, { idempotencyKey: "undo-garlic", batchId, itemId: ids["ing-garlic"]!, reason: "Typed the wrong amount" });
-    expect((await loadStockPositions(db))[ids["ing-garlic"]!]!.onHand!.toString()).toBe("100");
+    expect(await garlic()).toBe("99");
+    // It was 3, not 1: 2 more from the same lot.
+    await recordConsumption(db, { idempotencyKey: "fix-garlic", batchId, itemId: ids["ing-garlic"]!, quantity: "3" });
+    expect(await garlic()).toBe("97");
+    // None was used after all: everything goes back, and the line stays recorded as 0.
+    await recordConsumption(db, { idempotencyKey: "fix-garlic-2", batchId, itemId: ids["ing-garlic"]!, quantity: "0" });
+    expect(await garlic()).toBe("100");
     const [line] = await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, batchId), eq(t.batchConsumption.itemId, ids["ing-garlic"]!)));
-    expect(line!.confirmedAt).toBeNull();
+    expect(line!.confirmedAt).not.toBeNull();
   });
 
   it("a confirmed zero is different from pending, and a batch can't close with pending lines", async () => {
@@ -111,8 +117,9 @@ suite("production, packaging, sales and traceability", () => {
     expect(garlic.sources).toHaveLength(0);
   });
 
-  it("output becomes a bulk lot; packaging uses materials for every filled jar but only stocks accepted ones", async () => {
-    await recordBatchOutput(db, { idempotencyKey: "out-1", batchId, producedOn: "2026-10-20", litres: "28", kg: "29.4" });
+  it("packaging uses materials for every filled jar but only stocks accepted ones; litres come from the jars", async () => {
+    const [cooked] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.id, batchId));
+    expect(cooked!.status).toBe("awaiting_packaging");
     const big = ids["Liberiaanse Kip 700 ml"]!;
     const small = ids["Liberiaanse Kip 250 ml"]!;
 
@@ -143,22 +150,16 @@ suite("production, packaging, sales and traceability", () => {
     expect(stock[ids["pkg-700-ml-container"]!]!.onHand!.toString()).toBe("470");
     expect(stock[ids["pkg-250-ml-container"]!]!.onHand!.toString()).toBe("480");
 
-    // Bulk: 28 L − (30 × 0.7 + 20 × 0.25) = 2 L left.
+    // Litres: 30 × 0.7 + 20 × 0.25 = 26 L, rejects included. No bulk sauce stock.
     const trace = await traceBatch(db, batchId);
-    expect(trace!.bulk!.balance.toString()).toBe("2");
+    expect(trace!.bulk).toBeNull();
     expect(trace!.filledLitres.toString()).toBe("26");
     expect(trace!.jarsBySize.find((j) => j.productId === big)).toMatchObject({ filled: 30, rejected: 2, accepted: 28 });
-
-    // Can't pack more than the bulk sauce left.
-    await expect(
-      recordPackaging(db, { idempotencyKey: "pack-2", batchId, packedOn: "2026-10-21", lines: [{ productId: big, filled: 5, rejected: 0 }] }),
-    ).rejects.toThrow(/only 2 L/);
   });
 
-  it("closing a batch needs a reason for leftover sauce, then closes the run and releases what's left reserved", async () => {
+  it("closing the last batch closes the run and releases what's left reserved", async () => {
     await recordIncident(db, { batchId, type: "spill", note: "Dropped a tray of lids", occurredOn: "2026-10-21" });
-    await expect(closeBatch(db, { idempotencyKey: "close-1", batchId })).rejects.toThrow(/2 L of bulk sauce is left/);
-    const r = await closeBatch(db, { idempotencyKey: "close-1", batchId, leftoverReason: "Staff tasting and cleaning loss" });
+    const r = await closeBatch(db, { idempotencyKey: "close-1", batchId });
     expect(r.runClosed).toBe(true);
     const [run] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     expect(run!.status).toBe("closed");
@@ -305,7 +306,7 @@ suite("production, packaging, sales and traceability", () => {
     expect(bad.issues[0]!.message).toMatch(/60%/);
   });
 
-  it("an undone extra ingredient goes away, a not-made batch frees its reservation, incidents record once", async () => {
+  it("an extra ingredient is added to the batch, a not-made batch frees its reservation, incidents record once", async () => {
     await db.insert(t.yieldFigures).values({ sauceId: ids["italiaanse-bolognese"]!, litresPerBatch: "30", source: "estimate" });
     const run = await createRun(db, { idempotencyKey: "run-b2", plannedFor: "2026-10-27", targets: { [ids["Italiaanse Bolognese 700 ml"]!]: 50 } });
     await confirmRun(db, run.id);
@@ -319,8 +320,7 @@ suite("production, packaging, sales and traceability", () => {
     await recordConsumption(db, { idempotencyKey: "extra-bay", batchId: b1!.id, itemId: bayLeaf.id, quantity: "0" });
     const [extra] = await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, b1!.id), eq(t.batchConsumption.extra, true)));
     expect(extra!.itemId).toBe(bayLeaf.id);
-    await undoConsumption(db, { idempotencyKey: "undo-extra", batchId: b1!.id, itemId: bayLeaf.id, reason: "Wrong batch" });
-    expect(await db.select().from(t.batchConsumption).where(eq(t.batchConsumption.id, extra!.id))).toHaveLength(0);
+    expect(extra!.confirmedAt).not.toBeNull();
 
     const bolOnion = (await db.select().from(t.batchConsumption).where(and(eq(t.batchConsumption.batchId, b2!.id), eq(t.batchConsumption.itemId, ids["ing-onions"]!))))[0];
     await closeBatch(db, { idempotencyKey: "nm-1", batchId: b2!.id, notMade: true, leftoverReason: "Ran out of time" });

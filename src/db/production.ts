@@ -3,7 +3,8 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, checkWholeUnits, itemsById, today, type Tx } from "./base";
-import { allocate, lotBalance } from "./ledger";
+import { lotBalance } from "./ledger";
+import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor } from "@/domain/codes";
 import type { PlanResult } from "@/domain/planner";
@@ -14,10 +15,13 @@ import type { PlanResult } from "@/domain/planner";
  * - A confirmed run gets one batch per planned batch, each pinned to the
  *   recipe version it follows. Later recipe changes never touch it.
  * - Each recipe line of a batch starts as "pending". Recording it (even as 0)
- *   confirms it and takes the quantity from specific lots.
- * - Measured output becomes a bulk-sauce lot. Packaging takes litres from it,
- *   packaging materials for every filled jar (rejects used materials too),
- *   and adds only accepted jars to a finished lot for this batch and size.
+ *   confirms it and takes the quantity from specific lots. Recording again
+ *   corrects it by the difference.
+ * - A batch's litres are always the jars filled × fill per jar (rejects
+ *   included). There is no bulk sauce stock.
+ * - Packaging uses materials for every filled jar (rejects used materials
+ *   too) and adds only accepted jars to a finished lot for this batch and size.
+ *   Sessions can be edited or deleted; stock moves by the difference.
  * - As stock is used, the run's reservations shrink by the same amount.
  */
 
@@ -136,199 +140,151 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
 
 // ---------------------------------------------------------------- ingredients used
 
-export interface ConsumptionInput {
-  idempotencyKey: string;
-  batchId: string;
+export interface IngredientLineInput {
   itemId: string;
   /** Total used, in the item's stock unit. 0 is a confirmed zero. */
   quantity: Decimal.Value;
-  /** Optional: which lots it came from. Otherwise earliest best-before first. */
+  /** Manual mode: how much came from each lot. Otherwise automatic (earliest best-before first). */
   lots?: { lotId: string; quantity: Decimal.Value }[];
-  occurredOn?: string;
 }
 
-/** Record how much of one ingredient a batch actually used, and from which lots. */
-export async function recordConsumption(db: DB, input: ConsumptionInput) {
-  return db.transaction(async (tx) => {
-    const { batch } = await getBatch(tx, input.batchId);
-    let [line] = await tx
-      .select()
-      .from(t.batchConsumption)
-      .where(and(eq(t.batchConsumption.batchId, batch.id), eq(t.batchConsumption.itemId, input.itemId)));
-    if (line?.recordKey === input.idempotencyKey) return { alreadyRecorded: true };
-    assertOpen(batch);
-
-    const item = (await itemsById(tx, [input.itemId])).get(input.itemId);
-    if (!item || item.kind !== "ingredient") throw new OperationError("Choose an ingredient.");
-    if (line?.confirmedAt) throw new OperationError(`${item.name} is already recorded for ${batch.code}. Undo it first to record it again.`);
-
-    let qty: Decimal;
-    try {
-      qty = new Decimal(input.quantity);
-    } catch {
-      throw new OperationError(`${item.name}: "${input.quantity}" is not a number.`);
-    }
-    if (qty.isNaN() || qty.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
-    checkWholeUnits(item, qty);
-    const chosen = input.lots?.filter((l) => String(l.quantity).trim() !== "" && !new Decimal(l.quantity).isZero());
-    if (chosen && chosen.length > 0) {
-      const sum = chosen.reduce((s, l) => s.plus(l.quantity), D0);
-      if (!sum.eq(qty)) throw new OperationError(`${item.name}: the lots add up to ${sum}, not ${qty}.`);
-    }
-
-    if (!line) {
-      // An ingredient not in the recipe: recorded as an extra.
-      [line] = await tx.insert(t.batchConsumption).values({ batchId: batch.id, itemId: item.id, standardQty: "0", plannedQty: "0", extra: true }).returning();
-    }
-
-    const allocations = await allocate(tx, item, qty, chosen);
-    const on = input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today();
-    let i = 0;
-    for (const a of allocations) {
-      await tx.insert(t.movements).values({
-        lotId: a.lotId,
-        itemId: item.id,
-        quantity: a.quantity.neg().toString(),
-        type: "consumption",
-        occurredAt: new Date(`${on}T12:00:00Z`),
-        docType: "batch_consumption",
-        docId: line!.id,
-        reason: `Used in ${batch.code}`,
-        idempotencyKey: `${input.idempotencyKey}:${i++}`,
-      });
-    }
-    // A confirmed zero has no movements; confirmedAt is what tells it apart from pending.
-    await tx.update(t.batchConsumption).set({ confirmedAt: new Date(), recordKey: input.idempotencyKey }).where(eq(t.batchConsumption.id, line!.id));
-    await markStarted(tx, batch, "in_production");
-    await syncRunReservation(tx, batch.runId, item.id);
-    return { alreadyRecorded: false };
-  });
+function parseQty(name: string, v: Decimal.Value): Decimal {
+  let d: Decimal;
+  try {
+    d = new Decimal(String(v).trim() === "" ? NaN : v);
+  } catch {
+    throw new OperationError(`${name}: "${v}" is not a number.`);
+  }
+  if (d.isNaN()) throw new OperationError(`${name}: enter the quantity used (0 if none was used).`);
+  if (d.lt(0)) throw new OperationError(`${name}: quantity can't be negative.`);
+  return d;
 }
 
-/** Undo a recorded ingredient line: puts the stock back with reversal movements and makes it pending again. */
-export async function undoConsumption(db: DB, input: { idempotencyKey: string; batchId: string; itemId: string; reason: string }) {
-  if (!input.reason.trim()) throw new OperationError("Say why it's being undone.");
-  return db.transaction(async (tx) => {
-    const done = await tx.select({ id: t.movements.id }).from(t.movements).where(sql`${t.movements.idempotencyKey} like ${input.idempotencyKey + ":%"}`);
-    if (done.length > 0) return { alreadyRecorded: true };
-    const { batch } = await getBatch(tx, input.batchId);
-    assertOpen(batch);
-    const [line] = await tx
-      .select()
-      .from(t.batchConsumption)
-      .where(and(eq(t.batchConsumption.batchId, batch.id), eq(t.batchConsumption.itemId, input.itemId)));
-    if (!line?.confirmedAt) throw new OperationError("Nothing recorded to undo.");
-    const moves = await tx
-      .select()
-      .from(t.movements)
-      .where(and(eq(t.movements.docType, "batch_consumption"), eq(t.movements.docId, line.id), sql`${t.movements.reversesMovementId} is null`));
-    const reversed = await tx
-      .select({ id: t.movements.reversesMovementId })
-      .from(t.movements)
-      .where(and(eq(t.movements.docType, "batch_consumption"), eq(t.movements.docId, line.id), sql`${t.movements.reversesMovementId} is not null`));
-    const reversedIds = new Set(reversed.map((r) => r.id));
-    let i = 0;
-    for (const m of moves) {
-      if (reversedIds.has(m.id)) continue;
-      await tx.insert(t.movements).values({
-        lotId: m.lotId,
-        itemId: m.itemId,
-        quantity: new Decimal(m.quantity).neg().toString(),
-        type: "reversal",
-        occurredAt: new Date(),
-        docType: "batch_consumption",
-        docId: line.id,
-        reason: input.reason.trim(),
-        reversesMovementId: m.id,
-        idempotencyKey: `${input.idempotencyKey}:${i++}`,
-      });
-    }
-    if (line.extra) {
-      // An ingredient outside the recipe goes away again once undone. Its
-      // movement and reversal stay in the ledger with the reason.
-      await tx.delete(t.batchConsumption).where(eq(t.batchConsumption.id, line.id));
-    } else {
-      await tx.update(t.batchConsumption).set({ confirmedAt: null, recordKey: null }).where(eq(t.batchConsumption.id, line.id));
-    }
-    await syncRunReservation(tx, batch.runId, input.itemId);
-    return { alreadyRecorded: false };
-  });
+/** Move the batch forward to `next` if it isn't there yet (never backwards). */
+async function advance(tx: Tx, batchId: string, next: (typeof t.batchStatus.enumValues)[number]) {
+  const [b] = await tx.select().from(t.productionBatches).where(eq(t.productionBatches.id, batchId));
+  if (b) await markStarted(tx, b, next);
 }
-
-// ---------------------------------------------------------------- output
 
 /**
- * Record what the batch produced, as measured. Litres become a bulk lot that
- * packaging draws from; kg is kept for reference. Either can be left unknown.
- * Recording again corrects the figure with a new movement (history is kept).
+ * Record the ingredients a batch used, all lines at once ("Record").
+ *
+ * - A pending line is taken from stock for the first time.
+ * - A line already recorded is corrected: only the difference moves
+ *   (2 kg recorded but it was 3 → 1 kg more from the same lot).
+ * - In manual mode the quantity per lot is given and the split is matched.
+ * - A line not in the recipe is added as an extra.
+ * When no line is left pending the batch is cooked and waits for packaging.
  */
-export async function recordBatchOutput(
-  db: DB,
-  input: { idempotencyKey: string; batchId: string; producedOn: string; litres?: string | null; kg?: string | null; note?: string | null },
-) {
-  const litres = input.litres?.trim() ? new Decimal(input.litres) : null;
-  const kg = input.kg?.trim() ? new Decimal(input.kg) : null;
-  if (!litres && !kg) throw new OperationError("Enter the measured litres, kilograms, or both.");
-  if ((litres && (litres.isNaN() || litres.lt(0))) || (kg && (kg.isNaN() || kg.lt(0)))) throw new OperationError("Output can't be negative.");
-  if (!isDate(input.producedOn)) throw new OperationError("Enter the production date.");
-
+export async function recordIngredients(db: DB, input: { idempotencyKey: string; batchId: string; producedOn?: string | null; lines: IngredientLineInput[] }) {
+  if (input.producedOn && !isDate(input.producedOn)) throw new OperationError("Enter the production date.");
   return db.transaction(async (tx) => {
-    const done = await tx.select({ id: t.movements.id }).from(t.movements).where(eq(t.movements.idempotencyKey, input.idempotencyKey));
-    if (done.length > 0) return { alreadyRecorded: true };
-    const { batch, sauce } = await getBatch(tx, input.batchId);
+    const { batch } = await getBatch(tx, input.batchId);
+    const existing = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
+    if (existing.some((l) => l.recordKey === input.idempotencyKey)) return { alreadyRecorded: true, changed: 0 };
     assertOpen(batch);
 
-    let bulkLotId = batch.bulkLotId;
-    if (litres) {
-      const bulkItemId = await ensureBulkItem(tx, sauce);
-      if (!bulkLotId) {
-        const [lot] = await tx
-          .insert(t.lots)
-          .values({ itemId: bulkItemId, code: `${batch.code}-BULK`, receivedOn: input.producedOn, batchId: batch.id })
-          .returning();
-        bulkLotId = lot!.id;
-      }
-      // Bring the bulk lot to: measured litres − litres already packed.
-      const packed = await tx.execute<{ l: string | null }>(sql`
-        select sum(l.filled * l.fill_ml) / 1000.0 as l from packaging_session_lines l
-        join packaging_sessions s on s.id = l.session_id where s.batch_id = ${batch.id}`);
-      const already = new Decimal([...packed][0]?.l ?? 0);
-      if (litres.lt(already)) throw new OperationError(`${already} L has already been packed from this batch, so the output can't be less than that.`);
-      const balance = await lotBalance(tx, bulkLotId);
-      const diff = litres.minus(already).minus(balance);
-      const first = batch.outputLitres === null;
-      await tx.insert(t.movements).values({
-        lotId: bulkLotId,
-        itemId: bulkItemId,
-        quantity: diff.toString(),
-        type: first ? "production_output" : "count_correction",
-        occurredAt: new Date(`${input.producedOn}T12:00:00Z`),
-        docType: "batch",
-        docId: batch.id,
-        reason: first ? `Produced in ${batch.code}` : `Measured output corrected to ${litres} L`,
-        idempotencyKey: input.idempotencyKey,
-      });
+    const seen = new Set<string>();
+    for (const l of input.lines) {
+      if (seen.has(l.itemId)) throw new OperationError("The same ingredient is listed twice.");
+      seen.add(l.itemId);
     }
-    await tx
-      .update(t.productionBatches)
-      .set({
-        producedOn: input.producedOn,
-        outputLitres: litres ? litres.toString() : batch.outputLitres,
-        outputKg: kg ? kg.toString() : batch.outputKg,
-        bulkLotId,
-        note: input.note?.trim() || batch.note,
-      })
-      .where(eq(t.productionBatches.id, batch.id));
-    await markStarted(tx, batch, "awaiting_packaging");
-    return { alreadyRecorded: false };
+    const items = await itemsById(tx, input.lines.map((l) => l.itemId));
+    const byItem = new Map(existing.map((l) => [l.itemId, l]));
+    const used = await usedByDocs(tx, "batch_consumption", existing.map((l) => l.id));
+    const lots = await lotsOf(tx, input.lines.map((l) => l.itemId));
+
+    const errors: string[] = [];
+    const plans: { item: typeof t.items.$inferSelect; line?: typeof t.batchConsumption.$inferSelect; current: LotSplit; target: LotSplit; qty: Decimal }[] = [];
+    for (const l of input.lines) {
+      const item = items.get(l.itemId);
+      try {
+        if (!item || item.kind !== "ingredient") throw new OperationError("Choose an ingredient.");
+        const line = byItem.get(item.id);
+        const current = line ? (used.get(line.id)?.get(item.id) ?? new Map<string, Decimal>()) : new Map<string, Decimal>();
+        const itemLots = lots.filter((x) => x.itemId === item.id);
+        const chosen = l.lots?.filter((x) => String(x.quantity).trim() !== "");
+        let qty: Decimal;
+        let target: LotSplit;
+        if (chosen && chosen.length > 0) {
+          target = new Map();
+          for (const c of chosen) {
+            if (!c.lotId) throw new OperationError(`${item.name}: choose the lot for each quantity.`);
+            const q = parseQty(item.name, c.quantity);
+            if (target.has(c.lotId)) throw new OperationError(`${item.name}: the same lot is chosen twice.`);
+            if (!q.isZero()) target.set(c.lotId, q);
+          }
+          qty = splitTotal(target);
+          if (String(l.quantity).trim() !== "" && !parseQty(item.name, l.quantity).eq(qty)) {
+            throw new OperationError(`${item.name}: the lots add up to ${qty}, not ${l.quantity}.`);
+          }
+          checkManualSplit(item, current, target, itemLots);
+        } else {
+          qty = parseQty(item.name, l.quantity);
+          target = autoSplit(item, current, itemLots, qty);
+        }
+        checkWholeUnits(item, qty);
+        plans.push({ item, line, current, target, qty });
+      } catch (e) {
+        if (e instanceof OperationError) errors.push(e.message);
+        else throw e;
+      }
+    }
+    if (errors.length) throw new OperationError(errors.join(" "));
+
+    const on = input.producedOn || batch.producedOn || today();
+    const at = new Date(`${on}T12:00:00Z`);
+    let changed = 0;
+    for (const p of plans) {
+      let line = p.line;
+      if (!line) {
+        [line] = await tx.insert(t.batchConsumption).values({ batchId: batch.id, itemId: p.item.id, standardQty: "0", plannedQty: "0", extra: true }).returning();
+      }
+      const first = !line!.confirmedAt;
+      const before = splitTotal(p.current);
+      const posted = await applySplit(tx, {
+        itemId: p.item.id,
+        docType: "batch_consumption",
+        docId: line!.id,
+        current: p.current,
+        target: p.target,
+        at,
+        takeReason: first ? `Used in ${batch.code}` : `Corrected in ${batch.code}: ${before} → ${p.qty} ${p.item.stockUnit}`,
+        giveReason: `Corrected in ${batch.code}: ${before} → ${p.qty} ${p.item.stockUnit}`,
+        keyPrefix: `${input.idempotencyKey}:${p.item.id}`,
+      });
+      if (posted || first) changed++;
+      // A confirmed zero has no movements; confirmedAt is what tells it apart from pending.
+      await tx
+        .update(t.batchConsumption)
+        .set({ confirmedAt: line!.confirmedAt ?? new Date(), recordKey: input.idempotencyKey })
+        .where(eq(t.batchConsumption.id, line!.id));
+      await syncRunReservation(tx, batch.runId, p.item.id);
+    }
+    if (input.producedOn && input.producedOn !== batch.producedOn) {
+      await tx.update(t.productionBatches).set({ producedOn: input.producedOn }).where(eq(t.productionBatches.id, batch.id));
+    }
+    await markStarted(tx, batch, "in_production");
+    const [{ pending } = { pending: 0 }] = await tx
+      .select({ pending: sql<number>`count(*)::int` })
+      .from(t.batchConsumption)
+      .where(and(eq(t.batchConsumption.batchId, batch.id), isNull(t.batchConsumption.confirmedAt)));
+    if (pending === 0) await advance(tx, batch.id, "awaiting_packaging");
+    return { alreadyRecorded: false, changed };
   });
 }
 
-export async function ensureBulkItem(tx: Tx, sauce: { code: string; name: string }) {
-  const code = `bulk-${sauce.code}`;
-  await tx.insert(t.items).values({ code, name: `${sauce.name} (bulk, awaiting packaging)`, kind: "bulk", stockUnit: "L" }).onConflictDoNothing({ target: t.items.code });
-  const [row] = await tx.select({ id: t.items.id }).from(t.items).where(eq(t.items.code, code));
-  return row!.id;
+/** Record (or correct) one ingredient line. Same rules as `recordIngredients`. */
+export async function recordConsumption(
+  db: DB,
+  input: { idempotencyKey: string; batchId: string; itemId: string; quantity: Decimal.Value; lots?: { lotId: string; quantity: Decimal.Value }[]; occurredOn?: string },
+) {
+  return recordIngredients(db, {
+    idempotencyKey: input.idempotencyKey,
+    batchId: input.batchId,
+    producedOn: input.occurredOn,
+    lines: [{ itemId: input.itemId, quantity: input.quantity, lots: input.lots }],
+  });
 }
 
 // ---------------------------------------------------------------- packaging
@@ -337,6 +293,80 @@ export interface PackagingLineInput {
   productId: string;
   filled: number;
   rejected: number;
+}
+
+function checkJarNumbers(lines: PackagingLineInput[]) {
+  for (const l of lines) {
+    if (!Number.isInteger(l.filled) || !Number.isInteger(l.rejected) || l.filled < 0 || l.rejected < 0)
+      throw new OperationError("Jars must be whole numbers, 0 or more.");
+    if (l.rejected > l.filled) throw new OperationError("Rejected jars can't be more than jars filled.");
+  }
+}
+
+/**
+ * Products, packaging list versions and materials needed for these jars.
+ * Lines already recorded keep the packaging version they used; new sizes use
+ * the active one. Materials are used for every filled jar, rejects included.
+ */
+async function packagingNeeds(tx: Tx, sauce: { id: string; name: string }, lines: (PackagingLineInput & { packagingVersionId?: string | null })[]) {
+  const productIds = lines.map((l) => l.productId);
+  const productRows = productIds.length
+    ? await tx.select({ product: t.products, format: t.formats }).from(t.products).innerJoin(t.formats, eq(t.products.formatId, t.formats.id)).where(inArray(t.products.id, productIds))
+    : [];
+  const active = productIds.length
+    ? await tx.select().from(t.packagingVersions).where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
+    : [];
+  const versionOf = new Map<string, string>();
+  for (const l of lines) {
+    const p = productRows.find((r) => r.product.id === l.productId);
+    if (!p || p.product.sauceId !== sauce.id) throw new OperationError(`That product isn't ${sauce.name}.`);
+    const v = l.packagingVersionId ?? active.find((x) => x.productId === l.productId)?.id;
+    if (!v) throw new OperationError(`${p.product.name}: no packaging list is set up.`);
+    versionOf.set(l.productId, v);
+  }
+  const versionIds = [...new Set(versionOf.values())];
+  const pkgLines = versionIds.length ? await tx.select().from(t.packagingLines).where(inArray(t.packagingLines.packagingVersionId, versionIds)) : [];
+  const need = new Map<string, Decimal>();
+  for (const l of lines) {
+    for (const pl of pkgLines.filter((x) => x.packagingVersionId === versionOf.get(l.productId))) {
+      need.set(pl.itemId, (need.get(pl.itemId) ?? D0).plus(l.filled * pl.perJar));
+    }
+  }
+  return { productRows, versionOf, need };
+}
+
+/** Plan the material movements for a session going from `used` to `need`. Collects every shortage. */
+async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<string, LotSplit>) {
+  const itemIds = [...new Set([...need.keys(), ...used.keys()])];
+  const items = await itemsById(tx, itemIds);
+  const lots = await lotsOf(tx, itemIds);
+  const errors: string[] = [];
+  const plans: { itemId: string; current: LotSplit; target: LotSplit }[] = [];
+  for (const itemId of itemIds) {
+    const current = used.get(itemId) ?? new Map<string, Decimal>();
+    try {
+      const target = autoSplit(items.get(itemId)!, current, lots.filter((l) => l.itemId === itemId), need.get(itemId) ?? D0);
+      if (!sameSplit(current, target)) plans.push({ itemId, current, target });
+    } catch (e) {
+      if (e instanceof OperationError) errors.push(e.message);
+      else throw e;
+    }
+  }
+  return { plans, errors };
+}
+
+/** The finished lot for this batch and size (one per batch and size), created if needed. */
+async function finishedLot(tx: Tx, batch: { id: string; code: string }, p: { product: typeof t.products.$inferSelect; format: typeof t.formats.$inferSelect }, on: string, bestBefore: string | null) {
+  let [lot] = await tx.select().from(t.lots).where(and(eq(t.lots.batchId, batch.id), eq(t.lots.itemId, p.product.itemId)));
+  if (!lot) {
+    [lot] = await tx
+      .insert(t.lots)
+      .values({ itemId: p.product.itemId, code: `${batch.code}-${p.format.capacityMl}`, batchId: batch.id, receivedOn: on, bestBefore })
+      .returning();
+  } else if (!lot.bestBefore && bestBefore) {
+    await tx.update(t.lots).set({ bestBefore }).where(eq(t.lots.id, lot.id));
+  }
+  return lot!;
 }
 
 /**
@@ -349,13 +379,10 @@ export async function recordPackaging(
   input: { idempotencyKey: string; batchId: string; packedOn: string; bestBefore?: string | null; note?: string | null; lines: PackagingLineInput[] },
 ) {
   if (!isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
+  if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
   const lines = input.lines.filter((l) => l.filled > 0 || l.rejected > 0);
   if (lines.length === 0) throw new OperationError("Enter the jars filled for at least one size.");
-  for (const l of lines) {
-    if (!Number.isInteger(l.filled) || !Number.isInteger(l.rejected) || l.filled < 0 || l.rejected < 0)
-      throw new OperationError("Jars must be whole numbers, 0 or more.");
-    if (l.rejected > l.filled) throw new OperationError("Rejected jars can't be more than jars filled.");
-  }
+  checkJarNumbers(lines);
 
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.packagingSessions).where(eq(t.packagingSessions.idempotencyKey, input.idempotencyKey));
@@ -363,116 +390,219 @@ export async function recordPackaging(
     const { batch, sauce } = await getBatch(tx, input.batchId);
     assertOpen(batch);
 
-    const productRows = await tx
-      .select({ product: t.products, format: t.formats })
-      .from(t.products)
-      .innerJoin(t.formats, eq(t.products.formatId, t.formats.id))
-      .where(inArray(t.products.id, lines.map((l) => l.productId)));
-    const versions = await tx
-      .select()
-      .from(t.packagingVersions)
-      .where(and(inArray(t.packagingVersions.productId, lines.map((l) => l.productId)), eq(t.packagingVersions.status, "active")));
-    const pkgLines = versions.length
-      ? await tx.select().from(t.packagingLines).where(inArray(t.packagingLines.packagingVersionId, versions.map((v) => v.id)))
-      : [];
-
-    // Materials for every filled jar, summed per item.
-    const need = new Map<string, Decimal>();
-    let litres = D0;
-    for (const l of lines) {
-      const p = productRows.find((r) => r.product.id === l.productId);
-      if (!p || p.product.sauceId !== sauce.id) throw new OperationError(`That product isn't ${sauce.name}.`);
-      const v = versions.find((x) => x.productId === l.productId);
-      if (!v) throw new OperationError(`${p.product.name}: no packaging list is set up.`);
-      for (const pl of pkgLines.filter((x) => x.packagingVersionId === v.id)) {
-        need.set(pl.itemId, (need.get(pl.itemId) ?? D0).plus(l.filled * pl.perJar));
-      }
-      litres = litres.plus(new Decimal(l.filled).mul(p.format.fillMl).div(1000));
-    }
+    const { productRows, versionOf, need } = await packagingNeeds(tx, sauce, lines);
+    const { plans, errors } = await planMaterials(tx, need, new Map());
+    if (errors.length) throw new OperationError(errors.join(" "));
 
     const [session] = await tx
       .insert(t.packagingSessions)
       .values({ batchId: batch.id, packedOn: input.packedOn, idempotencyKey: input.idempotencyKey, note: input.note?.trim() || null })
       .returning();
     const at = new Date(`${input.packedOn}T12:00:00Z`);
-    let i = 0;
-    const move = (lotId: string, itemId: string, qty: Decimal, type: "consumption" | "packaging_output", reason: string) =>
-      tx.insert(t.movements).values({
-        lotId,
-        itemId,
-        quantity: qty.toString(),
-        type,
-        occurredAt: at,
+    for (const p of plans) {
+      await applySplit(tx, {
+        ...p,
         docType: "packaging_session",
         docId: session!.id,
-        reason,
-        idempotencyKey: `${input.idempotencyKey}:${i++}`,
+        at,
+        takeReason: `Packed ${batch.code}`,
+        giveReason: `Packed ${batch.code}`,
+        keyPrefix: `${input.idempotencyKey}:${p.itemId}`,
       });
-
-    // Packaging materials.
-    const items = await itemsById(tx, [...need.keys()]);
-    const shortages: string[] = [];
-    const plans: { itemId: string; allocations: Awaited<ReturnType<typeof allocate>> }[] = [];
-    for (const [itemId, qty] of need) {
-      if (qty.isZero()) continue;
-      try {
-        plans.push({ itemId, allocations: await allocate(tx, items.get(itemId)!, qty) });
-      } catch (e) {
-        if (e instanceof OperationError) shortages.push(e.message);
-        else throw e;
-      }
-    }
-    if (shortages.length) throw new OperationError(shortages.join(" "));
-    for (const p of plans) for (const a of p.allocations) await move(a.lotId, p.itemId, a.quantity.neg(), "consumption", `Packed ${batch.code}`);
-
-    // Bulk sauce, when its output was measured in litres.
-    if (batch.bulkLotId) {
-      const balance = await lotBalance(tx, batch.bulkLotId);
-      if (balance.lt(litres)) {
-        throw new OperationError(
-          `These jars hold ${litres} L but only ${balance} L of ${batch.code} is left. Correct the measured output first if it was more.`,
-        );
-      }
-      const [bulk] = await tx.select().from(t.lots).where(eq(t.lots.id, batch.bulkLotId));
-      await move(batch.bulkLotId, bulk!.itemId, litres.neg(), "consumption", `Filled into jars`);
     }
 
     // Accepted jars into a finished lot per batch and size.
+    let i = 0;
     for (const l of lines) {
       const p = productRows.find((r) => r.product.id === l.productId)!;
-      const v = versions.find((x) => x.productId === l.productId)!;
       const accepted = l.filled - l.rejected;
-      let [lot] = await tx.select().from(t.lots).where(and(eq(t.lots.batchId, batch.id), eq(t.lots.itemId, p.product.itemId)));
-      if (!lot) {
-        [lot] = await tx
-          .insert(t.lots)
-          .values({
-            itemId: p.product.itemId,
-            code: `${batch.code}-${p.format.capacityMl}`,
-            batchId: batch.id,
-            receivedOn: input.packedOn,
-            bestBefore: input.bestBefore || null,
-          })
-          .returning();
-      } else if (!lot.bestBefore && input.bestBefore) {
-        await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lot.id));
+      const lot = await finishedLot(tx, batch, p, input.packedOn, input.bestBefore || null);
+      if (accepted > 0) {
+        await tx.insert(t.movements).values({
+          lotId: lot.id,
+          itemId: p.product.itemId,
+          quantity: String(accepted),
+          type: "packaging_output",
+          occurredAt: at,
+          docType: "packaging_session",
+          docId: session!.id,
+          reason: `Packed from ${batch.code}`,
+          idempotencyKey: `${input.idempotencyKey}:jars:${i++}`,
+        });
       }
-      if (accepted > 0) await move(lot!.id, p.product.itemId, new Decimal(accepted), "packaging_output", `Packed from ${batch.code}`);
       await tx.insert(t.packagingSessionLines).values({
         sessionId: session!.id,
         productId: p.product.id,
-        packagingVersionId: v.id,
+        packagingVersionId: versionOf.get(l.productId)!,
         fillMl: p.format.fillMl,
         filled: l.filled,
         rejected: l.rejected,
         accepted,
-        finishedLotId: lot!.id,
+        finishedLotId: lot.id,
       });
     }
 
     await markStarted(tx, batch, "packing");
     for (const itemId of need.keys()) await syncRunReservation(tx, batch.runId, itemId);
     return { session: session!, alreadyRecorded: false };
+  });
+}
+
+type SessionLine = typeof t.packagingSessionLines.$inferSelect;
+
+/** One line per size with the sum of a session's lines (the original plus any corrections). */
+export function netLines(lines: SessionLine[]): SessionLine[] {
+  const out = new Map<string, SessionLine>();
+  for (const l of lines) {
+    const cur = out.get(l.productId);
+    if (!cur) out.set(l.productId, { ...l });
+    else {
+      cur.filled += l.filled;
+      cur.rejected += l.rejected;
+      cur.accepted += l.accepted;
+      cur.finishedLotId ??= l.finishedLotId;
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * Edit or delete a packaging session, also on a closed batch. Nothing is
+ * removed: the stock moves by the difference (materials back to or from
+ * their lots, accepted jars in or out of the finished lot) and a deleted
+ * session is only marked as deleted. If jars from the session have already
+ * left stock and too few are left, it's refused with the reason.
+ */
+export async function changePackaging(
+  db: DB,
+  input: {
+    idempotencyKey: string;
+    sessionId: string;
+    /** Delete the whole session. */
+    delete?: boolean;
+    reason?: string | null;
+    packedOn?: string;
+    bestBefore?: string | null;
+    note?: string | null;
+    lines?: PackagingLineInput[];
+  },
+) {
+  if (!input.delete) {
+    if (!input.packedOn || !isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
+    if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
+    checkJarNumbers(input.lines ?? []);
+  }
+  return db.transaction(async (tx) => {
+    const [session] = await tx.select().from(t.packagingSessions).where(eq(t.packagingSessions.id, input.sessionId));
+    if (!session) throw new OperationError("Packaging session not found.");
+    if (session.changeKey === input.idempotencyKey) return { alreadyRecorded: true, deleted: !!session.deletedAt };
+    if (session.deletedAt) throw new OperationError("This packaging session has already been deleted.");
+    const { batch, sauce } = await getBatch(tx, session.batchId);
+    if (batch.status === "cancelled") throw new OperationError(`${batch.code} was marked as not made.`);
+
+    // The session's current figures per size: original lines plus earlier corrections.
+    const old = netLines(await tx.select().from(t.packagingSessionLines).where(eq(t.packagingSessionLines.sessionId, session.id)));
+    const wanted = new Map((input.delete ? [] : (input.lines ?? [])).map((l) => [l.productId, l]));
+    const lines = [
+      ...old.map((o) => ({ productId: o.productId, filled: wanted.get(o.productId)?.filled ?? 0, rejected: wanted.get(o.productId)?.rejected ?? 0, packagingVersionId: o.packagingVersionId, old: o })),
+      ...[...wanted.values()].filter((w) => !old.some((o) => o.productId === w.productId) && (w.filled > 0 || w.rejected > 0)).map((w) => ({ ...w, packagingVersionId: null, old: null })),
+    ];
+    if (!input.delete && !lines.some((l) => l.filled > 0 || l.rejected > 0)) {
+      throw new OperationError("Enter the jars filled for at least one size, or delete the session.");
+    }
+
+    const { productRows, versionOf, need } = await packagingNeeds(tx, sauce, lines);
+    // Materials used so far by this session (finished jars are handled below).
+    const finishedItems = new Set(productRows.map((r) => r.product.itemId));
+    const usedAll = (await usedByDocs(tx, "packaging_session", [session.id])).get(session.id) ?? new Map<string, LotSplit>();
+    const used = new Map([...usedAll].filter(([itemId]) => !finishedItems.has(itemId)));
+    const { plans, errors } = await planMaterials(tx, need, used);
+
+    // Jars: the finished lot can only give back what is still in it.
+    const jarMoves: { lotId: string; itemId: string; diff: number }[] = [];
+    for (const l of lines) {
+      const p = productRows.find((r) => r.product.id === l.productId)!;
+      const diff = l.filled - l.rejected - (l.old?.accepted ?? 0);
+      if (diff === 0) continue;
+      const lotId = l.old?.finishedLotId ?? null;
+      if (diff < 0 && lotId) {
+        const left = await lotBalance(tx, lotId);
+        if (left.lt(-diff)) {
+          const [lot] = await tx.select().from(t.lots).where(eq(t.lots.id, lotId));
+          errors.push(
+            `${p.product.name}: this would take ${-diff} accepted jar${-diff === 1 ? "" : "s"} back out of stock, but lot ${lot?.code ?? ""} only has ${left} left. ` +
+              `The other jars have already left stock (sold or sent out), so this session can't be ${input.delete ? "deleted" : "lowered that much"}.`,
+          );
+          continue;
+        }
+      }
+      jarMoves.push({ lotId: lotId ?? "", itemId: p.product.itemId, diff });
+    }
+    if (errors.length) throw new OperationError(errors.join(" "));
+
+    const when = session.packedOn;
+    const what = input.delete ? `Packaging of ${when} for ${batch.code} deleted` : `Packaging of ${when} for ${batch.code} corrected`;
+    const at = new Date();
+    for (const p of plans) {
+      await applySplit(tx, {
+        ...p,
+        docType: "packaging_session",
+        docId: session.id,
+        at,
+        takeReason: what,
+        giveReason: what,
+        keyPrefix: `${input.idempotencyKey}:${p.itemId}`,
+      });
+    }
+
+    let i = 0;
+    for (const l of lines) {
+      const p = productRows.find((r) => r.product.id === l.productId)!;
+      const accepted = l.filled - l.rejected;
+      let lotId = l.old?.finishedLotId ?? null;
+      if (!lotId && (l.filled > 0 || l.rejected > 0)) lotId = (await finishedLot(tx, batch, p, input.packedOn ?? when, input.bestBefore || null)).id;
+      const move = jarMoves.find((m) => m.itemId === p.product.itemId);
+      if (move && lotId) {
+        await tx.insert(t.movements).values({
+          lotId,
+          itemId: p.product.itemId,
+          quantity: String(move.diff),
+          type: move.diff > 0 ? "packaging_output" : "reversal",
+          occurredAt: at,
+          docType: "packaging_session",
+          docId: session.id,
+          reason: what,
+          idempotencyKey: `${input.idempotencyKey}:jars:${i++}`,
+        });
+      }
+      const dFilled = l.filled - (l.old?.filled ?? 0);
+      const dRejected = l.rejected - (l.old?.rejected ?? 0);
+      if (dFilled !== 0 || dRejected !== 0) {
+        await tx.insert(t.packagingSessionLines).values({
+          sessionId: session.id,
+          productId: l.productId,
+          packagingVersionId: versionOf.get(l.productId)!,
+          fillMl: l.old?.fillMl ?? p.format.fillMl,
+          filled: dFilled,
+          rejected: dRejected,
+          accepted: dFilled - dRejected,
+          finishedLotId: lotId,
+          changeKey: input.idempotencyKey,
+        });
+      }
+      if (!input.delete && input.bestBefore && lotId && l.filled > 0) await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
+    }
+
+    await tx
+      .update(t.packagingSessions)
+      .set(
+        input.delete
+          ? { deletedAt: at, deletedReason: input.reason?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey }
+          : { packedOn: input.packedOn!, note: input.note?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey },
+      )
+      .where(eq(t.packagingSessions.id, session.id));
+    for (const itemId of new Set([...need.keys(), ...used.keys()])) await syncRunReservation(tx, batch.runId, itemId);
+    return { alreadyRecorded: false, deleted: !!input.delete };
   });
 }
 
@@ -503,9 +633,8 @@ export async function recordIncident(
 
 /**
  * Close a batch. Every ingredient line must be recorded first (a pending
- * line is not the same as zero). Bulk sauce left over is written off with a
- * reason. When every batch of the run is closed, the run closes and any
- * stock still reserved for it is released.
+ * line is not the same as zero). When every batch of the run is closed, the
+ * run closes and any stock still reserved for it is released.
  */
 export async function closeBatch(db: DB, input: { idempotencyKey: string; batchId: string; leftoverReason?: string | null; notMade?: boolean }) {
   return db.transaction(async (tx) => {
@@ -514,12 +643,15 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
     assertOpen(batch);
 
     if (input.notMade) {
-      const sessions = await tx.select({ id: t.packagingSessions.id }).from(t.packagingSessions).where(eq(t.packagingSessions.batchId, batch.id));
+      const sessions = await tx
+        .select({ id: t.packagingSessions.id })
+        .from(t.packagingSessions)
+        .where(and(eq(t.packagingSessions.batchId, batch.id), isNull(t.packagingSessions.deletedAt)));
       const used = await tx
         .select({ id: t.batchConsumption.id })
         .from(t.batchConsumption)
         .where(and(eq(t.batchConsumption.batchId, batch.id), sql`${t.batchConsumption.confirmedAt} is not null`));
-      if (sessions.length || used.length || batch.bulkLotId) throw new OperationError("Something is already recorded for this batch, so it can't be marked as not made.");
+      if (sessions.length || used.length) throw new OperationError("Something is already recorded for this batch, so it can't be marked as not made.");
       await tx
         .update(t.productionBatches)
         .set({ status: "cancelled", closedAt: new Date(), note: input.leftoverReason?.trim() || batch.note })
@@ -539,24 +671,6 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         .innerJoin(t.items, eq(t.batchConsumption.itemId, t.items.id))
         .where(and(eq(t.batchConsumption.batchId, batch.id), isNull(t.batchConsumption.confirmedAt)));
       if (pending.length) throw new OperationError(`Still pending: ${pending.map((p) => p.name).join(", ")}. Record what was used (0 if none) before closing.`);
-      if (batch.bulkLotId) {
-        const left = await lotBalance(tx, batch.bulkLotId);
-        if (left.gt(0)) {
-          if (!input.leftoverReason?.trim()) throw new OperationError(`${left} L of bulk sauce is left. Say what happened to it before closing.`);
-          const [bulk] = await tx.select().from(t.lots).where(eq(t.lots.id, batch.bulkLotId));
-          await tx.insert(t.movements).values({
-            lotId: batch.bulkLotId,
-            itemId: bulk!.itemId,
-            quantity: left.neg().toString(),
-            type: "waste",
-            occurredAt: new Date(),
-            docType: "batch",
-            docId: batch.id,
-            reason: input.leftoverReason.trim(),
-            idempotencyKey: input.idempotencyKey,
-          });
-        }
-      }
       await tx.update(t.productionBatches).set({ status: "closed", closedAt: new Date() }).where(eq(t.productionBatches.id, batch.id));
     }
 

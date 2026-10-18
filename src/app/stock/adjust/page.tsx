@@ -14,7 +14,6 @@ const KINDS = [
   ["ingredient", "Ingredients"],
   ["packaging", "Packaging"],
   ["finished", "Finished jars"],
-  ["bulk", "Bulk sauce"],
 ] as const;
 
 type Item = typeof t.items.$inferSelect;
@@ -102,7 +101,7 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
         <input type="hidden" name="mode" value="count" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Item you counted</label>
-          <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "finished", "bulk"]} />
+          <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "finished"]} />
         </div>
         <button type="submit">Show its lots</button>
       </form>
@@ -191,7 +190,7 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
         <input type="hidden" name="mode" value="writeoff" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Show lots of (optional)</label>
-          <AnyItemSelect items={items} value={item?.kind !== "finished" ? item?.id : undefined} kinds={["ingredient", "packaging", "bulk"]} />
+          <AnyItemSelect items={items} value={item?.kind !== "finished" ? item?.id : undefined} kinds={["ingredient", "packaging"]} />
         </div>
         <button type="submit">Filter</button>
       </form>

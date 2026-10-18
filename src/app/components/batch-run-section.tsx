@@ -19,7 +19,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
   const packed = await db().execute<{ product_id: string; name: string; filled: number; rejected: number; accepted: number }>(sql`
     select l.product_id, p.name, sum(l.filled)::int as filled, sum(l.rejected)::int as rejected, sum(l.accepted)::int as accepted
     from packaging_session_lines l
-    join packaging_sessions s on s.id = l.session_id
+    join packaging_sessions s on s.id = l.session_id and s.deleted_at is null
     join production_batches b on b.id = s.batch_id
     join products p on p.id = l.product_id
     where b.run_id = ${runId}

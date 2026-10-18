@@ -82,10 +82,10 @@ const exports: Record<string, Export> = {
     const rows = await db().execute<Record<string, Cell>>(sql`
       select b.code, s.name as sauce, r.code as run, v.version_no, b.status::text as status, r.planned_for::text as planned_for,
         b.produced_on::text as produced_on, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on,
-        b.output_litres::text as output_litres, b.output_kg::text as output_kg,
-        (select sum(l.filled) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id)::int as filled,
-        (select sum(l.rejected) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id)::int as rejected,
-        (select sum(l.accepted) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id)::int as accepted,
+        (select (sum(l.filled * l.fill_ml) / 1000.0)::text from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null) as litres,
+        (select sum(l.filled) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as filled,
+        (select sum(l.rejected) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as rejected,
+        (select sum(l.accepted) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as accepted,
         b.note
       from production_batches b
       join sauces s on s.id = b.sauce_id
@@ -94,8 +94,8 @@ const exports: Record<string, Export> = {
       ${where}
       order by r.planned_for, b.code`);
     return {
-      header: ["batch", "sauce", "run", "recipe version", "status", "planned for", "produced on", "closed on", "measured litres", "measured kg", "jars filled", "jars rejected", "jars accepted", "note"],
-      rows: [...rows].map((r) => [r.code, r.sauce, r.run, r.version_no, r.status, r.planned_for, r.produced_on, r.closed_on, r.output_litres, r.output_kg, r.filled, r.rejected, r.accepted, r.note]),
+      header: ["batch", "sauce", "run", "recipe version", "status", "planned for", "produced on", "closed on", "litres (jars filled x ml, rejects included)", "jars filled", "jars rejected", "jars accepted", "note"],
+      rows: [...rows].map((r) => [r.code, r.sauce, r.run, r.version_no, r.status, r.planned_for, r.produced_on, r.closed_on, r.litres, r.filled, r.rejected, r.accepted, r.note]),
     };
   },
 };

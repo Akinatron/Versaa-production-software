@@ -11,6 +11,8 @@ const LINKS = [
   ["/", "Home"],
   ["/plan", "Plan"],
   ["/runs", "Runs"],
+  ["/production", "Production"],
+  ["/packaging", "Packaging"],
   ["/batches", "Batches"],
   ["/orders", "Orders"],
   ["/deliveries", "Deliveries"],

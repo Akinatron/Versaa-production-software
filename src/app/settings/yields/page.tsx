@@ -87,12 +87,6 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                         <td>Sellable (accepted jars) average</td>
                         <td className="num">{L(seen.avgSellableLitres)}</td>
                       </tr>
-                      <tr>
-                        <td>Measured after cooking, average</td>
-                        <td className="num">
-                          {L(seen.avgMeasuredLitres)} · {formatQty(seen.avgMeasuredKg, "kg")}
-                        </td>
-                      </tr>
                     </tbody>
                   </table>
                 ) : (

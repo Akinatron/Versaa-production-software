@@ -46,13 +46,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       where o.type <> 'sale' and o.occurred_on between ${from} and ${to}
       group by o.type, p.name
       order by o.type, p.name`),
-    d.execute<{ id: string; code: string; sauce: string; closed_on: string; output_litres: string | null; version_no: number; filled: number; rejected: number; accepted: number }>(sql`
-      select b.id, b.code, s.name as sauce, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, b.output_litres, v.version_no,
+    d.execute<{ id: string; code: string; sauce: string; closed_on: string; litres: string | null; version_no: number; filled: number; rejected: number; accepted: number }>(sql`
+      select b.id, b.code, s.name as sauce, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, (sum(l.filled * l.fill_ml) / 1000.0)::text as litres, v.version_no,
         coalesce(sum(l.filled), 0)::int as filled, coalesce(sum(l.rejected), 0)::int as rejected, coalesce(sum(l.accepted), 0)::int as accepted
       from production_batches b
       join sauces s on s.id = b.sauce_id
       join recipe_versions v on v.id = b.recipe_version_id
-      left join packaging_sessions ps on ps.batch_id = b.id
+      left join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
       left join packaging_session_lines l on l.session_id = ps.id
       where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
       group by b.id, s.name, v.version_no
@@ -60,7 +60,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     d.execute<{ size: string; filled: number; rejected: number; accepted: number }>(sql`
       select f.name as size, sum(l.filled)::int as filled, sum(l.rejected)::int as rejected, sum(l.accepted)::int as accepted
       from production_batches b
-      join packaging_sessions ps on ps.batch_id = b.id
+      join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
       join packaging_session_lines l on l.session_id = ps.id
       join products p on p.id = l.product_id
       join formats f on f.id = p.format_id
@@ -88,7 +88,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         d.execute<{ run_id: string; product_id: string; filled: number; accepted: number }>(sql`
           select b.run_id, l.product_id, sum(l.filled)::int as filled, sum(l.accepted)::int as accepted
           from production_batches b
-          join packaging_sessions ps on ps.batch_id = b.id
+          join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
           join packaging_session_lines l on l.session_id = ps.id
           where b.run_id::text = any(string_to_array(${runIds.join(",")}, ','))
           group by b.run_id, l.product_id`),
@@ -217,7 +217,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <th>Sauce</th>
                   <th>Recipe</th>
                   <th>Closed</th>
-                  <th className="num">Measured output</th>
+                  <th className="num">Litres (from jars)</th>
                   <th className="num">Filled</th>
                   <th className="num">Rejected</th>
                   <th className="num">Accepted</th>
@@ -232,7 +232,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     <td>{b.sauce}</td>
                     <td>v{b.version_no}</td>
                     <td>{b.closed_on}</td>
-                    <td className="num">{b.output_litres ? `${new Decimal(b.output_litres).toString()} L` : "unknown"}</td>
+                    <td className="num">{b.litres ? `${new Decimal(b.litres).toDecimalPlaces(3).toString()} L` : "—"}</td>
                     <td className="num">{b.filled}</td>
                     <td className="num">{b.rejected}</td>
                     <td className="num">{b.accepted}</td>
@@ -394,7 +394,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               ["movements", "Stock movements", "the full ledger: every quantity in or out, with item, lot, reason and document"],
               ["lots", "Lots", "every lot with its origin (supplier or batch) and what is left"],
               ["sales", "Outbound (all stock exits)", "every jar that left stock: reason, date, customer, product, lot, batch, price"],
-              ["batches", "Batches", "every batch with recipe version, dates, measured output and jars"],
+              ["batches", "Batches", "every batch with recipe version, dates, litres (from jars filled) and jars"],
             ].map(([name, title, text]) => (
               <tr key={name}>
                 <td>

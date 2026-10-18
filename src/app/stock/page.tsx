@@ -6,14 +6,13 @@ import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../components/flash";
-import { BATCH_STATUS } from "../components/labels";
 import { jars } from "../components/trace-format";
 
 export const dynamic = "force-dynamic";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, stock, avail, lotCounts, bulk] = await Promise.all([
+  const [catalog, stock, avail, lotCounts] = await Promise.all([
     loadPlanCatalog(db()),
     loadStockPositions(db()),
     finishedAvailability(db()),
@@ -22,13 +21,6 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         (select count(*)::int from lots l where l.item_id = p.item_id
           and (select coalesce(sum(m.quantity), 0) from movements m where m.lot_id = l.id) > 0) as lots
       from products p`),
-    db().execute<{ lot_id: string; lot_code: string; item_id: string; sauce: string; batch_id: string; batch_code: string; status: string; produced_on: string | null; balance: string }>(sql`
-      select l.id as lot_id, l.code as lot_code, l.item_id, s.name as sauce, b.id as batch_id, b.code as batch_code, b.status, b.produced_on::text,
-        (select sum(m.quantity) from movements m where m.lot_id = l.id) as balance
-      from lots l join items i on i.id = l.item_id and i.kind = 'bulk'
-      join production_batches b on b.id = l.batch_id join sauces s on s.id = b.sauce_id
-      where (select coalesce(sum(m.quantity), 0) from movements m where m.lot_id = l.id) > 0
-      order by b.code`),
   ]);
   const lotsByProduct = new Map([...lotCounts].map((r) => [r.product_id, r]));
   const finished = avail.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
@@ -125,42 +117,6 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         )}
       </div>
 
-      <h2>Bulk sauce awaiting packaging</h2>
-      <p className="small muted">Measured output of a batch that hasn&apos;t been put in jars yet, in litres.</p>
-      <div className="card scroll">
-        {bulk.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No bulk sauce waiting.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Batch</th>
-                <th>Sauce</th>
-                <th>Produced</th>
-                <th>Status</th>
-                <th className="num">Left to pack</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...bulk].map((b) => (
-                <tr key={b.lot_id}>
-                  <td>
-                    <Link href={`/batches/${b.batch_id}`}>{b.batch_code}</Link>
-                  </td>
-                  <td>{b.sauce}</td>
-                  <td>{b.produced_on ?? "—"}</td>
-                  <td>
-                    <span className={`badge ${BATCH_STATUS[b.status]?.cls ?? ""}`}>{BATCH_STATUS[b.status]?.label ?? b.status}</span>
-                  </td>
-                  <td className="num">
-                    <Link href={`/stock/${b.item_id}`}>{formatQty(new Decimal(b.balance), "L")}</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </>
   );
 }

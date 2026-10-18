@@ -385,9 +385,10 @@ export const productionBatches = pgTable(
     seq: integer("seq").notNull(),
     status: batchStatus("status").notNull().default("planned"),
     producedOn: date("produced_on"),
-    /** Measured output; either may be unknown. */
+    /** No longer recorded: litres come from the jars filled. Kept for old batches. */
     outputLitres: numeric("output_litres"),
     outputKg: numeric("output_kg"),
+    /** Old batches only: bulk sauce stock was removed in round 1. */
     bulkLotId: uuid("bulk_lot_id").references(() => lots.id),
     note: text("note"),
     closedAt: timestamp("closed_at", { withTimezone: true }),
@@ -425,6 +426,12 @@ export const packagingSessions = pgTable("packaging_sessions", {
   packedOn: date("packed_on").notNull(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   note: text("note"),
+  /** Set when the session is deleted. It stays for traceability; its stock effect is reversed. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedReason: text("deleted_reason"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  /** Idempotency key of the last edit or delete, so a retry doesn't apply it twice. */
+  changeKey: text("change_key"),
   createdAt: createdAt(),
 });
 
@@ -439,6 +446,12 @@ export const packagingSessionLines = pgTable("packaging_session_lines", {
   rejected: integer("rejected").notNull(),
   accepted: integer("accepted").notNull(),
   finishedLotId: uuid("finished_lot_id").references(() => lots.id),
+  /**
+   * Set on correction lines added by an edit or delete of the session: they
+   * hold the difference (can be negative). A session's figures per size are
+   * the sum of its lines.
+   */
+  changeKey: text("change_key"),
 });
 
 export const incidentType = pgEnum("incident_type", ["loss", "spill", "quality", "other"]);

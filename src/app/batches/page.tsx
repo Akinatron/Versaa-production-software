@@ -15,7 +15,7 @@ export default async function BatchesPage() {
       runCode: t.productionRuns.code,
       plannedFor: t.productionRuns.plannedFor,
       pending: sql<number>`(select count(*)::int from batch_consumption c where c.batch_id = ${t.productionBatches.id} and c.confirmed_at is null)`,
-      sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id})`,
+      sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
     })
     .from(t.productionBatches)
     .innerJoin(t.sauces, eq(t.productionBatches.sauceId, t.sauces.id))
@@ -32,8 +32,7 @@ export default async function BatchesPage() {
 
   const todo = (r: (typeof rows)[number]) => {
     const out: string[] = [];
-    if (r.pending > 0) out.push(`${r.pending} ingredient${r.pending === 1 ? "" : "s"} pending`);
-    if (r.batch.outputLitres === null && r.batch.outputKg === null) out.push("output not measured");
+    if (r.pending > 0) out.push(`${r.pending} ingredient${r.pending === 1 ? "" : "s"} not recorded`);
     if (r.sessions === 0) out.push("not packed");
     return out.length ? out.join(" · ") : "ready to close";
   };
@@ -43,7 +42,8 @@ export default async function BatchesPage() {
     <>
       <h1>Batches</h1>
       <p className="lead">
-        One batch is one pot of sauce, created when a production run is confirmed. Open a batch to record the ingredients used, the measured output and the jars packed.
+        One batch is one pot of sauce, created when a production run is confirmed. Ingredients are recorded in <a href="/production">Production</a> and jars in{" "}
+        <a href="/packaging">Packaging</a>; open a batch here for its summary, cost and closing.
       </p>
       {open.length === 0 && (
         <div className="card">
