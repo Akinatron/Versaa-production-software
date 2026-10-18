@@ -48,6 +48,7 @@ export async function saveSalesOrder(form: FormData) {
       destination: str(form, "destination") || null,
       reference: str(form, "reference") || null,
       orderedOn: str(form, "orderedOn"),
+      deliverBy: str(form, "deliverBy") || null,
       lines,
     });
   });

@@ -64,13 +64,16 @@ export interface SalesLineInput {
 /** A pending order: reserves jars so they aren't promised twice. Stock doesn't change yet. */
 export async function createSalesOrder(
   db: DB,
-  input: { idempotencyKey: string; customerId?: string | null; destination?: string | null; reference?: string | null; orderedOn?: string; lines: SalesLineInput[] },
+  input: { idempotencyKey: string; customerId?: string | null; destination?: string | null; reference?: string | null; orderedOn?: string; deliverBy?: string | null; lines: SalesLineInput[] },
 ) {
   const lines = input.lines.filter((l) => l.productId && l.jars !== 0);
   if (!lines.length) throw new OperationError("Add at least one product.");
   for (const l of lines) if (!Number.isInteger(l.jars) || l.jars < 0) throw new OperationError("Jars must be whole numbers.");
   if (!input.customerId && !input.destination?.trim()) throw new OperationError("Choose a customer or write a destination.");
   const orderedOn = input.orderedOn && isDate(input.orderedOn) ? input.orderedOn : today();
+  const deliverBy = input.deliverBy?.trim() || null;
+  if (deliverBy && !isDate(deliverBy)) throw new OperationError("The delivery date isn't a valid date.");
+  if (deliverBy && deliverBy < orderedOn) throw new OperationError("The delivery date can't be before the order date.");
 
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.idempotencyKey, input.idempotencyKey));
@@ -84,6 +87,7 @@ export async function createSalesOrder(
         destination: input.destination?.trim() || null,
         reference: input.reference?.trim() || null,
         orderedOn,
+        deliverBy,
         idempotencyKey: input.idempotencyKey,
       })
       .returning();

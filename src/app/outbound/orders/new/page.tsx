@@ -54,6 +54,11 @@ export default async function NewSalesOrderPage({ searchParams }: { searchParams
             <label htmlFor="orderedOn">Order date (required)</label>
             <input id="orderedOn" name="orderedOn" type="date" required defaultValue={todayIso()} />
           </div>
+          <div>
+            <label htmlFor="deliverBy">Deliver by (optional)</label>
+            <input id="deliverBy" name="deliverBy" type="date" />
+            <div className="small muted">When the customer wants it. Plan production uses it to pick which orders to make jars for.</div>
+          </div>
         </div>
         <div className="card scroll">
           <table>

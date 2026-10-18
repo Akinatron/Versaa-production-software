@@ -69,7 +69,7 @@ export default async function SalesOrderPage({
         back={{ href: "/outbound", label: "Outbound" }}
         title={who(customer, o.destination)}
         status={{ label: status.label, cls: status.cls }}
-        lead={`Sales order ${o.code}, ordered ${fmtDate(o.orderedOn)}${o.reference ? `, customer reference ${o.reference}` : ""}.`}
+        lead={`Sales order ${o.code}, ordered ${fmtDate(o.orderedOn)}${o.deliverBy ? `, to deliver by ${fmtDate(o.deliverBy)}` : ""}${o.reference ? `, customer reference ${o.reference}` : ""}.`}
         actions={
           pending ? (
             <a href="#deliver" className="btn">
