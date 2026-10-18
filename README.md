@@ -14,6 +14,7 @@ Everyone signs in with their own email and password. The first time the app open
 - **Batches** (`/batches`): the batch summary: ingredients used, jars and litres (always jars filled × ml, rejects included), the batch's real cost at the price of the lots it used, incidents, closing, and plan vs actual.
 - **Suppliers** (`/suppliers`) and item cards (`/items/…`): which suppliers sell each ingredient and packaging item, in favourite order, with the price per pack as they sell it (e.g. 12 € per 25 kg sack). The link is one record shown on both cards; changing a price keeps the old one with its date.
 - **Orders** and **Deliveries**: orders start as drafts and "Mark as sent" stores the date they went out. An order can be for a run or a plain restock. Deliveries record, per line, what was accepted (becomes a lot with its supplier batch and best-before) and what was refused, plus damage notes, an optional time and a note. Refused goods count as not received; close the order by hand if they won't be replaced.
+- **Paperwork**: a photo (straight from the phone camera) or PDF of the supplier's delivery note goes with each delivery, added while recording it or later from Deliveries, the order or the lot. The invoice goes with the order, since one invoice can cover several deliveries. Both show on the lot, the order, the supplier card and in the backward trace of a batch. Only JPG, PNG, WEBP, HEIC and PDF files are accepted (checked from the file's contents), up to 20 MB each. Removing a file only hides it; the record and the file are kept.
 - **Stock** (`/stock`): ingredients, packaging and finished jars, per lot with origin and full history. Opening count, count corrections and write-offs (always with a reason).
 - **Outbound** (`/outbound`, formerly Sales): every jar that leaves stock. "Record a stock exit" starts by choosing the reason: Sale, Own use, Test, Sample / gift or Waste / loss. Sales keep customer, price and order (sales orders reserve jars; delivering takes them out once, from specific batch lots). The other reasons only ask for product, lot, jars, date and note. All of them take jars out of stock and stay traceable; only sales count in the sales reports. Old `/sales` links redirect.
 - **Trace** (`/trace`): search any lot, batch, delivery note or supplier batch. Forward: where an ingredient lot went, which jars are still in stock and who received the rest (recall summary). Backward: from a sale or jar lot to the batch, its ingredient lots and suppliers.
@@ -45,6 +46,8 @@ pnpm db:migrate     # create or update tables (run again after every update)
 pnpm db:seed        # load the starting catalog (safe to repeat)
 pnpm dev            # http://localhost:3000, then create the first account
 ```
+
+Uploaded delivery notes and invoices are saved in an `uploads` folder next to the app (set `UPLOADS_DIR` to keep them elsewhere). That folder is not in git; back it up together with the database.
 
 Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty database to also run the database tests; that database is wiped on each run.
 

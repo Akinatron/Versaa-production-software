@@ -9,6 +9,9 @@ import { BatchBackward } from "../../../components/trace-backward";
 import { LotOrigin, batchCodes, jars, lotQty, who } from "../../../components/trace-format";
 import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
+import { lotPaperwork } from "@/db/documents";
+import { DocList } from "../../../components/documents";
+import { DocUpload } from "../../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +62,8 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
       jars: (out.get(k)?.jars ?? 0) + d.jars,
     });
   }
+  const paperwork = await lotPaperwork(db(), lot.id);
+  const back = `/trace/lot/${lot.id}`;
   const sorted = [...destinations].sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : a.code.localeCompare(b.code)));
 
   return (
@@ -91,6 +96,47 @@ export default async function LotTracePage({ params }: { params: Promise<{ id: s
           <strong>{lotQty(lot.balance, lot.unit, lot.itemKind)}</strong>
         </div>
       </div>
+
+      {paperwork && (
+        <div className="card">
+          <div className="paperwork">
+            <div className="head">
+              <strong>
+                Delivery note
+                <span className="muted small" style={{ fontWeight: 400 }}>
+                  {" "}
+                  · delivered {fmtDate(paperwork.receipt.receivedOn, { year: true })}
+                  {paperwork.receipt.deliveryRef && `, no. ${paperwork.receipt.deliveryRef}`}
+                </span>
+              </strong>
+              <DocUpload
+                kind="delivery_note"
+                receiptId={paperwork.receipt.id}
+                back={back}
+                label={paperwork.deliveryNotes.length ? "Add another file" : "Add delivery note"}
+              />
+            </div>
+            {paperwork.deliveryNotes.length === 0 && <span className="small muted">No photo or PDF of the delivery note yet.</span>}
+            <DocList docs={paperwork.deliveryNotes} />
+          </div>
+          {paperwork.order && (
+            <div className="paperwork">
+              <div className="head">
+                <strong>
+                  Invoice
+                  <span className="muted small" style={{ fontWeight: 400 }}>
+                    {" "}
+                    · order <Link href={`/orders/${paperwork.order.id}`}>{paperwork.order.code}</Link>
+                  </span>
+                </strong>
+                <DocUpload kind="invoice" poId={paperwork.order.id} back={back} label={paperwork.invoices.length ? "Add another file" : "Add invoice"} />
+              </div>
+              {paperwork.invoices.length === 0 && <span className="small muted">No invoice yet.</span>}
+              <DocList docs={paperwork.invoices} />
+            </div>
+          )}
+        </div>
+      )}
 
       <h2>Recall summary</h2>
       <div className="card">

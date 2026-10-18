@@ -9,6 +9,7 @@ import { ItemSelect } from "../../components/item-select";
 import { saveDelivery } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { GuardedForm } from "../../components/unsaved-guard";
+import { DocFileInput } from "../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,10 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
           <div>
             <label htmlFor="deliveryRef">Delivery note number (optional)</label>
             <input id="deliveryRef" name="deliveryRef" type="text" />
+          </div>
+          <div>
+            <label htmlFor="docs">Delivery note, photo or PDF (optional)</label>
+            <DocFileInput id="docs" name="docs" />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <label htmlFor="note">Note about the delivery (optional)</label>

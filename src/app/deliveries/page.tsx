@@ -7,6 +7,9 @@ import { formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../components/flash";
 import { PageHeader, Empty } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
+import { documentsFor } from "@/db/documents";
+import { DocList } from "../components/documents";
+import { DocUpload } from "../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,7 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
     .from(t.receiptLines)
     .innerJoin(t.items, eq(t.receiptLines.itemId, t.items.id))
     .leftJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id));
+  const docs = await documentsFor(db(), { receiptIds: receipts.map((r) => r.r.id) });
 
   return (
     <>
@@ -52,8 +56,17 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
                 {r.deliveryRef && ` · note ${r.deliveryRef}`}
               </span>
             </h2>
+            <div className="more">
+              <DocUpload
+                kind="delivery_note"
+                receiptId={r.id}
+                back="/deliveries"
+                label={docs.some((d) => d.receiptId === r.id) ? "Add another file" : "Add delivery note"}
+              />
+            </div>
           </div>
           {r.note && <p className="small muted">{r.note}</p>}
+          <DocList docs={docs.filter((d) => d.receiptId === r.id)} back="/deliveries" />
           <table>
             <thead>
               <tr>

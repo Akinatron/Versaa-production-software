@@ -14,6 +14,8 @@ import { linkAction, setSupplierActiveAction, updateSupplierAction } from "../ac
 import { loadOrders } from "@/db/purchasing";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
+import { supplierDocuments } from "@/db/documents";
+import { DocList } from "../../components/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +52,8 @@ export default async function SupplierPage({
     db(),
     offers.map((o) => o.supplierItemId),
   );
-  const orders = await loadOrders(db(), { ids: recent.map((r) => r.id) });
+  const [orders, paperwork] = await Promise.all([loadOrders(db(), { ids: recent.map((r) => r.id) }), supplierDocuments(db(), id)]);
+  const docInfo = new Map(paperwork.map((p) => [p.doc.id, p]));
   // Linked items may be retired, so look them up separately from the active list.
   const linkedItems = offers.length
     ? await db()
@@ -183,6 +186,35 @@ export default async function SupplierPage({
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <h2>Paperwork</h2>
+      <div className="card">
+        {paperwork.length === 0 ? (
+          <p className="muted small" style={{ margin: 0 }}>
+            No delivery notes or invoices yet. Add them on each delivery and order.
+          </p>
+        ) : (
+          <DocList
+            docs={paperwork.map((p) => p.doc)}
+            showKind
+            extra={(d) => {
+              const p = docInfo.get(d.id)!;
+              if (d.purchaseOrderId)
+                return (
+                  <>
+                    for <Link href={`/orders/${d.purchaseOrderId}`}>{p.poCode}</Link> ·{" "}
+                  </>
+                );
+              return (
+                <>
+                  delivered {fmtDate(p.receivedOn)}
+                  {p.deliveryRef && `, no. ${p.deliveryRef}`} ·{" "}
+                </>
+              );
+            }}
+          />
         )}
       </div>
 

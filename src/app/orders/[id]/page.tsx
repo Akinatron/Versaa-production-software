@@ -13,6 +13,9 @@ import { MarkSentForm } from "../../components/order-bits";
 import { cancelOrder, closeOrderAction, updateDraftAction } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
+import { documentsFor } from "@/db/documents";
+import { DocList } from "../../components/documents";
+import { DocUpload } from "../../components/doc-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +42,9 @@ export default async function OrderPage({
         .where(inArray(t.receiptLines.purchaseOrderLineId, lineIds))
         .orderBy(t.receipts.receivedOn)
     : [];
+  const deliveries = [...new Map(receipts.map(({ r }) => [r.id, r])).values()];
+  const docs = await documentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
+  const invoices = docs.filter((d) => d.kind === "invoice");
   const open = po.status === "sent" || po.status === "partly_received";
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
@@ -226,6 +232,48 @@ export default async function OrderPage({
         <p className="card small" style={{ whiteSpace: "pre-wrap" }}>
           {po.note}
         </p>
+      )}
+
+      {(po.status !== "draft" || docs.length > 0) && (
+        <>
+          <h2>Paperwork</h2>
+          <div className="card">
+            <div className="paperwork">
+              <div className="head">
+                <strong>Invoice</strong>
+                <DocUpload kind="invoice" poId={po.id} back={back} label={invoices.length ? "Add another file" : "Add invoice"} />
+              </div>
+              {invoices.length === 0 && <span className="small muted">No invoice yet. One invoice can cover several deliveries.</span>}
+              <DocList docs={invoices} back={back} />
+            </div>
+            {deliveries.map((r) => {
+              const notes = docs.filter((d) => d.receiptId === r.id);
+              return (
+                <div key={r.id} className="paperwork">
+                  <div className="head">
+                    <strong>
+                      Delivery note, {fmtDate(r.receivedOn)}
+                      {r.deliveryRef && (
+                        <span className="muted small" style={{ fontWeight: 400 }}>
+                          {" "}
+                          · no. {r.deliveryRef}
+                        </span>
+                      )}
+                    </strong>
+                    <DocUpload kind="delivery_note" receiptId={r.id} back={back} label={notes.length ? "Add another file" : "Add delivery note"} />
+                  </div>
+                  {notes.length === 0 && <span className="small muted">No photo or PDF of this delivery note yet.</span>}
+                  <DocList docs={notes} back={back} />
+                </div>
+              );
+            })}
+            {deliveries.length === 0 && po.status !== "draft" && (
+              <p className="small muted" style={{ margin: "14px 0 0" }}>
+                Delivery notes are added with each delivery.
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       {receipts.length > 0 && (

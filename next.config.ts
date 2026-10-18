@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // NEXT_DIST_DIR lets several dev servers run side by side from one checkout.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
+  // Delivery notes and invoices are uploaded as photos or PDFs (up to 50 MB at once).
+  experimental: { serverActions: { bodySizeLimit: "60mb" }, middlewareClientMaxBodySize: "60mb" },
   // "Sales" was renamed "Outbound": keep old links and bookmarks working.
   async redirects() {
     return [

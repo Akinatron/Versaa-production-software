@@ -4,6 +4,7 @@ import { traceBatch, type LotSummary } from "@/db/trace";
 import { BATCH_STATUS } from "./labels";
 import { LotOrigin, lotQty } from "./trace-format";
 import { fmtDate } from "./ui/format";
+import { deliveryNotesForLots } from "@/db/documents";
 
 /** Backward trace of one batch: the ingredient and packaging lots it used, with suppliers. */
 export async function BatchBackward({ batchId, heading = true }: { batchId: string; heading?: boolean }) {
@@ -12,12 +13,25 @@ export async function BatchBackward({ batchId, heading = true }: { batchId: stri
   const st = BATCH_STATUS[b.batch.status];
   // The batch's own bulk sauce shows up as "used" by packaging; it isn't a bought material.
   const materials = b.materials.filter((m) => m.lot.itemKind !== "bulk");
+  const notes = await deliveryNotesForLots(db(), [...b.ingredientUse.flatMap((u) => u.sources.map((s) => s.lot.id)), ...materials.map((m) => m.lot.id)]);
   const lotCell = (lot: LotSummary) => (
     <>
       <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link>
       <div className="small muted">
         <LotOrigin lot={lot} />
         {lot.bestBefore ? ` · best before ${fmtDate(lot.bestBefore, { year: true })}` : ""}
+        {notes.get(lot.id)?.length ? (
+          <>
+            {" · "}
+            {notes.get(lot.id)!.length === 1 ? (
+              <a href={`/documents/${notes.get(lot.id)![0]!.id}`} target="_blank" rel="noopener">
+                delivery note
+              </a>
+            ) : (
+              <Link href={`/trace/lot/${lot.id}`}>delivery note ({notes.get(lot.id)!.length} files)</Link>
+            )}
+          </>
+        ) : null}
       </div>
     </>
   );
