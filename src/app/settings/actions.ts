@@ -23,6 +23,7 @@ import {
   setItemActive,
   setProductActive,
   setSauceActive,
+  setSauceColor,
   startPackagingDraft,
   startRecipeDraft,
 } from "@/db/catalog";
@@ -204,6 +205,12 @@ export async function addSauceAction(form: FormData) {
   redirect(
     withOk("/settings/catalog", `${s.name} added (batch numbers start with ${s.batchPrefix}). Next: add its recipe, a yield estimate and its products.`),
   );
+}
+
+export async function setSauceColorAction(form: FormData) {
+  await attempt("/settings/catalog", () => setSauceColor(db(), str(form, "sauceId"), str(form, "color")));
+  refresh();
+  redirect(withOk("/settings/catalog", "Colour changed."));
 }
 
 export async function setSauceActiveAction(form: FormData) {

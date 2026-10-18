@@ -93,7 +93,7 @@ export default async function ProductionBatchPage({
   return (
     <>
       <style>{css}</style>
-      <BatchSteps batch={batch} sauceName={sauce.name} run={run} current="production" versionNo={recipe.versionNo} />
+      <BatchSteps batch={batch} sauceName={sauce.name} sauceColor={sauce.color} run={run} current="production" versionNo={recipe.versionNo} />
       <Flash params={flash} />
       {open ? (
         <>

@@ -8,6 +8,7 @@ import { formatQty, type UnitCode } from "@/domain/quantity";
 import { RUN_STATUS } from "./components/labels";
 import { PageHeader } from "./components/ui/header";
 import { fmtDate, plural, relDate } from "./components/ui/format";
+import { SauceName } from "./components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
@@ -57,11 +58,12 @@ export default async function Home() {
       code: string;
       status: string;
       sauce: string;
+      sauce_color: string;
       planned_for: string;
       pending: number;
       sessions: number;
     }>(sql`
-      select b.id, b.code, b.status::text, s.name as sauce, r.planned_for::text,
+      select b.id, b.code, b.status::text, s.name as sauce, s.color as sauce_color, r.planned_for::text,
         (select count(*)::int from batch_consumption c where c.batch_id = b.id and c.confirmed_at is null) as pending,
         (select count(*)::int from packaging_sessions ps where ps.batch_id = b.id and ps.deleted_at is null) as sessions
       from production_batches b join sauces s on s.id = b.sauce_id join production_runs r on r.id = b.run_id
@@ -255,7 +257,7 @@ export default async function Home() {
       level: "warn",
       text: (
         <>
-          {b.code} · {b.sauce}
+          {b.code} · <SauceName name={b.sauce} color={b.sauce_color} />
         </>
       ),
       sub: step.why,

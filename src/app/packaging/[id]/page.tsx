@@ -68,6 +68,7 @@ export default async function PackagingBatchPage({
       <BatchSteps
         batch={batch}
         sauceName={sauce.name}
+        sauceColor={sauce.color}
         run={run}
         current="packaging"
         versionNo={recipe.versionNo}

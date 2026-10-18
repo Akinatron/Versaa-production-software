@@ -3,6 +3,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { loadSeedCatalog } from "@/domain/seed-catalog";
 import { batchPrefixFor } from "@/domain/codes";
+import { SAUCE_COLORS } from "@/domain/sauce-colors";
 
 /**
  * Load the starting catalog. Safe to run more than once: anything that
@@ -20,8 +21,13 @@ export async function seedCatalog(db: DB) {
     for (const i of c.items) await upsertItem(i.id, i.name, i.kind, i.stockUnit);
 
     const sauceIds = new Map<string, string>();
+    const byName = [...c.sauces].sort((a, b) => a.name.localeCompare(b.name)).map((s) => s.code);
     for (const s of c.sauces) {
-      await tx.insert(t.sauces).values({ code: s.code, name: s.name, batchPrefix: batchPrefixFor(s.name) }).onConflictDoNothing({ target: t.sauces.code });
+      const color = SAUCE_COLORS[byName.indexOf(s.code) % (SAUCE_COLORS.length - 1)]!.key;
+      await tx
+        .insert(t.sauces)
+        .values({ code: s.code, name: s.name, batchPrefix: batchPrefixFor(s.name), color })
+        .onConflictDoNothing({ target: t.sauces.code });
       const [row] = await tx.select({ id: t.sauces.id }).from(t.sauces).where(eq(t.sauces.code, s.code));
       sauceIds.set(s.code, row!.id);
       const existing = await tx.select().from(t.recipeVersions).where(eq(t.recipeVersions.sauceId, row!.id));

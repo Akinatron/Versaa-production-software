@@ -2,9 +2,11 @@ import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
+import { sauceColorMaps } from "@/db/catalog";
 import type { PlanResult } from "@/domain/planner";
 import { BATCH_STATUS } from "./labels";
 import { createBatches } from "../runs/actions";
+import { SauceName } from "./sauce-name";
 
 /** A batch opens on the page where its next step is recorded. */
 const nextHref = (b: { id: string; status: string }) =>
@@ -21,6 +23,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
     .select({
       batch: t.productionBatches,
       sauce: t.sauces.name,
+      sauceColor: t.sauces.color,
       versionNo: t.recipeVersions.versionNo,
     })
     .from(t.productionBatches)
@@ -56,6 +59,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
       .filter((r) => !frozen?.products.some((p) => p.productId === r.product_id))
       .map((r) => ({ productId: r.product_id, name: r.name, target: null })),
   ];
+  const colors = await sauceColorMaps(db());
   const sauceIds = [...new Set([...(frozen?.sauces ?? []).map((s) => s.sauceId), ...batches.map((b) => b.batch.sauceId)])];
 
   return (
@@ -84,7 +88,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
               </tr>
             </thead>
             <tbody>
-              {batches.map(({ batch, sauce, versionNo }) => {
+              {batches.map(({ batch, sauce, sauceColor, versionNo }) => {
                 const s = BATCH_STATUS[batch.status] ?? {
                   label: batch.status,
                   cls: "",
@@ -96,7 +100,9 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
                         <strong>{batch.code}</strong>
                       </Link>
                     </td>
-                    <td>{sauce}</td>
+                    <td>
+                      <SauceName name={sauce} color={sauceColor} />
+                    </td>
                     <td>v{versionNo}</td>
                     <td>
                       <span className={`badge ${s.cls}`}>{s.label}</span>
@@ -134,7 +140,9 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
                   const n = (f: (st: string) => boolean) => mine.filter((b) => f(b.batch.status)).length;
                   return (
                     <tr key={sid}>
-                      <td>{line?.name ?? mine[0]?.sauce}</td>
+                      <td>
+                        <SauceName name={line?.name ?? mine[0]?.sauce ?? ""} color={colors.bySauce.get(sid)} />
+                      </td>
                       <td className="num">{line?.batches ?? "unknown"}</td>
                       <td className="num">{n((s) => s === "closed")}</td>
                       <td className="num">{n((s) => s !== "closed" && s !== "cancelled")}</td>
@@ -165,7 +173,9 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
                   const diff = p.target === null ? null : accepted - p.target;
                   return (
                     <tr key={p.productId}>
-                      <td>{p.name}</td>
+                      <td>
+                        <SauceName name={p.name} color={colors.byProduct.get(p.productId)} />
+                      </td>
                       <td className="num">{p.target ?? "—"}</td>
                       <td className="num">
                         <strong>{accepted}</strong>

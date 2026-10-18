@@ -10,13 +10,15 @@ import { PageHeader, Empty } from "../components/ui/header";
 import { fmtDate, relDate } from "../components/ui/format";
 import { ConfirmButton } from "../components/unsaved-guard";
 import { cancelOrder } from "./actions";
+import { sauceColorMaps } from "@/db/catalog";
+import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
 
 export default async function OutboundPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const reason = (OUTFLOW_REASONS as readonly string[]).includes(params.reason ?? "") ? (params.reason as (typeof OUTFLOW_REASONS)[number]) : null;
-  const [avail, pending, outflows] = await Promise.all([
+  const [avail, pending, outflows, colors] = await Promise.all([
     finishedAvailability(db()),
     db()
       .select({ o: t.salesOrders, customer: t.customers.name })
@@ -35,6 +37,7 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
       .where(reason ? eq(t.outflows.type, reason) : undefined)
       .orderBy(desc(t.outflows.occurredOn), desc(t.outflows.createdAt))
       .limit(40),
+    sauceColorMaps(db()),
   ]);
   const lines = pending.length
     ? await db()
@@ -182,7 +185,9 @@ export default async function OutboundPage({ searchParams }: { searchParams: Pro
                 <tbody>
                   {shown.map((a) => (
                     <tr key={a.productId}>
-                      <td>{a.name}</td>
+                      <td>
+                        <SauceName name={a.name} color={colors.byProduct.get(a.productId)} />
+                      </td>
                       <td className="num">{jars(a.onHand)}</td>
                       <td className="num">{jars(a.reserved)}</td>
                       <td className="num">

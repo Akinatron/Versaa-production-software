@@ -4,6 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
 import { batchPrefixFor } from "@/domain/codes";
+import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
 
@@ -204,8 +205,14 @@ export async function addSauce(db: DB, input: { name: string; batchPrefix?: stri
   if (!name) throw new OperationError("Name is required.");
   const code = await uniqueCode(db, slug(name), t.sauces);
   const prefix = (input.batchPrefix?.trim() || batchPrefixFor(name)).toUpperCase().slice(0, 5);
-  const [row] = await db.insert(t.sauces).values({ code, name, batchPrefix: prefix }).returning();
+  const used = (await db.select({ color: t.sauces.color }).from(t.sauces)).map((r) => r.color);
+  const [row] = await db.insert(t.sauces).values({ code, name, batchPrefix: prefix, color: nextSauceColor(used) }).returning();
   return row!;
+}
+
+export async function setSauceColor(db: DB, sauceId: string, color: string) {
+  if (!isSauceColor(color)) throw new OperationError("Choose one of the listed colours.");
+  await db.update(t.sauces).set({ color }).where(eq(t.sauces.id, sauceId));
 }
 
 export async function setSauceActive(db: DB, sauceId: string, active: boolean) {
@@ -257,4 +264,19 @@ export async function addProduct(db: DB, input: { sauceId: string; formatId: str
 
 export async function setProductActive(db: DB, productId: string, active: boolean) {
   await db.update(t.products).set({ active }).where(eq(t.products.id, productId));
+}
+
+/** Colour of every sauce, by sauce id and by product id, for showing the sauce dot next to names. */
+export async function sauceColorMaps(db: DB) {
+  const rows = await db
+    .select({ sauceId: t.sauces.id, color: t.sauces.color, productId: t.products.id })
+    .from(t.sauces)
+    .leftJoin(t.products, eq(t.products.sauceId, t.sauces.id));
+  const bySauce = new Map<string, string>();
+  const byProduct = new Map<string, string>();
+  for (const r of rows) {
+    bySauce.set(r.sauceId, r.color);
+    if (r.productId) byProduct.set(r.productId, r.color);
+  }
+  return { bySauce, byProduct };
 }
