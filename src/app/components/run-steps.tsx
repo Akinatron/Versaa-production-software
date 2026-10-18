@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { RUN_STATUS } from "./labels";
 import { PageHeader, Steps } from "./ui/header";
-import { fmtDate } from "./ui/format";
+import { dayOf, fmtDate } from "./ui/format";
 
 export type RunStep = "run" | "stock" | "order" | "receive";
 
@@ -31,7 +31,11 @@ export function RunHeader({ run, step, actions }: { run: typeof t.productionRuns
         back={{ href: "/runs", label: "Runs" }}
         title={run.code}
         status={status}
-        lead={<>Production on {fmtDate(run.plannedFor, { weekday: true })}</>}
+        lead={
+          <>
+            Production on {fmtDate(run.plannedFor, { weekday: true })} · created {fmtDate(dayOf(run.createdAt), { weekday: true })}
+          </>
+        }
         actions={actions}
       />
       <Steps

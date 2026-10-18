@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { describePrice, money, unitPrice, type Offer } from "@/domain/pricing";
 import { UNITS, type UnitCode } from "@/domain/quantity";
-import { setOfferAction, unlinkAction } from "../suppliers/actions";
+import { linkAction, moveRankAction, setOfferAction, unlinkAction } from "../suppliers/actions";
 import { fmtDate } from "./ui/format";
 
 /** Edit one supplier ↔ item link: pack size, pack name and price. Used on both cards. */
@@ -14,7 +14,7 @@ export function OfferForm({ offer, unit, back, supplierCode }: { offer: Offer; u
         <input type="hidden" name="supplierItemId" value={offer.supplierItemId} />
         <input type="hidden" name="back" value={back} />
         <div>
-          <label className="small">Pack size ({u})</label>
+          <label className="small">Quantity for that price ({u})</label>
           <input
             name="packQty"
             type="number"
@@ -26,11 +26,11 @@ export function OfferForm({ offer, unit, back, supplierCode }: { offer: Offer; u
           />
         </div>
         <div>
-          <label className="small">Pack name</label>
+          <label className="small">Pack name (optional)</label>
           <input name="packName" type="text" defaultValue={offer.packName ?? ""} placeholder="sack, box…" style={{ maxWidth: 110 }} />
         </div>
         <div>
-          <label className="small">Price € (per pack, or per {u === "units" ? "unit" : u})</label>
+          <label className="small">Price (€)</label>
           <input name="price" type="number" min="0" step="any" defaultValue={offer.price?.toString() ?? ""} style={{ maxWidth: 100 }} />
         </div>
         <div>
@@ -108,5 +108,77 @@ export function PriceHistory({ rows, unit, label }: { rows: PriceRow[]; unit: Un
         </tbody>
       </table>
     </details>
+  );
+}
+
+/**
+ * Add a supplier ↔ item link. The same form on the supplier card (choose the
+ * item) and on the item card (choose the supplier): both write the one link.
+ */
+export function AddLinkForm({
+  supplierId,
+  itemId,
+  chooser,
+  unitLabel,
+  back,
+  button,
+  canBeFavourite,
+}: {
+  supplierId?: string;
+  itemId?: string;
+  /** The select for the side that isn't fixed. */
+  chooser: React.ReactNode;
+  /** The item's unit when known (item card); otherwise "the item's unit". */
+  unitLabel?: string;
+  back: string;
+  button: string;
+  /** Show "Make it the favourite" (only when the item already has another supplier, or the item isn't known yet). */
+  canBeFavourite: boolean;
+}) {
+  const u = unitLabel ?? "item's unit";
+  return (
+    <form action={linkAction} className="card row" style={{ gap: 8, alignItems: "flex-end" }}>
+      {supplierId && <input type="hidden" name="supplierId" value={supplierId} />}
+      {itemId && <input type="hidden" name="itemId" value={itemId} />}
+      <input type="hidden" name="back" value={back} />
+      {chooser}
+      <div>
+        <label>Price (€)</label>
+        <input name="price" type="number" min="0" step="any" placeholder="e.g. 12" style={{ maxWidth: 110 }} />
+      </div>
+      <div>
+        <label>Quantity for that price ({u})</label>
+        <input name="packQty" type="number" min="0" step="any" placeholder="e.g. 25" style={{ maxWidth: 110 }} />
+      </div>
+      <div>
+        <label>Pack name (optional)</label>
+        <input name="packName" type="text" placeholder="sack, box…" style={{ maxWidth: 120 }} />
+      </div>
+      {canBeFavourite && (
+        <label className="row small" style={{ gap: 6, alignItems: "center", margin: "0 0 10px" }}>
+          <input type="checkbox" name="favourite" value="1" /> Make it the favourite
+        </label>
+      )}
+      <button type="submit" className="secondary">
+        {button}
+      </button>
+      <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
+        For example 12 € for 25 kg. Leave the quantity empty if they sell any amount; the price is then per {u === "units" ? "unit" : u}. The link shows on both
+        the supplier and the item, and changing it on one changes it on the other.
+      </p>
+    </form>
+  );
+}
+
+/** "Make favourite" for one supplier ↔ item link; the same action on both cards. */
+export function MakeFavourite({ supplierItemId, back }: { supplierItemId: string; back: string }) {
+  return (
+    <form action={moveRankAction} className="edit-only">
+      <input type="hidden" name="supplierItemId" value={supplierItemId} />
+      <input type="hidden" name="back" value={back} />
+      <button type="submit" name="to" value="first" className="secondary sm">
+        Make favourite
+      </button>
+    </form>
   );
 }

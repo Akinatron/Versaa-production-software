@@ -53,7 +53,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           <div className="card grid">
             <div>
               <label htmlFor="supplierId">Supplier (required)</label>
-              <select id="supplierId" name="supplierId" required defaultValue="">
+              <select id="supplierId" name="supplierId" required defaultValue={suppliers.some((s) => s.id === params.supplier) ? params.supplier : ""}>
                 <option value="">Choose…</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>

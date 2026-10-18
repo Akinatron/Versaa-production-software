@@ -7,8 +7,8 @@ import * as t from "@/db/schema";
 import { loadOffers, priceHistory } from "@/db/suppliers";
 import { UNITS, formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
-import { OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
-import { linkAction, moveRankAction } from "../../suppliers/actions";
+import { AddLinkForm, OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
+import { moveRankAction } from "../../suppliers/actions";
 import { PageHeader } from "../../components/ui/header";
 import { History } from "../../components/history";
 
@@ -59,6 +59,18 @@ export default async function ItemPage({
             {item.kind === "ingredient" ? "Ingredient" : "Packaging item"} · counted in {u} · in stock{" "}
             <Link href={`/stock/${id}`}>{onHand == null ? "not counted yet" : formatQty(new Decimal(onHand), unit)}</Link>
             {[...usedBy].length > 0 && <> · used by {[...usedBy].map((r) => r.name).join(", ")}</>}
+          </>
+        }
+        actions={
+          <>
+            <Link href={`/stock/${id}`} className="btn secondary">
+              Stock and lots
+            </Link>
+            {item.active && (
+              <Link href={`/orders/new?${offers[0] ? `supplier=${offers[0].supplierId}&` : ""}items=${id}:`} className="btn secondary edit-only">
+                Order
+              </Link>
+            )}
           </>
         }
       />
@@ -119,41 +131,28 @@ export default async function ItemPage({
           Every supplier is already linked. <Link href="/suppliers">Add a new supplier</Link> first.
         </p>
       ) : (
-        <form action={linkAction} className="card row" style={{ gap: 8, alignItems: "flex-end" }}>
-          <input type="hidden" name="itemId" value={id} />
-          <input type="hidden" name="back" value={back} />
-          <div style={{ minWidth: 200 }}>
-            <label>Supplier (required)</label>
-            <select name="supplierId" required defaultValue="">
-              <option value="">Choose…</option>
-              {suppliers
-                .filter((s) => !linked.has(s.id))
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label>Pack size ({u})</label>
-            <input name="packQty" type="number" min="0" step="any" placeholder={item.kind === "packaging" ? "e.g. 100" : "e.g. 25"} />
-          </div>
-          <div>
-            <label>Pack name</label>
-            <input name="packName" type="text" placeholder="sack, box…" style={{ maxWidth: 120 }} />
-          </div>
-          <div>
-            <label>Price per pack (€)</label>
-            <input name="price" type="number" min="0" step="any" />
-          </div>
-          <button type="submit" className="secondary">
-            Add supplier
-          </button>
-          <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-            Leave the pack size empty if they sell any quantity; the price is then per {u === "units" ? "unit" : u}.
-          </p>
-        </form>
+        <AddLinkForm
+          itemId={id}
+          back={back}
+          unitLabel={u}
+          button="Add supplier"
+          canBeFavourite={offers.length > 0}
+          chooser={
+            <div style={{ minWidth: 200 }}>
+              <label>Supplier (required)</label>
+              <select name="supplierId" required defaultValue="">
+                <option value="">Choose…</option>
+                {suppliers
+                  .filter((s) => !linked.has(s.id))
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          }
+        />
       )}
       <History of={{ type: "item", id }} />
     </>

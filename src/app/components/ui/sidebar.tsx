@@ -36,8 +36,7 @@ export function Sidebar({ user, counts, signOut }: { user: { name: string }; cou
     {
       label: "Make",
       entries: [
-        { href: "/plan", label: "Plan", icon: "plan" },
-        { href: "/runs", label: "Runs", icon: "runs" },
+        { href: "/runs", label: "Runs", icon: "runs", also: ["/plan"] },
         {
           href: "/batches",
           label: "Batches",

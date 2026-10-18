@@ -6,7 +6,9 @@ import * as t from "@/db/schema";
 import { traceBatch } from "@/db/trace";
 import { Flash } from "../../../components/flash";
 import { BatchSteps } from "../../../components/batch-steps";
-import { BatchPackRow } from "../../../components/batch-pack-row";
+import { PackRows } from "../../../components/batch-pack-row";
+import { SauceName } from "../../../components/sauce-name";
+import { packFormMaterials, plannedJarsForBatch, type PackMaterial, type PackStock } from "@/db/production";
 import { PackagingTable } from "../../../components/packaging-table";
 import { ConfirmButton, GuardedForm } from "../../../components/unsaved-guard";
 import { deletePack, editPack, recordPack, restorePack } from "../../pack-actions";
@@ -51,6 +53,7 @@ export default async function PackagingBatchPage({
           fillMl: l.line.fillMl,
           filled: String(l.line.filled),
           rejected: String(l.line.rejected),
+          packagingVersionId: l.line.packagingVersionId as string | null,
         })),
         ...products
           .filter((p) => !editing.lines.some((l) => l.product.id === p.product.id))
@@ -60,9 +63,22 @@ export default async function PackagingBatchPage({
             fillMl: p.format.fillMl,
             filled: "",
             rejected: "",
+            packagingVersionId: null as string | null,
           })),
       ]
     : [];
+  const showForm = !!editing || open;
+  const [plan, pack] = await Promise.all([
+    plannedJarsForBatch(db(), batch),
+    showForm
+      ? packFormMaterials(
+          db(),
+          editing ? editSizes.map((s) => ({ productId: s.id, packagingVersionId: s.packagingVersionId })) : products.map((p) => ({ productId: p.product.id })),
+          editing?.id,
+        )
+      : Promise.resolve({ materials: {} as Record<string, PackMaterial[]>, stock: {} as Record<string, PackStock> }),
+  ]);
+  const plannedOf = new Map(plan?.sizes.map((p) => [p.productId, p.perBatch]) ?? []);
   const deleted = await db()
     .select({ s: t.packagingSessions, by: t.users.name })
     .from(t.packagingSessions)
@@ -99,9 +115,46 @@ export default async function PackagingBatchPage({
         </ul>
       )}
 
+      {plan && (
+        <>
+          <h2 style={{ marginTop: 0 }}>Planned jars</h2>
+          <div className="card scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Size</th>
+                  <th className="num">To fill in this batch</th>
+                  <th className="num">Filled so far</th>
+                  <th className="num">Left</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.sizes.map((p) => (
+                  <tr key={p.productId}>
+                    <td>
+                      <SauceName name={p.name} color={sauce.color} />
+                    </td>
+                    <td className="num">{p.perBatch}</td>
+                    <td className="num">{p.batchFilled}</td>
+                    <td className="num">{Math.max(0, p.perBatch - p.batchFilled)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="small muted" style={{ marginBottom: 0 }}>
+              From the forecast saved when <Link href={`/runs/${run.id}`}>{run.code}</Link> was confirmed: jars to fill, rejects allowed for.
+              {plan.batchCount > 1 &&
+                ` The run fills ${plan.sizes.map((p) => `${p.runToFill} × ${p.name}`).join(", ")} over ${plan.batchCount} batches of ${sauce.name}; this is one batch's share (${plan.sizes
+                  .map((p) => `${p.runFilled} ${p.name}`)
+                  .join(", ")} filled so far across the run).`}
+            </p>
+          </div>
+        </>
+      )}
+
       {tr.sessions.length > 0 && (
         <>
-          <h2 style={{ marginTop: 0 }}>
+          <h2 style={plan ? undefined : { marginTop: 0 }}>
             Jars packed{" "}
             <span className="muted" style={{ fontWeight: 400 }}>
               · {tr.filledLitres.toString()} L filled
@@ -134,9 +187,18 @@ export default async function PackagingBatchPage({
                 <input id="e-bestBefore" name="bestBefore" type="date" defaultValue={editLot?.bestBefore ?? ""} />
               </div>
             </div>
-            {editSizes.map((s, i) => (
-              <BatchPackRow key={s.id} index={i} productId={s.id} name={s.name} fillMl={s.fillMl} initialFilled={s.filled} initialRejected={s.rejected} />
-            ))}
+            <PackRows
+              stock={pack.stock}
+              sizes={editSizes.map((s) => ({
+                productId: s.id,
+                name: s.name,
+                fillMl: s.fillMl,
+                initialFilled: s.filled,
+                initialRejected: s.rejected,
+                planned: plannedOf.get(s.id) ?? null,
+                materials: pack.materials[s.id] ?? [],
+              }))}
+            />
             <div className="field" style={{ marginTop: 16 }}>
               <label htmlFor="e-note">Note (optional)</label>
               <input id="e-note" name="note" defaultValue={editing.note ?? ""} />
@@ -170,7 +232,7 @@ export default async function PackagingBatchPage({
 
       {open && !editing && (
         <div className="edit-only">
-          <h2 style={tr.sessions.length === 0 ? { marginTop: 0 } : undefined}>
+          <h2 style={tr.sessions.length === 0 && !plan ? { marginTop: 0 } : undefined}>
             {tr.sessions.length === 0 ? "Record the jars packed" : "Record another session"}
           </h2>
           <p className="small muted">
@@ -191,9 +253,16 @@ export default async function PackagingBatchPage({
               </div>
             </div>
             {products.length === 0 && <p className="muted">No active jar sizes for {sauce.name}.</p>}
-            {products.map(({ product, format }, i) => (
-              <BatchPackRow key={product.id} index={i} productId={product.id} name={product.name} fillMl={format.fillMl} />
-            ))}
+            <PackRows
+              stock={pack.stock}
+              sizes={products.map(({ product, format }) => ({
+                productId: product.id,
+                name: product.name,
+                fillMl: format.fillMl,
+                planned: plannedOf.get(product.id) ?? null,
+                materials: pack.materials[product.id] ?? [],
+              }))}
+            />
             <div className="field" style={{ marginTop: 16 }}>
               <label htmlFor="pack-note">Note (optional)</label>
               <input id="pack-note" name="note" />

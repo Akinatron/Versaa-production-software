@@ -52,6 +52,7 @@ export async function linkAction(form: FormData) {
       packName: str(form, "packName"),
       price: str(form, "price"),
       supplierCode: str(form, "supplierCode"),
+      favourite: str(form, "favourite") === "1",
     }),
   );
   refresh();
@@ -84,5 +85,5 @@ export async function moveRankAction(form: FormData) {
   const to = str(form, "to");
   await attempt(path, () => moveSupplierRank(db(), str(form, "supplierItemId"), to === "up" || to === "down" ? to : "first"));
   refresh();
-  redirect(path);
+  redirect(to === "first" ? withOk(path, "Favourite changed. It is preselected when ordering and its price is used in budgets.") : path);
 }

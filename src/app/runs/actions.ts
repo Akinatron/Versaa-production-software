@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
-import { cancelRun, confirmRun, restoreRun } from "@/db/operations";
+import { cancelRun, confirmRun, restoreRun, updateDraftRun } from "@/db/operations";
 import { ensureBatches } from "@/db/production";
 import { attempt, withOk } from "../components/flash";
 
@@ -33,4 +33,16 @@ export async function createBatches(form: FormData) {
   const r = await attempt(`/runs/${id}`, () => ensureBatches(db(), id));
   revalidatePath("/batches");
   redirect(withOk(`/runs/${id}`, r.created ? `${r.created} batch(es) created from the saved forecast.` : "This run already has its batches."));
+}
+
+/** Change a draft run: its production date and jar targets. */
+export async function editDraft(form: FormData) {
+  const id = String(form.get("runId"));
+  const targets: Record<string, number> = {};
+  for (const [k, v] of form.entries()) {
+    if (k.startsWith("t:")) targets[k.slice(2)] = String(v).trim() === "" ? 0 : Number(v);
+  }
+  await attempt(`/runs/${id}?edit=1`, () => updateDraftRun(db(), id, String(form.get("plannedFor") ?? ""), targets, String(form.get("reason") ?? "")));
+  revalidatePath("/runs");
+  redirect(withOk(`/runs/${id}`, "Draft run saved. Batches, stock and budget below follow the new numbers."));
 }

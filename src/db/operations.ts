@@ -243,15 +243,25 @@ export async function restoreRun(db: DB, runId: string, reason?: string | null) 
 
 /** Re-plan a draft run's targets. Confirmed runs are frozen. */
 export async function updateDraftRun(db: DB, runId: string, plannedFor: string, targets: Record<string, number>, reason?: string | null) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(plannedFor)) throw new OperationError("Choose a production date.");
+  for (const n of Object.values(targets)) if (!Number.isInteger(n) || n < 0) throw new OperationError("Jar targets must be whole numbers, 0 or more.");
+  if (!Object.values(targets).some((n) => n > 0)) throw new OperationError("Enter at least one jar target.");
   return db.transaction(async (tx) => {
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run || run.status !== "draft") throw new OperationError("Only draft runs can be changed.");
+    // The code carries the production date; keep it in step while the run is a draft.
+    let code = run.code;
+    if (plannedFor !== run.plannedFor) {
+      const next = run.code.replace(/^RUN-\d{8}-/, `RUN-${plannedFor.replaceAll("-", "")}-`);
+      const [taken] = next !== run.code ? await tx.select({ id: t.productionRuns.id }).from(t.productionRuns).where(eq(t.productionRuns.code, next)) : [];
+      if (!taken) code = next;
+    }
     const old = await tx
       .select({ productId: t.runTargets.productId, jars: t.runTargets.targetJars, name: t.products.name })
       .from(t.runTargets)
       .innerJoin(t.products, eq(t.runTargets.productId, t.products.id))
       .where(eq(t.runTargets.runId, runId));
-    await tx.update(t.productionRuns).set({ plannedFor }).where(eq(t.productionRuns.id, runId));
+    await tx.update(t.productionRuns).set({ plannedFor, code }).where(eq(t.productionRuns.id, runId));
     await tx.delete(t.runTargets).where(eq(t.runTargets.runId, runId));
     const rows = Object.entries(targets).filter(([, n]) => n > 0);
     if (rows.length) await tx.insert(t.runTargets).values(rows.map(([productId, n]) => ({ runId, productId, targetJars: n })));
@@ -262,11 +272,12 @@ export async function updateDraftRun(db: DB, runId: string, plannedFor: string, 
     const before = new Map(old.map((o) => [o.productId, o.jars]));
     const after = new Map(rows);
     const changes = diff([
-      ["Date", run.plannedFor, plannedFor],
+      ["Production date", run.plannedFor, plannedFor],
+      ["Code", run.code, code],
       ...[...names].map(([id, name]) => [name, before.has(id) ? `${before.get(id)} jars` : null, after.has(id) ? `${after.get(id)} jars` : null] as [string, unknown, unknown]),
     ]);
     if (changes.length) {
-      await logChange(tx, { action: "update", area: "production", entity: { type: "run", id: run.id, code: run.code }, summary: `Draft run ${run.code} changed`, changes, reason });
+      await logChange(tx, { action: "update", area: "production", entity: { type: "run", id: run.id, code }, summary: `Draft run ${code} changed`, changes, reason: reason?.trim() || null });
     }
   });
 }
