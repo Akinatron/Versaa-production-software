@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const back = params.back?.startsWith("/sales") ? params.back : "";
+  const back = params.back?.startsWith("/outbound") ? params.back : "";
   const customers = [
     ...(await db().execute<{ id: string; name: string; contact: string | null; notes: string | null; orders: number; last: string | null }>(sql`
       select c.id, c.name, c.contact, c.notes,
@@ -74,7 +74,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         )}
       </div>
       <p>
-        <Link href={back || "/sales"}>← Back</Link>
+        <Link href={back || "/outbound"}>← Back</Link>
       </p>
     </>
   );

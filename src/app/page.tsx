@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const tiles = [
   { href: "/plan", title: "Plan production", text: "Jars or batches per sauce → ingredients, packaging and what to buy." },
   { href: "/batches", title: "Batches", text: "Record what was used, measured and packed." },
-  { href: "/sales", title: "Sales", text: "Orders, deliveries to customers, samples and waste." },
+  { href: "/outbound", title: "Outbound", text: "Every jar leaving stock: sales and orders, own use, tests, samples, waste." },
   { href: "/deliveries/new", title: "Record a delivery", text: "What arrived, with supplier batch and best-before." },
   { href: "/orders", title: "Purchase orders", text: "What's ordered and still pending." },
   { href: "/stock", title: "Stock", text: "What you have, by lot, and what's reserved." },
@@ -203,7 +203,7 @@ export default async function Home() {
       level: "warn",
       text: (
         <>
-          <Link href={`/sales/${id}`}>{s.code}</Link>
+          <Link href={`/outbound/orders/${id}`}>{s.code}</Link>
           {s.who && ` (${s.who})`} can't be fully delivered from stock: {s.parts.join("; ")}. <Link href="/plan">Plan production</Link>.
         </>
       ),

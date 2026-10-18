@@ -4,14 +4,15 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { finishedAvailability } from "@/db/sales";
 import { Flash } from "../components/flash";
-import { OUTFLOW } from "../components/labels";
+import { OUTFLOW, OUTFLOW_REASONS, outflowBadge } from "../components/labels";
 import { buttonLink, jars, who } from "../components/trace-format";
 import { cancelOrder } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function SalesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function OutboundPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
+  const reason = (OUTFLOW_REASONS as readonly string[]).includes(params.reason ?? "") ? (params.reason as (typeof OUTFLOW_REASONS)[number]) : null;
   const [avail, pending, outflows] = await Promise.all([
     finishedAvailability(db()),
     db()
@@ -28,6 +29,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
       })
       .from(t.outflows)
       .leftJoin(t.customers, eq(t.outflows.customerId, t.customers.id))
+      .where(reason ? eq(t.outflows.type, reason) : undefined)
       .orderBy(desc(t.outflows.occurredOn), desc(t.outflows.createdAt))
       .limit(40),
   ]);
@@ -45,17 +47,18 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <h1>Sales</h1>
+      <h1>Outbound</h1>
       <p className="lead">
-        Orders from customers and every jar that leaves stock. A pending order only promises jars; stock goes down when you deliver it.
+        Every jar that leaves stock, for any reason: sales, own use, tests, samples and gifts, waste. A pending sales order only promises jars;
+        stock goes down when you deliver it.
       </p>
       <Flash params={params} />
       <div className="card row">
-        <Link href="/sales/new" style={buttonLink}>
-          New sales order
+        <Link href="/outbound/new" style={buttonLink}>
+          Record a stock exit
         </Link>
-        <Link href="/sales/outflow/new?type=sale">Record a delivery without an order / sample / waste / internal use</Link>
-        <Link href="/sales/customers">Customers</Link>
+        <Link href="/outbound/orders/new">New sales order</Link>
+        <Link href="/outbound/customers">Customers</Link>
       </div>
 
       <h2>Jars available now</h2>
@@ -121,7 +124,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 return (
                   <tr key={o.id}>
                     <td>
-                      <Link href={`/sales/${o.id}`}>{o.code}</Link>
+                      <Link href={`/outbound/orders/${o.id}`}>{o.code}</Link>
                       {o.reference && <div className="small muted">Ref {o.reference}</div>}
                     </td>
                     <td>{who(customer, o.destination)}</td>
@@ -136,7 +139,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                     <td>{short.length ? <span className="badge bad">not enough in stock</span> : <span className="badge ok">enough in stock</span>}</td>
                     <td>
                       <div className="row" style={{ flexWrap: "nowrap" }}>
-                        <Link href={`/sales/${o.id}#deliver`}>Deliver</Link>
+                        <Link href={`/outbound/orders/${o.id}#deliver`}>Deliver</Link>
                         <form action={cancelOrder}>
                           <input type="hidden" name="orderId" value={o.id} />
                           <button type="submit" style={{ background: "var(--muted)", padding: "4px 10px" }}>
@@ -153,17 +156,25 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         )}
       </div>
 
-      <h2>Recently sent out</h2>
-      <p className="small muted">Every jar that left stock: deliveries, samples, waste and internal use. Only “Sale” counts as sales.</p>
+      <h2>Recent stock exits</h2>
+      <p className="small muted">Every jar that left stock, with its reason. Only “Sale” counts as sales.</p>
+      <div className="row small" style={{ gap: 6, marginBottom: 8 }}>
+        <span className="muted">Show:</span>
+        {[["", "All"], ...OUTFLOW_REASONS.map((r) => [r, OUTFLOW[r]!])].map(([r, label]) => (
+          <Link key={r} href={r ? `/outbound?reason=${r}` : "/outbound"} aria-current={r === reason ? "page" : undefined} style={{ fontWeight: r === reason ? 700 : undefined }}>
+            {label}
+          </Link>
+        ))}
+      </div>
       <div className="card scroll">
         {outflows.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>Nothing sent out yet.</p>
+          <p className="muted" style={{ margin: 0 }}>{reason ? `No stock exits for “${OUTFLOW[reason]}” yet.` : "No jars have left stock yet."}</p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Code</th>
-                <th>Type</th>
+                <th>Reason</th>
                 <th>Date</th>
                 <th>Customer / destination</th>
                 <th className="num">Jars</th>
@@ -175,7 +186,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
                 <tr key={o.id}>
                   <td>{o.code}</td>
                   <td>
-                    <span className={`badge ${o.type === "sale" ? "ok" : o.type === "waste" ? "bad" : "warn"}`}>{OUTFLOW[o.type] ?? o.type}</span>
+                    <span className={`badge ${outflowBadge(o.type)}`}>{OUTFLOW[o.type] ?? o.type}</span>
                     {o.note && <div className="small muted">{o.note}</div>}
                   </td>
                   <td>{o.occurredOn}</td>

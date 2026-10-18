@@ -185,7 +185,7 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
     <>
       <p className="small muted">
         Take stock out of a specific lot: thrown away, used by the team, or given as a sample. For finished jars, use{" "}
-        <Link href="/sales/outflow/new?type=waste">Sales → waste / sample / internal use</Link> instead, so it shows up where the jars went.
+        <Link href="/outbound/new">Outbound → record a stock exit</Link> instead, so it shows up where the jars went.
       </p>
       <form method="get" className="card row">
         <input type="hidden" name="mode" value="writeoff" />

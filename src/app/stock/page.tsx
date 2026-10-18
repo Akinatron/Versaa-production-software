@@ -92,7 +92,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       ))}
 
       <h2>Finished jars</h2>
-      <p className="small muted">Jars come in from packaging and go out through Sales. Promised = held for pending sales orders, still physically here.</p>
+      <p className="small muted">Jars come in from packaging and go out through Outbound. Promised = held for pending sales orders, still physically here.</p>
       <div className="card scroll">
         {finished.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>No finished jars in stock.</p>

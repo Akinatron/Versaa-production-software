@@ -21,9 +21,10 @@ export const MOVEMENT: Record<string, string> = {
   production_output: "Produced",
   packaging_output: "Packed",
   sale: "Sale",
-  sample: "Sample",
-  waste: "Waste",
-  internal_use: "Internal use",
+  sample: "Sample / gift",
+  waste: "Waste / loss",
+  internal_use: "Own use",
+  test: "Test",
   count_correction: "Count correction",
   reversal: "Reversal",
 };
@@ -43,12 +44,28 @@ export const SALES_STATUS: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Cancelled", cls: "" },
 };
 
+/** Reasons a jar leaves stock, in the order they're offered. Only "sale" counts as sales. */
+export const OUTFLOW_REASONS = ["sale", "internal_use", "test", "sample", "waste"] as const;
+export type OutflowReason = (typeof OUTFLOW_REASONS)[number];
+
 export const OUTFLOW: Record<string, string> = {
   sale: "Sale",
-  sample: "Sample",
-  waste: "Waste",
-  internal_use: "Internal use",
+  internal_use: "Own use",
+  test: "Test",
+  sample: "Sample / gift",
+  waste: "Waste / loss",
 };
+
+export const OUTFLOW_EXPLAIN: Record<OutflowReason, string> = {
+  sale: "Jars sold to a customer. The only reason that counts as sales.",
+  internal_use: "Jars the team uses itself: cooking, staff, the office.",
+  test: "Jars opened for tests and trials: quality checks, shelf-life, new recipes.",
+  sample: "Jars given away for free: tastings, samples for shops, gifts.",
+  waste: "Jars thrown away: broken, spoiled or failed a check. Say why in the note.",
+};
+
+/** Badge colour for an outbound reason. */
+export const outflowBadge = (type: string) => (type === "sale" ? "ok" : type === "waste" ? "bad" : "warn");
 
 export const INCIDENT: Record<string, string> = {
   loss: "Loss",
