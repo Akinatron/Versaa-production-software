@@ -154,6 +154,48 @@ export const suppliers = pgTable("suppliers", {
   createdAt: createdAt(),
 });
 
+/**
+ * The one link between a supplier and an item it sells. Both the supplier
+ * card and the item card read and write these same rows. `rank` orders an
+ * item's suppliers: 1 is the favourite.
+ */
+export const supplierItems = pgTable(
+  "supplier_items",
+  {
+    id: id(),
+    supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
+    itemId: uuid("item_id").notNull().references(() => items.id),
+    rank: integer("rank").notNull(),
+    supplierCode: text("supplier_code"),
+    note: text("note"),
+    /** Removed links stay, so old prices remain explainable. */
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("supplier_items_supplier_item").on(t.supplierId, t.itemId), index("supplier_items_item").on(t.itemId)],
+);
+
+/**
+ * Append-only price history of a supplier link. The newest row is the
+ * current price. The price is for one pack as the supplier sells it
+ * (e.g. 12 € per 25 kg sack); `packQty` null means priced per stock unit.
+ */
+export const supplierItemPrices = pgTable(
+  "supplier_item_prices",
+  {
+    id: id(),
+    supplierItemId: uuid("supplier_item_id").notNull().references(() => supplierItems.id),
+    /** Pack size in the item's stock unit, e.g. 25 (kg) or 100 (units). */
+    packQty: numeric("pack_qty"),
+    /** Optional name of the pack, e.g. "sack", "box". */
+    packName: text("pack_name"),
+    /** Price of one pack (or of one stock unit when there is no pack size). */
+    price: numeric("price"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("supplier_item_prices_link").on(t.supplierItemId)],
+);
+
 // ---------- Stock ----------
 
 export const lots = pgTable(
@@ -213,32 +255,55 @@ export const movements = pgTable(
 
 // ---------- Purchasing ----------
 
-export const poStatus = pgEnum("po_status", ["draft", "sent", "partly_received", "received", "cancelled"]);
+/** "closed": closed by hand before everything arrived (e.g. rejected goods not replaced). */
+export const poStatus = pgEnum("po_status", ["draft", "sent", "partly_received", "received", "cancelled", "closed"]);
 
-export const purchaseOrders = pgTable("purchase_orders", {
-  id: id(),
-  code: text("code").notNull().unique(),
-  supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
-  status: poStatus("status").notNull().default("draft"),
-  orderedOn: date("ordered_on"),
-  expectedOn: date("expected_on"),
-  reference: text("reference"),
-  createdAt: createdAt(),
-});
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: id(),
+    code: text("code").notNull().unique(),
+    supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
+    /** Optional: the production run this order is for. */
+    runId: uuid("run_id").references(() => productionRuns.id),
+    status: poStatus("status").notNull().default("draft"),
+    /** Date the order was sent to the supplier; null while it is a draft. */
+    orderedOn: date("ordered_on"),
+    expectedOn: date("expected_on"),
+    reference: text("reference"),
+    note: text("note"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    idempotencyKey: text("idempotency_key").unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("purchase_orders_run").on(t.runId)],
+);
 
 export const purchaseOrderLines = pgTable("purchase_order_lines", {
   id: id(),
   purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id),
   itemId: uuid("item_id").notNull().references(() => items.id),
+  /** Ordered quantity in the item's stock unit (packs × pack size when packs are used). */
   quantity: numeric("quantity").notNull(),
+  /** Price per stock unit, so every line and lot can be costed the same way. */
   unitPrice: numeric("unit_price"),
+  /** Pack size and pack count at the time of ordering, when bought in packs. */
+  packQty: numeric("pack_qty"),
+  packs: integer("packs"),
+  packPrice: numeric("pack_price"),
+  /** What the run needed when the order was planned (before rounding to packs). */
+  neededQty: numeric("needed_qty"),
 });
 
 export const receipts = pgTable("receipts", {
   id: id(),
   supplierId: uuid("supplier_id").references(() => suppliers.id),
   receivedOn: date("received_on").notNull(),
+  /** Optional time of arrival, HH:MM. */
+  receivedTime: text("received_time"),
   deliveryRef: text("delivery_ref"),
+  /** General note about the delivery. */
+  note: text("note"),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   createdAt: createdAt(),
 });
@@ -247,9 +312,14 @@ export const receiptLines = pgTable("receipt_lines", {
   id: id(),
   receiptId: uuid("receipt_id").notNull().references(() => receipts.id),
   purchaseOrderLineId: uuid("purchase_order_line_id").references(() => purchaseOrderLines.id),
-  lotId: uuid("lot_id").notNull().references(() => lots.id),
+  /** The lot made from the accepted quantity; null when nothing was accepted. */
+  lotId: uuid("lot_id").references(() => lots.id),
   itemId: uuid("item_id").notNull().references(() => items.id),
+  /** Accepted quantity: the only part that goes into stock. */
   quantity: numeric("quantity").notNull(),
+  /** Refused at delivery (damaged, wrong). Counts as not received. */
+  rejectedQty: numeric("rejected_qty").notNull().default("0"),
+  damageNote: text("damage_note"),
 });
 
 // ---------- Planning ----------

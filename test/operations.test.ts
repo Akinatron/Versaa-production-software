@@ -9,6 +9,7 @@ import {
   confirmRun,
   createPurchaseOrder,
   createRun,
+  markOrderSent,
   planForRun,
   recordOpeningCount,
   recordReceipt,
@@ -72,7 +73,15 @@ suite("recording operations", () => {
       ],
     });
     expect(await onHand("ing-onions")).toBe("12.5");
+    // A new order is a draft: prepared, not sent, so not "on order" yet.
+    expect(po.status).toBe("draft");
+    expect(po.orderedOn).toBeNull();
     let stock = await loadStockPositions(db);
+    expect(stock[ids["ing-onions"]!]?.onOrder.toString() ?? "0").toBe("0");
+    const sent = await markOrderSent(db, po.id, { sentOn: "2026-10-17" });
+    expect(sent.po.status).toBe("sent");
+    expect(sent.po.orderedOn).toBe("2026-10-17");
+    stock = await loadStockPositions(db);
     expect(stock[ids["ing-onions"]!]!.onOrder.toString()).toBe("20");
 
     const [onionLine, garlicLine] = await db.select().from(t.purchaseOrderLines).where(eq(t.purchaseOrderLines.purchaseOrderId, po.id)).orderBy(t.purchaseOrderLines.itemId);

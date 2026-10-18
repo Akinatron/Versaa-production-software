@@ -13,10 +13,14 @@ const SOURCE: Record<Source, string> = { observed: "measured", estimate: "estima
 const D = (v: unknown): Decimal | null => (v === null || v === undefined ? null : new Decimal(v as Decimal.Value));
 const q = (v: unknown, unit: UnitCode) => formatQty(D(v), unit);
 
-export function PlanView({ result }: { result: PlanResult }) {
+type Part = "issues" | "production" | "requirements";
+
+/** The plan; `only` shows just some parts (the run splits them over its steps). */
+export function PlanView({ result, only, batchesTitle = "Batches" }: { result: PlanResult; only?: Part[]; batchesTitle?: string }) {
+  const show = (p: Part) => !only || only.includes(p);
   return (
     <>
-      {result.issues.length > 0 && (
+      {show("issues") && result.issues.length > 0 && (
         <>
           <h2>Needs attention</h2>
           <ul className="issues">
@@ -29,9 +33,9 @@ export function PlanView({ result }: { result: PlanResult }) {
         </>
       )}
 
-      {result.sauces.length > 0 && (
+      {show("production") && result.sauces.length > 0 && (
         <>
-          <h2>Batches</h2>
+          <h2>{batchesTitle}</h2>
           <div className="card scroll">
             <table>
               <thead>
@@ -102,7 +106,7 @@ export function PlanView({ result }: { result: PlanResult }) {
         </>
       )}
 
-      {(["ingredient", "packaging"] as const).map((kind) => {
+      {show("requirements") && (["ingredient", "packaging"] as const).map((kind) => {
         const rows = result.requirements.filter((r) => r.kind === kind);
         if (rows.length === 0) return null;
         return (
@@ -152,9 +156,9 @@ export function PlanView({ result }: { result: PlanResult }) {
   );
 }
 
-/** Link that pre-fills a purchase order with everything still to buy. */
+/** Link to plan orders (one per supplier) for everything still to buy. */
 export function orderLinkFor(result: PlanResult): string | null {
   const lines = result.requirements.filter((r) => r.toBuy !== null && D(r.toBuy)!.gt(0));
   if (lines.length === 0) return null;
-  return `/orders/new?items=${encodeURIComponent(lines.map((r) => `${r.itemId}:${D(r.toBuy)!.toString()}`).join(","))}`;
+  return `/orders/plan?items=${encodeURIComponent(lines.map((r) => `${r.itemId}:${D(r.toBuy)!.toString()}`).join(","))}`;
 }
