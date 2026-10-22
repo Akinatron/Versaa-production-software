@@ -61,7 +61,7 @@ Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty d
 
 The same app also runs as a normal Mac program, opened with a double click, with no Terminal, browser or database to install. Its data stays on that Mac only: the team can't share it, and it is separate from the `pnpm dev` database.
 
-Build and install it from this folder (needs Node 22 and pnpm, like the web version):
+Build and install it from this folder (needs Node 22 and pnpm, like the web version; the desktop part installs its own tools with npm):
 
 ```sh
 pnpm desktop:mac    # builds Versaa.app and copies it into /Applications
