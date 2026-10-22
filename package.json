@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "desktop:mac": "npm --prefix desktop ci && npm --prefix desktop run dist:mac && npm --prefix desktop run install:mac",
+    "desktop:win": "npm --prefix desktop ci && npm --prefix desktop run dist:win",
+    "desktop:dev": "npm --prefix desktop ci && npm --prefix desktop start"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

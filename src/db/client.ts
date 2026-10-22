@@ -6,7 +6,8 @@ export type DB = ReturnType<typeof createDb>;
 
 export function createDb(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("DATABASE_URL is not set");
-  const sql = postgres(url, { max: 5 });
+  // The desktop app's built-in database takes one connection at a time (DATABASE_POOL_MAX=1).
+  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 5 });
   return drizzle(sql, { schema });
 }
 
