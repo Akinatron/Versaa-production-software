@@ -1,0 +1,76 @@
+{
+  "name": "versaa-desktop",
+  "productName": "Versaa",
+  "version": "0.1.0",
+  "description": "Versaa production software as a desktop app",
+  "private": true,
+  "main": "build/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "dist:mac": "node scripts/build.mjs && electron-builder --mac",
+    "install:mac": "node scripts/install-mac.mjs",
+    "dist:win": "node scripts/build.mjs && electron-builder --win"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.11",
+    "@electric-sql/pglite-socket": "0.2.14"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.27.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  },
+  "build": {
+    "appId": "com.versaa.production",
+    "productName": "Versaa",
+    "copyright": "Versaa",
+    "directories": {
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "build/main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/drizzle",
+        "to": "drizzle"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dir",
+        "zip"
+      ],
+      "category": "public.app-category.business",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "icon": "resources/icon.png"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "afterPack": "scripts/after-pack.cjs"
+  },
+  "author": "Versaa"
+}

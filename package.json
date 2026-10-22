@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "desktop:mac": "pnpm --dir desktop install && pnpm --dir desktop run dist:mac && pnpm --dir desktop run install:mac",
+    "desktop:win": "pnpm --dir desktop install && pnpm --dir desktop run dist:win",
+    "desktop:dev": "pnpm --dir desktop install && pnpm --dir desktop start"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

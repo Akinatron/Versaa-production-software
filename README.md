@@ -57,6 +57,29 @@ Uploaded delivery notes and invoices are saved in an `uploads` folder next to th
 
 Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty database to also run the database tests; that database is wiped on each run.
 
+## Desktop app (Mac)
+
+The same app also runs as a normal Mac program, opened with a double click, with no Terminal, browser or database to install. Its data stays on that Mac only: the team can't share it, and it is separate from the `pnpm dev` database.
+
+Build and install it from this folder (needs Node 22 and pnpm, like the web version):
+
+```sh
+pnpm desktop:mac    # builds Versaa.app and copies it into /Applications
+```
+
+Then open **Versaa** from Applications or Launchpad. The first start takes a few seconds longer while it creates the database; then it asks for the first account, as the web version does. Run the same command again after pulling an update: the app is replaced, the data is kept, and migrations run by themselves when it opens.
+
+The app isn't signed with an Apple developer account. A copy built on the same Mac opens normally. A copy brought from another Mac (the zip in `desktop/dist`) is blocked the first time: right-click it, choose **Open**, then **Open** again (or allow it in System Settings → Privacy & Security).
+
+What it keeps, in `~/Library/Application Support/Versaa/data` (File → Show Data Folder):
+
+- `database`: the database. It is PostgreSQL running inside the app ([PGlite](https://pglite.dev)), so the code, migrations and rules are the same as the web version.
+- `uploads`: delivery notes and invoices.
+- `backups`: a copy of the database made every time the app opens (the last 10), plus any made with File → Back Up Database Now. To go back to one, quit Versaa, rename `database` to `database-old`, create an empty `database` folder and unpack the backup into it (`tar -xzf <backup>.tar.gz -C database`).
+- `versaa.log`: what happened at start-up, for when something goes wrong.
+
+How it works: `desktop/` is an [Electron](https://www.electronjs.org) shell. On start it opens the database and serves it on a private local port, runs the migrations and the starting catalog (like `pnpm db:migrate` and `pnpm db:seed`), starts the Next.js server (built with `NEXT_OUTPUT=standalone`) on another local port and shows it in a window. Nothing listens outside the computer. The built-in database takes one connection at a time, so the app uses a pool of one there (`DATABASE_POOL_MAX=1`). `pnpm desktop:dev` runs it without packaging; `pnpm desktop:win` packages a Windows installer (build it on Windows; not tried yet).
+
 ## Stack
 
-Next.js 15 (TypeScript), PostgreSQL with Drizzle ORM, Vitest. Hosting on AWS comes later.
+Next.js 15 (TypeScript), PostgreSQL with Drizzle ORM, Vitest. Desktop: Electron with PGlite. Hosting on AWS comes later.
