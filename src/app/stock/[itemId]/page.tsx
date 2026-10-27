@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
+import { storageLabel } from "@/domain/storage";
 import * as t from "@/db/schema";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import Decimal from "decimal.js";
@@ -9,6 +10,7 @@ import { Flash } from "../../components/flash";
 import { MOVEMENT } from "../../components/labels";
 import { LotOrigin, lotQty } from "../../components/trace-format";
 import { PageHeader } from "../../components/ui/header";
+import { StorageBadge } from "../../components/storage";
 import { fmtDate } from "../../components/ui/format";
 import { History } from "../../components/history";
 import { loadOffers } from "@/db/suppliers";
@@ -53,6 +55,7 @@ export default async function ItemStockPage({
   const bought = item.kind === "ingredient" || item.kind === "packaging";
   const offers = bought ? await loadOffers(db(), { itemIds: [itemId] }) : [];
   const unitWord = item.kind === "finished" ? "jars" : UNITS[unit].label;
+  const storageHref = item.kind === "ingredient" ? `/items/${item.id}` : item.kind === "finished" ? "/settings/catalog" : "/settings";
 
   const lotTable = (list: typeof lots) => (
     <table>
@@ -62,6 +65,7 @@ export default async function ItemStockPage({
           <th>Where it came from</th>
           <th>{item.kind === "finished" || item.kind === "bulk" ? "Made / packed" : "Received"}</th>
           <th>Best before</th>
+          {item.kind !== "packaging" && <th>Kept in</th>}
           <th className="num">Left</th>
         </tr>
       </thead>
@@ -76,6 +80,11 @@ export default async function ItemStockPage({
             </td>
             <td>{lot.receivedOn ? fmtDate(lot.receivedOn, { year: true }) : "—"}</td>
             <td>{lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
+            {item.kind !== "packaging" && (
+              <td>
+                <StorageBadge value={lot.storage} quietUnset />
+              </td>
+            )}
             <td className="num">{q(balance)}</td>
           </tr>
         ))}
@@ -123,6 +132,12 @@ export default async function ItemStockPage({
           <div className="v">{withStock.length}</div>
           <div className="l">{withStock.length === 1 ? "lot" : "lots"} with stock</div>
         </div>
+        {item.kind !== "packaging" && (
+          <Link href={storageHref}>
+            <div className="v">{storageLabel(item.storage)}</div>
+            <div className="l">default storage · change</div>
+          </Link>
+        )}
         {bought && (
           <Link href={`/items/${item.id}`}>
             <div className="v">{offers[0] ? offers[0].supplierName : "No supplier"}</div>

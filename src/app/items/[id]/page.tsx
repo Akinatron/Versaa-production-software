@@ -11,6 +11,7 @@ import { AddLinkForm, OfferForm, PriceHistory, PriceText } from "../../component
 import { moveRankAction } from "../../suppliers/actions";
 import { PageHeader } from "../../components/ui/header";
 import { History } from "../../components/history";
+import { ItemStorageForm } from "../../components/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,18 @@ export default async function ItemPage({
         }
       />
       <Flash params={flash} />
+
+      {item.kind === "ingredient" && (
+        <div className="card row" style={{ alignItems: "center", gap: 12 }}>
+          <div>
+            <strong>Storage</strong>
+            <div className="small muted">Where it's kept. New lots of {item.name} take this; you can change it for one lot on the lot's page.</div>
+          </div>
+          <div style={{ marginLeft: "auto" }}>
+            <ItemStorageForm itemId={item.id} value={item.storage} back={back} label={`Storage for ${item.name}`} />
+          </div>
+        </div>
+      )}
 
       <h2>Suppliers</h2>
       <p className="small muted">

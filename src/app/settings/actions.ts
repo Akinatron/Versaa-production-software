@@ -23,6 +23,7 @@ import {
   setFormatActive,
   setFormatFill,
   setItemActive,
+  setItemStorage,
   setProductActive,
   setSauceActive,
   setSauceColor,
@@ -171,7 +172,7 @@ export async function discardPackaging(form: FormData) {
 
 export async function addItemAction(form: FormData) {
   const kind = str(form, "kind") === "packaging" ? "packaging" : "ingredient";
-  const item = await attempt("/settings/items", () => addItem(db(), { kind, name: str(form, "name"), stockUnit: str(form, "stockUnit") }));
+  const item = await attempt("/settings/items", () => addItem(db(), { kind, name: str(form, "name"), stockUnit: str(form, "stockUnit"), storage: str(form, "storage") }));
   refresh();
   redirect(withOk("/settings/items", `${item.name} added. Count its stock before planning with it.`));
 }
@@ -180,6 +181,17 @@ export async function renameItemAction(form: FormData) {
   await attempt("/settings/items", () => renameItem(db(), str(form, "itemId"), str(form, "name")));
   refresh();
   redirect(withOk("/settings/items", `Renamed to ${str(form, "name")}.`));
+}
+
+export async function setItemStorageAction(form: FormData) {
+  const back = str(form, "back");
+  const path = back.startsWith("/") && !back.startsWith("//") ? back : "/settings/items";
+  await attempt(path, () => setItemStorage(db(), str(form, "itemId"), str(form, "storage")));
+  refresh();
+  revalidatePath("/trace", "layout");
+  revalidatePath("/stock", "layout");
+  revalidatePath("/items", "layout");
+  redirect(withOk(path, "Storage saved."));
 }
 
 export async function setItemActiveAction(form: FormData) {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, desc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { Flash } from "../../components/flash";
@@ -16,6 +16,7 @@ import {
 import { PageHeader } from "../../components/ui/header";
 import { SauceName } from "../../components/sauce-name";
 import { SAUCE_COLORS } from "@/domain/sauce-colors";
+import { ItemStorageForm } from "../../components/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +36,16 @@ function Toggle({ action, idName, id, active }: { action: (f: FormData) => Promi
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const [sauces, formats, products, recipes, pkgs] = await Promise.all([
+  const [sauces, formats, products, recipes, pkgs, jarItems] = await Promise.all([
     db().select().from(t.sauces).orderBy(asc(t.sauces.name)),
     db().select().from(t.formats).orderBy(desc(t.formats.capacityMl)),
     db().select().from(t.products),
     db().select().from(t.recipeVersions),
     db().select().from(t.packagingVersions),
+    db().select({ id: t.items.id, storage: t.items.storage }).from(t.items).where(eq(t.items.kind, "finished")),
   ]);
+  const jarStorage = new Map(jarItems.map((i) => [i.id, i.storage]));
+  const noStorage = products.filter((p) => p.active && !jarStorage.get(p.itemId)).length;
   const sauceName = new Map(sauces.map((s) => [s.id, s]));
   const formatOf = new Map(formats.map((f) => [f.id, f]));
   const sortedProducts = [...products].sort(
@@ -195,12 +199,20 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       </div>
 
       <h2>Products</h2>
+      {noStorage > 0 && (
+        <ul className="issues">
+          <li className="warn">
+            {noStorage} {noStorage === 1 ? "product doesn't say" : "products don't say"} where the filled jars are kept. Choose it in the Storage column.
+          </li>
+        </ul>
+      )}
       <div className="card scroll">
         <table>
           <thead>
             <tr>
               <th>Product</th>
               <th>Packaging list</th>
+              <th>Storage (filled jars)</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -221,6 +233,9 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                     <Link href={`/settings/packaging/${p.id}`}>
                       {active ? `v${active.versionNo}` : <span className="badge bad">None — needed before planning</span>}
                     </Link>
+                  </td>
+                  <td>
+                    <ItemStorageForm itemId={p.itemId} value={jarStorage.get(p.itemId) ?? null} back="/settings/catalog" label={`Storage for ${p.name} jars`} />
                   </td>
                   <td>{p.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>
                   <td>

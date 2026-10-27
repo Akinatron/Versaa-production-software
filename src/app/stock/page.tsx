@@ -10,12 +10,32 @@ import { jars } from "../components/trace-format";
 import { PageHeader } from "../components/ui/header";
 import { sauceColorMaps } from "@/db/catalog";
 import { SauceName } from "../components/sauce-name";
+import { keptIn, storageByItem, type ItemStorage } from "@/db/storage";
+import { STORAGE, STORAGE_KEYS, isStorage } from "@/domain/storage";
+import { StorageBadge } from "../components/storage";
+
+/** Where an item's stock is: one label per place its lots are in, with amounts when split. */
+function KeptIn({ s, fmt }: { s: ItemStorage | undefined; fmt: (q: Decimal) => string }) {
+  if (!s) return <span className="muted">—</span>;
+  if (!s.places.size) return <StorageBadge value={s.default} quietUnset />;
+  const split = s.places.size > 1;
+  return (
+    <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+      {[...s.places.entries()].map(([place, qty]) => (
+        <span key={place} title={split ? undefined : fmt(qty)}>
+          <StorageBadge value={place || null} quietUnset />
+          {split && <span className="small muted"> {fmt(qty)}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 export const dynamic = "force-dynamic";
 
 export default async function StockPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, stock, avail, lotCounts, colors] = await Promise.all([
+  const [catalog, stock, avail, lotCounts, colors, storage] = await Promise.all([
     loadPlanCatalog(db()),
     loadStockPositions(db()),
     finishedAvailability(db()),
@@ -25,11 +45,17 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
           and (select coalesce(sum(m.quantity), 0) from movements m where m.lot_id = l.id) > 0) as lots
       from products p`),
     sauceColorMaps(db()),
+    storageByItem(db()),
   ]);
   const lotsByProduct = new Map([...lotCounts].map((r) => [r.product_id, r]));
-  const finished = avail.filter((a) => a.onHand.gt(0) || a.reserved.gt(0));
+  const jarItem = (productId: string) => lotsByProduct.get(productId)?.item_id ?? "";
+  const finished = avail.filter((a) => (a.onHand.gt(0) || a.reserved.gt(0)) && keep(jarItem(a.productId)));
   const uncounted = catalog.items.filter((i) => stock[i.id]?.onHand == null).length;
   const show = params.show === "packaging" || params.show === "jars" ? params.show : "ingredient";
+  const where = params.where === "unset" || isStorage(params.where) ? params.where : null;
+  const keep = (itemId: string) => !where || keptIn(storage.get(itemId), where);
+  const base = show === "ingredient" ? "/stock" : `/stock?show=${show}`;
+  const whereHref = (w: string | null) => (w ? `${base}${base.includes("?") ? "&" : "?"}where=${w}` : base);
   const tab = (key: string, label: string, href: string) => (
     <Link href={href} aria-current={show === key ? "page" : undefined}>
       {label}
@@ -60,6 +86,15 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
         {tab("packaging", "Packaging", "/stock?show=packaging")}
         {tab("jars", "Finished jars", "/stock?show=jars")}
       </nav>
+      {show !== "packaging" && (
+        <nav className="tabs" aria-label="Kept in" style={{ marginLeft: 8 }}>
+          {[null, ...STORAGE_KEYS, "unset"].map((w) => (
+            <Link key={w ?? "all"} href={whereHref(w)} aria-current={where === w ? "page" : undefined}>
+              {w === null ? "Anywhere" : w === "unset" ? "Not set" : STORAGE[w as keyof typeof STORAGE].label}
+            </Link>
+          ))}
+        </nav>
+      )}
       {(["ingredient", "packaging"] as const)
         .filter((k) => k === show)
         .map((kind) => (
@@ -69,6 +104,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                 <thead>
                   <tr>
                     <th>Item</th>
+                    {kind === "ingredient" && <th>Kept in</th>}
                     <th className="num">In stock</th>
                     <th className="num">Reserved for runs</th>
                     <th className="num">Free</th>
@@ -77,7 +113,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                 </thead>
                 <tbody>
                   {catalog.items
-                    .filter((i) => i.kind === kind)
+                    .filter((i) => i.kind === kind && (kind === "packaging" || keep(i.id)))
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((i) => {
                       const s = stock[i.id];
@@ -88,6 +124,11 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                           <td>
                             <Link href={`/stock/${i.id}`}>{i.name}</Link>
                           </td>
+                          {kind === "ingredient" && (
+                            <td>
+                              <KeptIn s={storage.get(i.id)} fmt={(q) => formatQty(q, i.stockUnit)} />
+                            </td>
+                          )}
                           <td className="num">{on === null ? <span className="badge warn">not counted</span> : formatQty(on, i.stockUnit)}</td>
                           <td className="num">{formatQty(res, i.stockUnit)}</td>
                           <td className="num">{on === null ? "unknown" : formatQty(on.minus(res), i.stockUnit)}</td>
@@ -106,13 +147,14 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
           <div className="card scroll">
             {finished.length === 0 ? (
               <p className="muted" style={{ margin: 0 }}>
-                No finished jars in stock.
+                {where ? "No finished jars kept there." : "No finished jars in stock."}
               </p>
             ) : (
               <table>
                 <thead>
                   <tr>
                     <th>Product</th>
+                    <th>Kept in</th>
                     <th className="num">In stock</th>
                     <th className="num">Promised to orders</th>
                     <th className="num">Free</th>
@@ -132,6 +174,9 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                           ) : (
                             <SauceName name={a.name} color={colors.byProduct.get(a.productId)} />
                           )}
+                        </td>
+                        <td>
+                          <KeptIn s={storage.get(jarItem(a.productId))} fmt={(q) => jars(q)} />
                         </td>
                         <td className="num">{jars(a.onHand)}</td>
                         <td className="num">{jars(a.reserved)}</td>

@@ -15,6 +15,7 @@ export async function editLot(form: FormData) {
       reason: String(form.get("reason") ?? ""),
       supplierBatch: form.has("supplierBatch") ? String(form.get("supplierBatch") ?? "") : undefined,
       bestBefore: String(form.get("bestBefore") ?? ""),
+      storage: form.has("storage") ? String(form.get("storage") ?? "") : undefined,
     }),
   );
   revalidatePath("/trace", "layout");

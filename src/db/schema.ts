@@ -32,6 +32,8 @@ export const itemKind = pgEnum("item_kind", ["ingredient", "packaging", "finishe
 export const unitCode = pgEnum("unit_code", ["g", "kg", "ml", "L", "unit"]);
 export const versionStatus = pgEnum("version_status", ["draft", "active", "retired"]);
 export const estimateSource = pgEnum("estimate_source", ["estimate", "observed"]);
+/** Where something is kept. Labels live in domain/storage.ts. */
+export const storagePlace = pgEnum("storage_place", ["fridge", "freezer", "room"]);
 
 // ---------- Catalog (Settings) ----------
 
@@ -41,6 +43,8 @@ export const items = pgTable("items", {
   name: text("name").notNull(),
   kind: itemKind("kind").notNull(),
   stockUnit: unitCode("stock_unit").notNull(),
+  /** Default storage for new lots of this item (ingredients and finished jars). Null = not set yet. */
+  storage: storagePlace("storage"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });
@@ -213,6 +217,8 @@ export const lots = pgTable(
     bestBefore: date("best_before"),
     /** For bulk sauce and finished jars: the production batch they came from. */
     batchId: uuid("batch_id"),
+    /** Where this lot is kept. Copied from the item's default when the lot is made (database trigger); can be changed per lot. */
+    storage: storagePlace("storage"),
     createdAt: createdAt(),
   },
   (t) => [index("lots_item").on(t.itemId), index("lots_batch").on(t.batchId)],
