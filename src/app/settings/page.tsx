@@ -5,6 +5,7 @@ import * as t from "@/db/schema";
 import { loadPlanCatalog } from "@/db/planning";
 import { Flash } from "../components/flash";
 import { PageHeader } from "../components/ui/header";
+import { AppUpdates } from "./app-updates";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +141,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <span className="chev" aria-hidden />
         </Link>
       </nav>
+
+      <AppUpdates />
     </>
   );
 }

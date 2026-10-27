@@ -17,6 +17,11 @@ import path from "node:path";
 import { startDatabase, type Database } from "./database";
 import { backupDatabase } from "./backup";
 
+// "Check for updates" (development only, see desktop/UPDATER.md). Left out of
+// the app entirely when it is built with VERSAA_UPDATER=0.
+declare const __VERSAA_UPDATER__: boolean;
+const updater = __VERSAA_UPDATER__ ? (require("./updater") as typeof import("./updater")) : undefined;
+
 // Everything Versaa keeps: on a Mac, ~/Library/Application Support/Versaa/data.
 const dataDir = path.join(app.getPath("userData"), "data");
 const paths = {
@@ -134,7 +139,7 @@ function createWindow() {
     title: "Versaa",
     backgroundColor: "#f6f4ef",
     show: false,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: updater?.preloadPath },
   });
   win.once("ready-to-show", () => win.show());
   // App pages (a delivery note opened in a new tab, for example) open in a new window; anything else in the browser.
@@ -215,6 +220,16 @@ async function start() {
   mainWindow = createWindow();
   await mainWindow.loadURL(splash);
 
+  await updater?.setupUpdater({
+    dataDir,
+    databaseDir: paths.database,
+    uploadsDir: paths.uploads,
+    backupsDir: paths.backups,
+    log,
+    backupDatabase: (dir) => backupDatabase(database!.pg, dir, { keep: 1 }),
+    isAppUrl,
+  });
+
   const firstRun = !existsSync(path.join(paths.database, "PG_VERSION"));
   database = await startDatabase({ dataDir: paths.database, migrationsDir, log });
   // A copy before migrations touch an existing database, so an update can always be undone.
@@ -228,6 +243,7 @@ async function start() {
   await database.prepare();
   appUrl = await startServer(database.url);
   log("ready at", appUrl);
+  await updater?.markStarted().catch((err) => log("updater: could not record the update", err));
   if (mainWindow) await mainWindow.loadURL(appUrl);
   else createWindow().loadURL(appUrl);
 }
@@ -245,8 +261,18 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() =>
-    start().catch((err) => {
+    start().catch(async (err) => {
       log("start failed", err);
+      if (updater) {
+        const recovered = await updater
+          .recoverFromFailedStart(err, async () => {
+            quitting = true;
+            server?.kill();
+            await database?.stop();
+          })
+          .catch((e) => (log("updater: going back failed", e), false));
+        if (recovered) return app.exit(1);
+      }
       dialog.showErrorBox("Versaa could not start", `${err instanceof Error ? err.message : String(err)}\n\nDetails are in ${paths.log}`);
       app.exit(1);
     }),

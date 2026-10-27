@@ -31,6 +31,7 @@
     },
     "files": [
       "build/main.cjs",
+      "build/preload.cjs",
       "package.json"
     ],
     "extraResources": [

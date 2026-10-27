@@ -1,6 +1,8 @@
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createDb } from "../../src/db/client";
 import { seedCatalog, seedYieldEstimates } from "../../src/db/seed";
 
@@ -39,6 +41,7 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
     async prepare() {
       const db = createDb(url);
       try {
+        await refuseNewerDatabase(db.$client, opts.migrationsDir);
         await migrate(db, { migrationsFolder: opts.migrationsDir });
         opts.log("migrations applied");
         await seedCatalog(db);
@@ -54,4 +57,22 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
       opts.log("database closed");
     },
   };
+}
+
+/**
+ * An older copy of the app must not open a database that a newer copy has
+ * already migrated: its code would not match the tables. Stop with a clear
+ * message instead (the backups folder has copies from before each update).
+ */
+async function refuseNewerDatabase(sql: ReturnType<typeof createDb>["$client"], migrationsDir: string) {
+  const journal = JSON.parse(readFileSync(path.join(migrationsDir, "meta", "_journal.json"), "utf8")) as { entries: unknown[] };
+  const [table] = await sql<{ exists: boolean }[]>`select to_regclass('drizzle.__drizzle_migrations') is not null as exists`;
+  if (!table?.exists) return;
+  const [row] = await sql<{ n: number }[]>`select count(*)::int as n from drizzle.__drizzle_migrations`;
+  const n = row?.n ?? 0;
+  if (n > journal.entries.length) {
+    throw new Error(
+      `This database was already updated by a newer version of Versaa (${n} database changes; this copy knows ${journal.entries.length}). Open the newer Versaa.app instead.`,
+    );
+  }
 }

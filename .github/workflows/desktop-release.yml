@@ -1,0 +1,54 @@
+# Part of "Check for updates" in the Mac app (development only, see desktop/UPDATER.md).
+# After the Check workflow passes on main, builds Versaa.app on a GitHub Mac and
+# publishes it as a release. The app's Settings page reads the latest release.
+name: Desktop app release
+on:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: desktop-release
+  cancel-in-progress: true
+jobs:
+  mac:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: macos-latest
+    env:
+      VERSAA_BUILD_NUMBER: ${{ github.run_number }}
+      VERSAA_UPDATE_REPO: ${{ github.repository }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 60
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npm --prefix desktop ci
+      - run: npm --prefix desktop run dist:mac -- --publish never
+      - run: node desktop/scripts/release-manifest.mjs
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="desktop-${VERSAA_BUILD_NUMBER}"
+          gh release create "$tag" desktop/release/*.zip desktop/release/update.json \
+            --target "$(git rev-parse HEAD)" --latest \
+            --title "Versaa for Mac · build ${VERSAA_BUILD_NUMBER}" \
+            --notes-file desktop/release/notes.md
+      - name: Keep only the last 5 builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("desktop-"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
+            while read -r tag; do gh release delete "$tag" --yes --cleanup-tag; done

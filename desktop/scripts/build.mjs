@@ -2,6 +2,9 @@
 //   server/   the Next.js app as a self-contained server (next build, output "standalone")
 //   drizzle/  the database migrations
 //   main.cjs  the desktop shell (src/main.ts and what it imports, bundled)
+//   preload.cjs  the updater's bridge to the Settings page (only with the updater)
+//
+// VERSAA_UPDATER=0 leaves "Check for updates" out completely (see UPDATER.md).
 import { execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -27,6 +30,21 @@ if (existsSync(path.join(root, "public"))) cpSync(path.join(root, "public"), pat
 cpSync(path.join(root, "drizzle"), path.join(out, "drizzle"), { recursive: true });
 
 console.log("3/3 Bundling the desktop shell…");
+const updater = process.env.VERSAA_UPDATER !== "0";
+const git = (args) => {
+  try {
+    return execSync(`git ${args}`, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "";
+  }
+};
+const buildInfo = {
+  number: Number(process.env.VERSAA_BUILD_NUMBER) || 0,
+  commit: git("rev-parse HEAD") || "unknown",
+  commitTime: git("log -1 --format=%cI") || new Date().toISOString(),
+  builtAt: new Date().toISOString(),
+  repo: process.env.VERSAA_UPDATE_REPO || "Akinatron/Versaa-production-software",
+};
 await build({
   entryPoints: [path.join(desktop, "src/main.ts")],
   outfile: path.join(out, "main.cjs"),
@@ -36,6 +54,19 @@ await build({
   target: "node22",
   tsconfig: path.join(root, "tsconfig.json"),
   external: ["electron", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
+  define: { __VERSAA_UPDATER__: String(updater), __VERSAA_BUILD__: JSON.stringify(buildInfo) },
   logLevel: "warning",
 });
-console.log("Done: desktop/build");
+if (updater) {
+  await build({
+    entryPoints: [path.join(desktop, "src/updater/preload.ts")],
+    outfile: path.join(out, "preload.cjs"),
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node22",
+    external: ["electron"],
+    logLevel: "warning",
+  });
+}
+console.log(`Done: desktop/build (${updater ? `with "Check for updates", build ${buildInfo.number}` : "without updater"})`);
