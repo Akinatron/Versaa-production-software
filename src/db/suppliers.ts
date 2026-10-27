@@ -364,3 +364,16 @@ export async function lotUnitCosts(db: Exec, lots: { lotId: string; itemId: stri
   }
   return out;
 }
+
+/** How one supplier names the items it sells: its own code and pack name, by item id. */
+export async function supplierNaming(db: Exec, supplierId: string, itemIds: string[]): Promise<Map<string, { code: string | null; packName: string | null }>> {
+  const out = new Map<string, { code: string | null; packName: string | null }>();
+  if (itemIds.length === 0) return out;
+  const links = await db
+    .select({ itemId: t.supplierItems.itemId, code: t.supplierItems.supplierCode })
+    .from(t.supplierItems)
+    .where(and(eq(t.supplierItems.supplierId, supplierId), inArray(t.supplierItems.itemId, itemIds)));
+  const offers = await loadOffers(db, { itemIds, supplierId });
+  for (const l of links) out.set(l.itemId, { code: l.code?.trim() || null, packName: offers.find((o) => o.itemId === l.itemId)?.packName ?? null });
+  return out;
+}

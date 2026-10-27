@@ -17,6 +17,8 @@ import { fmtDate } from "../../components/ui/format";
 import { documentsFor, removedDocumentsFor } from "@/db/documents";
 import { DocList, RemovedDocs } from "../../components/documents";
 import { DocUpload } from "../../components/doc-upload";
+import { SendOrder } from "../../components/send-order";
+import { orderMessageData } from "../message-data";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,8 @@ export default async function OrderPage({
   const docs = await documentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
   const removedDocs = await removedDocumentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
   const invoices = docs.filter((d) => d.kind === "invoice");
+  const message = po.status === "cancelled" ? null : await orderMessageData(db(), order);
+  const sendOrder = message && <SendOrder poId={po.id} supplierId={supplier.id} contact={supplier.contact} order={message} />;
   const open = po.status === "sent" || po.status === "partly_received";
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
@@ -198,6 +202,8 @@ export default async function OrderPage({
           <p className="small muted" style={{ margin: "4px 0 8px" }}>
             Place the order with {supplier.name}, then mark it as sent. Until then it doesn't count as on order.
           </p>
+          {sendOrder}
+          <hr style={{ margin: "16px 0" }} />
           <MarkSentForm poId={po.id} back={back} expectedOn={po.expectedOn} />
         </div>
       )}
@@ -251,6 +257,13 @@ export default async function OrderPage({
           <summary>Correct this order</summary>
           <p className="small muted">Change quantities, prices, the expected date or the reference. The change and its reason go in the history.</p>
           {editForm(true)}
+        </details>
+      )}
+      {open && sendOrder && (
+        <details className="card">
+          <summary>Send to supplier again</summary>
+          <p className="small muted">The order as a message to copy into an email or WhatsApp, or to print or save as a PDF.</p>
+          {sendOrder}
         </details>
       )}
       {po.note && po.status !== "draft" && (

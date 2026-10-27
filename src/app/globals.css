@@ -534,3 +534,16 @@ button.secondary.is-pending::after, button.ghost.is-pending::after, button.dange
 .viewer form[method="POST" i]:not(.keep), .viewer form[method="post"]:not(.keep), .viewer .edit-only { display: none !important; }
 .doc-remove > summary { list-style: none; cursor: pointer; }
 .doc-remove > summary::-webkit-details-marker { display: none; }
+
+/* Printable pages (a purchase order to send to a supplier). */
+.print-doc { max-width: 760px; }
+.print-doc table { width: 100%; }
+.send-order textarea { width: 100%; resize: vertical; }
+@page { margin: 16mm; }
+@media print {
+  .side, .topbar, .scrim, .no-print { display: none !important; }
+  .app { display: block; }
+  body { background: #fff; color: #000; }
+  main { padding: 0 !important; animation: none !important; }
+  .print-doc { max-width: none; }
+}
