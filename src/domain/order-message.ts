@@ -7,8 +7,6 @@ import { formatQty, type UnitCode } from "./quantity";
  * or WhatsApp, or printed. The app never sends it by itself.
  */
 
-export type OrderLang = "es" | "en";
-
 export interface OrderMessageLine {
   name: string;
   /** The supplier's own code for the item, when known. */
@@ -27,75 +25,40 @@ export interface OrderMessageLine {
 }
 
 export interface OrderMessageInput {
-  lang: OrderLang;
   supplierName: string;
   code: string;
   /** ISO date the order is dated (sent date, or today for a draft). */
   date: string;
   expectedOn?: string | null;
   reference?: string | null;
-  note?: string | null;
   lines: OrderMessageLine[];
   withPrices?: boolean;
   /** Who signs it. */
   from?: string;
 }
 
-const WORDS = {
-  es: {
-    hello: (s: string) => `Hola ${s},`,
-    intro: (code: string) => `Os paso nuestro pedido ${code}:`,
-    by: (d: string) => `Lo necesitaríamos para el ${d}.`,
-    ref: (r: string) => `Vuestra referencia: ${r}`,
-    total: "Total aproximado",
-    thanks: "¿Nos confirmáis la recepción y la fecha de entrega? Gracias.",
-    code: "ref.",
-    each: "c/u",
-    pack: "paquetes",
-  },
-  en: {
-    hello: (s: string) => `Hello ${s},`,
-    intro: (code: string) => `Here is our order ${code}:`,
-    by: (d: string) => `We would need it by ${d}.`,
-    ref: (r: string) => `Your reference: ${r}`,
-    total: "Approximate total",
-    thanks: "Could you confirm you received it and the delivery date? Thank you.",
-    code: "code",
-    each: "each",
-    pack: "packs",
-  },
-} as const;
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const MONTHS = {
-  es: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
-  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-};
-
-/** "3 de noviembre de 2026" / "3 November 2026". */
-export function longDate(iso: string, lang: OrderLang): string {
+/** "3 November 2026". */
+export function longDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  const month = MONTHS[lang][m! - 1];
-  return lang === "es" ? `${d} de ${month} de ${y}` : `${d} ${month} ${y}`;
+  return `${d} ${MONTHS[m! - 1]} ${y}`;
 }
 
 /** Quantity as the supplier sells it: "4 sacks × 25 kg (100 kg)" or "100 kg". */
-export function lineQuantity(l: OrderMessageLine, lang: OrderLang): string {
-  const qty = (v: Decimal.Value) => {
-    const s = formatQty(new Decimal(v), l.unit);
-    return lang === "es" && l.unit === "unit" ? s.replace(/ units$/, " uds") : s;
-  };
-  const total = qty(l.quantity);
+export function lineQuantity(l: OrderMessageLine): string {
+  const total = formatQty(new Decimal(l.quantity), l.unit);
   if (l.packQty && l.packs !== null && l.packs !== undefined) {
-    const size = qty(l.packQty);
-    const name = l.packName?.trim() || WORDS[lang].pack;
-    return `${l.packs} ${name} × ${size} (${total})`;
+    const size = formatQty(new Decimal(l.packQty), l.unit);
+    return `${l.packs} ${l.packName?.trim() || "packs"} × ${size} (${total})`;
   }
   return total;
 }
 
-function linePrice(l: OrderMessageLine, lang: OrderLang): string | null {
-  if (l.packQty && l.packPrice) return `${money(new Decimal(l.packPrice))} ${WORDS[lang].each}`;
-  if (l.unitPrice) return `${money(new Decimal(l.unitPrice))}/${l.unit === "unit" ? (lang === "es" ? "ud" : "unit") : l.unit}`;
+/** "12.50 € each" for a pack, "3.20 €/kg" per stock unit. */
+export function linePrice(l: OrderMessageLine): string | null {
+  if (l.packQty && l.packPrice) return `${money(new Decimal(l.packPrice))} each`;
+  if (l.unitPrice) return `${money(new Decimal(l.unitPrice))}/${l.unit}`;
   return null;
 }
 
@@ -106,27 +69,25 @@ export function orderTotal(lines: OrderMessageLine[]): Decimal | null {
 }
 
 export function orderMessage(o: OrderMessageInput): string {
-  const w = WORDS[o.lang];
-  const out: string[] = [w.hello(o.supplierName), "", w.intro(o.code), ""];
+  const out: string[] = [`Hello ${o.supplierName},`, "", `Here is our order ${o.code}:`, ""];
   for (const l of o.lines) {
     if (new Decimal(l.quantity).lte(0)) continue;
-    let row = `- ${l.name}${l.supplierCode ? ` (${w.code} ${l.supplierCode})` : ""}: ${lineQuantity(l, o.lang)}`;
+    let row = `- ${l.name}${l.supplierCode ? ` (code ${l.supplierCode})` : ""}: ${lineQuantity(l)}`;
     if (o.withPrices) {
-      const p = linePrice(l, o.lang);
+      const p = linePrice(l);
       if (p) row += ` · ${p}`;
     }
     out.push(row);
   }
   if (o.withPrices) {
     const total = orderTotal(o.lines);
-    if (total) out.push("", `${w.total}: ${money(total)}`);
+    if (total) out.push("", `Approximate total: ${money(total)}`);
   }
   const extra: string[] = [];
-  if (o.expectedOn) extra.push(w.by(longDate(o.expectedOn, o.lang)));
-  if (o.reference) extra.push(w.ref(o.reference));
-  if (o.note?.trim()) extra.push(o.note.trim());
+  if (o.expectedOn) extra.push(`We would need it by ${longDate(o.expectedOn)}.`);
+  if (o.reference) extra.push(`Your reference: ${o.reference}`);
   if (extra.length) out.push("", ...extra);
-  out.push("", w.thanks, "", o.from ?? "Versaa");
+  out.push("", "Could you confirm you received it and the delivery date? Thank you.", "", o.from ?? "Versaa");
   return out.join("\n");
 }
 

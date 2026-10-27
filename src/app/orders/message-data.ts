@@ -5,7 +5,7 @@ import type { OrderMessageInput } from "@/domain/order-message";
 import type { UnitCode } from "@/domain/quantity";
 
 /** An order's lines and dates, ready to turn into the supplier's message or printout. */
-export async function orderMessageData(d: DB, order: OrderView): Promise<Omit<OrderMessageInput, "lang" | "withPrices">> {
+export async function orderMessageData(d: DB, order: OrderView): Promise<Omit<OrderMessageInput, "withPrices">> {
   const { po, supplier, lines } = order;
   const naming = await supplierNaming(
     d,

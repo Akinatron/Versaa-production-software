@@ -50,7 +50,7 @@ export default async function OrderPage({
   const removedDocs = await removedDocumentsFor(db(), { purchaseOrderIds: [po.id], receiptIds: deliveries.map((r) => r.id) });
   const invoices = docs.filter((d) => d.kind === "invoice");
   const message = po.status === "cancelled" ? null : await orderMessageData(db(), order);
-  const sendOrder = message && <SendOrder poId={po.id} supplierId={supplier.id} contact={supplier.contact} order={message} />;
+  const sendOrder = message && <SendOrder poId={po.id} contact={supplier.contact} order={message} />;
   const open = po.status === "sent" || po.status === "partly_received";
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;

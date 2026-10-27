@@ -4,43 +4,26 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import { loadOrders } from "@/db/purchasing";
 import { money } from "@/domain/pricing";
-import { lineQuantity, longDate, orderTotal, type OrderLang } from "@/domain/order-message";
+import { linePrice, lineQuantity, longDate, orderTotal } from "@/domain/order-message";
 import { orderMessageData } from "../../message-data";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-const L = {
-  es: {
-    title: "Pedido",
-    date: "Fecha",
-    to: "Proveedor",
-    item: "Artículo",
-    code: "Ref. proveedor",
-    qty: "Cantidad",
-    price: "Precio",
-    cost: "Importe",
-    total: "Total aproximado",
-    by: "Entrega deseada",
-    ref: "Vuestra referencia",
-    print: "Imprimir o guardar en PDF",
-    back: "Volver al pedido",
-  },
-  en: {
-    title: "Purchase order",
-    date: "Date",
-    to: "Supplier",
-    item: "Item",
-    code: "Supplier code",
-    qty: "Quantity",
-    price: "Price",
-    cost: "Amount",
-    total: "Approximate total",
-    by: "Wanted by",
-    ref: "Your reference",
-    print: "Print or save as PDF",
-    back: "Back to the order",
-  },
+const w = {
+  title: "Purchase order",
+  date: "Date",
+  to: "Supplier",
+  item: "Item",
+  code: "Supplier code",
+  qty: "Quantity",
+  price: "Price",
+  cost: "Amount",
+  total: "Approximate total",
+  by: "Wanted by",
+  ref: "Your reference",
+  print: "Print or save as PDF",
+  back: "Back to the order",
 };
 
 export default async function PrintOrderPage({
@@ -52,12 +35,10 @@ export default async function PrintOrderPage({
 }) {
   const { id } = await params;
   const q = await searchParams;
-  const lang: OrderLang = q.lang === "en" ? "en" : "es";
   const withPrices = q.prices === "1";
   const [order] = await loadOrders(db(), { ids: [id] });
   if (!order || order.po.status === "cancelled") notFound();
   const m = await orderMessageData(db(), order);
-  const w = L[lang];
   const lines = m.lines.filter((l) => new Decimal(l.quantity).gt(0));
   const hasCodes = lines.some((l) => l.supplierCode);
   const total = orderTotal(lines);
@@ -76,7 +57,7 @@ export default async function PrintOrderPage({
           </h1>
         </div>
         <div className="small" style={{ textAlign: "right" }}>
-          {w.date}: {longDate(m.date, lang)}
+          {w.date}: {longDate(m.date)}
         </div>
       </header>
       <p style={{ margin: "20px 0" }}>
@@ -107,14 +88,10 @@ export default async function PrintOrderPage({
             <tr key={i}>
               <td>{l.name}</td>
               {hasCodes && <td>{l.supplierCode ?? ""}</td>}
-              <td className="num">{lineQuantity(l, lang)}</td>
+              <td className="num">{lineQuantity(l)}</td>
               {withPrices && (
                 <td className="num">
-                  {l.packQty && l.packPrice
-                    ? money(new Decimal(l.packPrice))
-                    : l.unitPrice
-                      ? `${money(new Decimal(l.unitPrice))}/${l.unit === "unit" ? (lang === "es" ? "ud" : "unit") : l.unit}`
-                      : ""}
+                  {linePrice(l)?.replace(/ each$/, "") ?? ""}
                 </td>
               )}
               {withPrices && <td className="num">{l.unitPrice ? money(new Decimal(l.quantity).mul(l.unitPrice)) : ""}</td>}
@@ -133,7 +110,7 @@ export default async function PrintOrderPage({
         <p style={{ marginTop: 20 }}>
           {m.expectedOn && (
             <>
-              {w.by}: <strong>{longDate(m.expectedOn, lang)}</strong>
+              {w.by}: <strong>{longDate(m.expectedOn)}</strong>
               <br />
             </>
           )}

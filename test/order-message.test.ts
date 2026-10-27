@@ -9,7 +9,7 @@ const lines = [
     unit: "kg" as const,
     packQty: "25",
     packs: 4,
-    packName: "sack",
+    packName: "sacks",
     unitPrice: "0.5",
     packPrice: "12.5",
   },
@@ -17,33 +17,28 @@ const lines = [
 ];
 
 describe("order message", () => {
-  it("writes the order in Spanish with packs, codes and the wanted date", () => {
-    const text = orderMessage({ lang: "es", supplierName: "Huerta Sur", code: "PO-0007", date: "2026-10-27", expectedOn: "2026-11-03", lines });
-    expect(text).toContain("Hola Huerta Sur,");
-    expect(text).toContain("Os paso nuestro pedido PO-0007:");
-    expect(text).toContain("- Tomato (ref. TM-25): 4 sack × 25 kg (100 kg)");
-    expect(text).toContain("- Lids 70 mm: 500 uds");
-    expect(text).toContain("Lo necesitaríamos para el 3 de noviembre de 2026.");
+  it("writes the order with packs, codes and the wanted date", () => {
+    const text = orderMessage({ supplierName: "Huerta Sur", code: "PO-0007", date: "2026-10-27", expectedOn: "2026-11-03", lines });
+    expect(text).toContain("Hello Huerta Sur,");
+    expect(text).toContain("Here is our order PO-0007:");
+    expect(text).toContain("- Tomato (code TM-25): 4 sacks × 25 kg (100 kg)");
+    expect(text).toContain("- Lids 70 mm: 500 units");
+    expect(text).toContain("We would need it by 3 November 2026.");
     expect(text).not.toContain("€");
   });
   it("adds prices and a total only when asked", () => {
-    const text = orderMessage({ lang: "en", supplierName: "X", code: "PO-1", date: "2026-10-27", lines, withPrices: true });
-    expect(text).toContain("4 sack × 25 kg (100 kg) · 12.50 € each");
+    const text = orderMessage({ supplierName: "X", code: "PO-1", date: "2026-10-27", lines, withPrices: true });
+    expect(text).toContain("4 sacks × 25 kg (100 kg) · 12.50 € each");
+    expect(text).toContain("500 units · 0.08 €/unit");
     expect(text).toContain("Approximate total: 90.00 €");
   });
   it("leaves out lines set to zero and has no total when a price is missing", () => {
-    const text = orderMessage({
-      lang: "en",
-      supplierName: "X",
-      code: "PO-1",
-      date: "2026-10-27",
-      lines: [...lines, { name: "Salt", quantity: "0", unit: "kg" }],
-    });
+    const text = orderMessage({ supplierName: "X", code: "PO-1", date: "2026-10-27", lines: [...lines, { name: "Salt", quantity: "0", unit: "kg" }] });
     expect(text).not.toContain("Salt");
     expect(orderTotal([...lines, { name: "Salt", quantity: "1", unit: "kg" }])).toBeNull();
   });
   it("names packs generically when the supplier gave no pack name", () => {
-    expect(lineQuantity({ name: "Oil", quantity: "20", unit: "L", packQty: "5", packs: 4 }, "es")).toBe("4 paquetes × 5 L (20 L)");
+    expect(lineQuantity({ name: "Oil", quantity: "20", unit: "L", packQty: "5", packs: 4 })).toBe("4 packs × 5 L (20 L)");
   });
 });
 
@@ -56,6 +51,6 @@ describe("supplier contact", () => {
     expect(contactChannels(null)).toEqual({ email: null, phone: null });
   });
   it("builds a WhatsApp link with the text", () => {
-    expect(whatsappHref("34612345678", "Hola\nPedido")).toBe("https://wa.me/34612345678?text=Hola%0APedido");
+    expect(whatsappHref("34612345678", "Hello\nOrder")).toBe("https://wa.me/34612345678?text=Hello%0AOrder");
   });
 });
