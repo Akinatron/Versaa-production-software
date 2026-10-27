@@ -69,6 +69,8 @@ pnpm desktop:mac    # builds Versaa.app and copies it into /Applications
 
 Then open **Versaa** from Applications or Launchpad. The first start takes a few seconds longer while it creates the database; then it asks for the first account, as the web version does. Run the same command again after pulling an update: the app is replaced, the data is kept, and migrations run by themselves when it opens.
 
+While the app is in development it can also update itself from GitHub (Settings → App updates). See [desktop/UPDATER.md](desktop/UPDATER.md), which also says how to build it without that or remove it.
+
 The app isn't signed with an Apple developer account. A copy built on the same Mac opens normally. A copy brought from another Mac (the zip in `desktop/dist`) is blocked the first time: right-click it, choose **Open**, then **Open** again (or allow it in System Settings → Privacy & Security).
 
 What it keeps, in `~/Library/Application Support/Versaa/data` (File → Show Data Folder):
