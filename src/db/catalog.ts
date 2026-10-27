@@ -8,6 +8,7 @@ import { batchPrefixFor } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
+import { parseStorage, storageLabel } from "@/domain/storage";
 
 /*
  * Changing the catalog (Settings). Recipes and packaging lists are edited as
@@ -216,16 +217,23 @@ async function uniqueCode(db: DB, base: string, table: typeof t.items | typeof t
   }
 }
 
-export async function addItem(db: DB, input: { kind: "ingredient" | "packaging"; name: string; stockUnit: string }) {
+export async function addItem(db: DB, input: { kind: "ingredient" | "packaging"; name: string; stockUnit: string; storage?: string | null }) {
   const name = input.name.trim();
+  const storage = input.kind === "packaging" ? null : parseStorage(input.storage);
+  if (storage === "invalid") throw new OperationError("Choose Fridge, Freezer or Room temperature.");
   if (!name) throw new OperationError("Name is required.");
   if (!isUnitCode(input.stockUnit)) throw new OperationError("Choose a stock unit.");
   if (input.kind === "packaging" && input.stockUnit !== "unit") throw new OperationError("Packaging is counted in units.");
   const [dup] = await db.select().from(t.items).where(and(eq(t.items.name, name), eq(t.items.kind, input.kind)));
   if (dup) throw new OperationError(`${name} already exists.`);
   const code = await uniqueCode(db, `${input.kind === "ingredient" ? "ing" : "pkg"}-${slug(name)}`, t.items);
-  const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit }).returning();
-  await logChange(db, { action: "create", area: "settings", entity: { type: "item", id: row!.id, code: name }, summary: `Added ${input.kind} ${name} (${input.stockUnit})` });
+  const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit, storage }).returning();
+  await logChange(db, {
+    action: "create",
+    area: "settings",
+    entity: { type: "item", id: row!.id, code: name },
+    summary: `Added ${input.kind} ${name} (${input.stockUnit}${storage ? `, ${storageLabel(storage).toLowerCase()}` : ""})`,
+  });
   return row!;
 }
 
@@ -236,6 +244,31 @@ export async function renameItem(db: DB, itemId: string, name: string) {
   if (item.name === name.trim()) return;
   await db.update(t.items).set({ name: name.trim() }).where(eq(t.items.id, itemId));
   await logChange(db, { action: "update", area: "settings", entity: { type: "item", id: itemId, code: name.trim() }, summary: `Renamed ${item.name} to ${name.trim()}`, changes: diff([["Name", item.name, name.trim()]]) });
+}
+
+/**
+ * Set where an item is kept by default. New lots take this value. Lots that
+ * had no value yet (made before it was set) take it too; lots that already
+ * say where they are keep theirs, so history isn't rewritten.
+ */
+export async function setItemStorage(db: DB, itemId: string, value: string | null) {
+  const storage = parseStorage(value);
+  if (storage === "invalid") throw new OperationError("Choose Fridge, Freezer or Room temperature.");
+  const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
+  if (!item) throw new OperationError("Item not found.");
+  if (item.kind === "packaging") throw new OperationError("Packaging items don't have a storage place.");
+  if (item.storage === storage) return;
+  await db.transaction(async (tx) => {
+    await tx.update(t.items).set({ storage }).where(eq(t.items.id, itemId));
+    if (storage) await tx.update(t.lots).set({ storage }).where(and(eq(t.lots.itemId, itemId), sql`${t.lots.storage} is null`));
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "item", id: itemId, code: item.name },
+      summary: `Storage of ${item.name} set to ${storageLabel(storage)}`,
+      changes: diff([["Storage", storageLabel(item.storage), storageLabel(storage)]]),
+    });
+  });
 }
 
 /** Retire or bring back an item. Its stock and history stay. */

@@ -1,3 +1,4 @@
+import { STORAGE, STORAGE_KEYS, storageLabel } from "@/domain/storage";
 import { eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
@@ -116,6 +117,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                 <th>Damage / problem</th>
                 <th>Supplier batch</th>
                 <th>Best before</th>
+                <th>Kept in</th>
               </tr>
             </thead>
             <tbody>
@@ -144,6 +146,23 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                   <td>
                     <input name={`bb_${i}`} type="date" aria-label="Best before" />
                   </td>
+                  <td>
+                    {l.item.kind === "packaging" ? (
+                      <>
+                        <input type="hidden" name={`st_${i}`} value="" />
+                        <span className="muted">—</span>
+                      </>
+                    ) : (
+                      <select name={`st_${i}`} defaultValue="" aria-label={`Where ${l.item.name} is kept`}>
+                        <option value="">{l.item.storage ? `${storageLabel(l.item.storage)} (as on its card)` : "Not set on its card"}</option>
+                        {STORAGE_KEYS.filter((k) => k !== l.item.storage).map((k) => (
+                          <option key={k} value={k}>
+                            {STORAGE[k].label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
                 </tr>
               ))}
               {Array.from({ length: blanks }, (_, j) => {
@@ -168,6 +187,16 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                     </td>
                     <td>
                       <input name={`bb_${i}`} type="date" aria-label="Best before" />
+                    </td>
+                    <td>
+                      <select name={`st_${i}`} defaultValue="" aria-label="Where it is kept">
+                        <option value="">As on its card</option>
+                        {STORAGE_KEYS.map((k) => (
+                          <option key={k} value={k}>
+                            {STORAGE[k].label}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                   </tr>
                 );

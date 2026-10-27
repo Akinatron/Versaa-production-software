@@ -17,6 +17,7 @@ import { lotFlow } from "../../../components/trace-flow-data";
 import { Flash } from "../../../components/flash";
 import { EditedMark, History, ReasonField } from "../../../components/history";
 import { editLot } from "../../actions";
+import { StorageBadge, StorageOptions } from "../../../components/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,12 @@ export default async function LotTracePage({
           <div className="small muted">Best before</div>
           {lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : "not recorded"}
         </div>
+        {lot.itemKind !== "packaging" && (
+          <div>
+            <div className="small muted">Kept in</div>
+            <StorageBadge value={lot.storage} />
+          </div>
+        )}
         <div>
           <div className="small muted">Still in stock</div>
           <strong>{lotQty(lot.balance, lot.unit, lot.itemKind)}</strong>
@@ -330,7 +337,9 @@ export default async function LotTracePage({
         </>
       )}
       <details className="card edit-only" style={{ marginTop: 32 }}>
-        <summary>Correct the best-before{isMade ? "" : " or supplier batch"}</summary>
+        <summary>
+          {lot.itemKind === "packaging" ? "Correct the best-before or supplier batch" : `Move it or correct the best-before${isMade ? "" : " or supplier batch"}`}
+        </summary>
         <form action={editLot} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
           <input type="hidden" name="lotId" value={lot.id} />
           {!isMade && (
@@ -343,7 +352,15 @@ export default async function LotTracePage({
             <label htmlFor="l-bb">Best before</label>
             <input id="l-bb" name="bestBefore" type="date" defaultValue={lot.bestBefore ?? ""} />
           </div>
-          <ReasonField id="l-reason" placeholder="e.g. misread the label" />
+          {lot.itemKind !== "packaging" && (
+            <div>
+              <label htmlFor="l-storage">Kept in</label>
+              <select id="l-storage" name="storage" defaultValue={lot.storage ?? ""}>
+                <StorageOptions />
+              </select>
+            </div>
+          )}
+          <ReasonField id="l-reason" placeholder="e.g. froze it to keep it longer" />
           <button type="submit" className="secondary">
             Save
           </button>

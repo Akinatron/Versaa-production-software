@@ -25,6 +25,8 @@ export interface LotSummary {
   receivedOn: string | null;
   bestBefore: string | null;
   batchId: string | null;
+  /** Where this lot is kept (fridge, freezer, room), or null if not set. */
+  storage: string | null;
   balance: Decimal;
 }
 
@@ -32,16 +34,16 @@ export async function lotsByIds(db: DB, ids: string[]): Promise<LotSummary[]> {
   if (!ids.length) return [];
   const rows = await db.execute<{
     id: string; code: string; item_id: string; item_name: string; kind: string; unit: string; supplier: string | null;
-    delivery_ref: string | null; supplier_batch: string | null; received_on: string | null; best_before: string | null; batch_id: string | null; balance: string;
+    delivery_ref: string | null; supplier_batch: string | null; received_on: string | null; best_before: string | null; batch_id: string | null; storage: string | null; balance: string;
   }>(sql`
     select l.id, l.code, l.item_id, i.name as item_name, i.kind, i.stock_unit as unit, s.name as supplier,
-      l.delivery_ref, l.supplier_batch, l.received_on::text, l.best_before::text, l.batch_id,
+      l.delivery_ref, l.supplier_batch, l.received_on::text, l.best_before::text, l.batch_id, l.storage::text,
       coalesce((select sum(m.quantity) from movements m where m.lot_id = l.id), 0) as balance
     from lots l join items i on i.id = l.item_id left join suppliers s on s.id = l.supplier_id
     where l.id in (${sql.join(ids.map((x) => sql`${x}`), sql`, `)})`);
   return [...rows].map((r) => ({
     id: r.id, code: r.code, itemId: r.item_id, itemName: r.item_name, itemKind: r.kind, unit: r.unit, supplierName: r.supplier,
-    deliveryRef: r.delivery_ref, supplierBatch: r.supplier_batch, receivedOn: r.received_on, bestBefore: r.best_before, batchId: r.batch_id,
+    deliveryRef: r.delivery_ref, supplierBatch: r.supplier_batch, receivedOn: r.received_on, bestBefore: r.best_before, batchId: r.batch_id, storage: r.storage,
     balance: new Decimal(r.balance),
   }));
 }

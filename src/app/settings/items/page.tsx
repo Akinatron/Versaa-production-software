@@ -7,6 +7,7 @@ import { loadOffers } from "@/db/suppliers";
 import { Flash } from "../../components/flash";
 import { addItemAction, renameItemAction, setItemActiveAction } from "../actions";
 import { PageHeader } from "../../components/ui/header";
+import { ItemStorageForm, StorageOptions } from "../../components/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,8 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     { kind: "packaging", title: "Packaging items" },
   ] as const;
 
+  const noStorage = items.filter((i) => i.kind === "ingredient" && i.active && !i.storage).length;
+
   return (
     <>
       <PageHeader
@@ -47,6 +50,14 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
         }
       />
       <Flash params={sp} />
+      {noStorage > 0 && (
+        <ul className="issues">
+          <li className="warn">
+            {noStorage} {noStorage === 1 ? "ingredient doesn't say" : "ingredients don't say"} where {noStorage === 1 ? "it's" : "they're"} kept. Choose Fridge,
+            Freezer or Room temperature in the Storage column below.
+          </li>
+        </ul>
+      )}
 
       <h2>Add an item</h2>
       <div className="grid">
@@ -65,6 +76,12 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
             <option value="g">g</option>
             <option value="L">L</option>
             <option value="ml">ml</option>
+          </select>
+          <label htmlFor="istorage" style={{ marginTop: 8 }}>
+            Storage — where it's kept
+          </label>
+          <select id="istorage" name="storage" defaultValue="">
+            <StorageOptions />
           </select>
           <div style={{ marginTop: 12 }}>
             <button type="submit">Add ingredient</button>
@@ -97,6 +114,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                     <th>Name</th>
                     <th>Suppliers</th>
                     <th>Stock unit</th>
+                    {g.kind === "ingredient" && <th>Storage</th>}
                     <th>Status</th>
                     <th>Used by (active)</th>
                     <th>Rename</th>
@@ -118,6 +136,11 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                         </td>
                         <td className="small">{suppliersOf.get(i.id)?.join(", ") ?? <span className="badge warn">none</span>}</td>
                         <td>{UNITS[i.stockUnit as UnitCode].label}</td>
+                        {g.kind === "ingredient" && (
+                          <td>
+                            <ItemStorageForm itemId={i.id} value={i.storage} back="/settings/items" label={`Storage for ${i.name}`} />
+                          </td>
+                        )}
                         <td>{i.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>
                         <td className="small">{used.length ? used.join(", ") : <span className="muted">—</span>}</td>
                         <td>

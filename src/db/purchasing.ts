@@ -9,6 +9,7 @@ import type { PlanResult } from "@/domain/planner";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { lotBalance } from "./ledger";
+import { parseStorage, storageLabel } from "@/domain/storage";
 
 /*
  * Purchase orders and deliveries.
@@ -389,6 +390,8 @@ export interface ReceiptLineInput {
   purchaseOrderLineId?: string | null;
   supplierBatch?: string | null;
   bestBefore?: string | null;
+  /** Where this lot goes. Empty = the item's default storage. Ignored for packaging. */
+  storage?: string | null;
 }
 
 const qtyOrZero = (v: Decimal.Value | null | undefined, what: string) => {
@@ -477,6 +480,8 @@ export async function recordReceipt(
       }
       let lotId: string | null = null;
       if (line.accepted.gt(0)) {
+        const storage = item.kind === "packaging" ? null : parseStorage(line.storage);
+        if (storage === "invalid") throw new OperationError(`${item.name}: choose Fridge, Freezer or Room temperature.`);
         const code = await nextLotCode(tx, `RCV-${input.receivedOn.replaceAll("-", "")}`);
         const [lot] = await tx
           .insert(t.lots)
@@ -488,6 +493,8 @@ export async function recordReceipt(
             supplierBatch: line.supplierBatch?.trim() || null,
             receivedOn: input.receivedOn,
             bestBefore: line.bestBefore || null,
+            // Null lets the database fill in the item's default.
+            storage,
           })
           .returning();
         lotId = lot!.id;
@@ -838,19 +845,26 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
 // ---------------------------------------------------------------- lots
 
 /** Correct a lot's supplier batch or best-before (matters for recalls, so it goes in the history). */
-export async function updateLot(db: DB, input: { lotId: string; reason: string; supplierBatch?: string | null; bestBefore?: string | null }) {
+export async function updateLot(
+  db: DB,
+  input: { lotId: string; reason: string; supplierBatch?: string | null; bestBefore?: string | null; storage?: string | null },
+) {
   const reason = needReason(input.reason, "Say why the lot is corrected");
   if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
+  const storage = input.storage === undefined ? undefined : parseStorage(input.storage);
+  if (storage === "invalid") throw new OperationError("Choose Fridge, Freezer or Room temperature.");
   return db.transaction(async (tx) => {
     const [lot] = await tx.select().from(t.lots).where(eq(t.lots.id, input.lotId));
     if (!lot) throw new OperationError("Lot not found.");
     const upd = {
       ...(input.supplierBatch !== undefined ? { supplierBatch: input.supplierBatch?.trim() || null } : {}),
       ...(input.bestBefore !== undefined ? { bestBefore: input.bestBefore || null } : {}),
+      ...(storage !== undefined ? { storage } : {}),
     };
     const changes = diff([
       ["Supplier batch", lot.supplierBatch, upd.supplierBatch === undefined ? lot.supplierBatch : upd.supplierBatch],
       ["Best-before", lot.bestBefore, upd.bestBefore === undefined ? lot.bestBefore : upd.bestBefore],
+      ["Storage", storageLabel(lot.storage), storageLabel(upd.storage === undefined ? lot.storage : upd.storage)],
     ]);
     if (!changes.length) return;
     await tx.update(t.lots).set(upd).where(eq(t.lots.id, lot.id));
@@ -870,7 +884,7 @@ export async function updateLot(db: DB, input: { lotId: string; reason: string; 
       action: "update",
       area: lot.batchId ? "packaging" : "stock",
       entity: { type: "lot", id: lot.id, code: lot.code },
-      summary: `Lot ${lot.code} corrected`,
+      summary: changes.length === 1 && changes[0]!.label === "Storage" ? `Lot ${lot.code} moved to ${storageLabel(upd.storage)}` : `Lot ${lot.code} corrected`,
       changes,
       reason,
       links,

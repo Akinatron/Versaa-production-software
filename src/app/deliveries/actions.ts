@@ -13,7 +13,7 @@ import { rows } from "../components/item-select";
 
 export async function saveDelivery(form: FormData) {
   const po = String(form.get("po") ?? "");
-  const lines = rows(form, ["item", "qty", "rej", "dmg", "pol", "batch", "bb"]).map((r) => ({
+  const lines = rows(form, ["item", "qty", "rej", "dmg", "pol", "batch", "bb", "st"]).map((r) => ({
     itemId: r.item!,
     quantity: r.qty!,
     rejectedQuantity: r.rej || null,
@@ -21,6 +21,7 @@ export async function saveDelivery(form: FormData) {
     purchaseOrderLineId: r.pol || null,
     supplierBatch: r.batch || null,
     bestBefore: r.bb || null,
+    storage: r.st || null,
   }));
   const files = await filesFrom(form, "docs");
   const retry = `/deliveries/new${po ? `?po=${po}` : ""}`;

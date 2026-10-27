@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
+import { storageLabel } from "@/domain/storage";
 import * as t from "@/db/schema";
 import { traceBatch } from "@/db/trace";
 import { Flash } from "../../../components/flash";
@@ -37,9 +38,10 @@ export default async function PackagingBatchPage({
   const pending = tr.ingredientUse.filter((l) => l.actual === null).length;
 
   const products = await db()
-    .select({ product: t.products, format: t.formats })
+    .select({ product: t.products, format: t.formats, storage: t.items.storage })
     .from(t.products)
     .innerJoin(t.formats, eq(t.products.formatId, t.formats.id))
+    .innerJoin(t.items, eq(t.products.itemId, t.items.id))
     .where(and(eq(t.products.sauceId, sauce.id), eq(t.products.active, true)))
     .orderBy(desc(t.formats.capacityMl));
 
@@ -255,10 +257,11 @@ export default async function PackagingBatchPage({
             {products.length === 0 && <p className="muted">No active jar sizes for {sauce.name}.</p>}
             <PackRows
               stock={pack.stock}
-              sizes={products.map(({ product, format }) => ({
+              sizes={products.map(({ product, format, storage }) => ({
                 productId: product.id,
                 name: product.name,
                 fillMl: format.fillMl,
+                storage: storage ? storageLabel(storage) : null,
                 planned: plannedOf.get(product.id) ?? null,
                 materials: pack.materials[product.id] ?? [],
               }))}

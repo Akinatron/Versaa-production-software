@@ -10,6 +10,8 @@ export interface PackSize {
   initialRejected?: string;
   /** Jars the run planned to fill in this batch, when known. */
   planned?: number | null;
+  /** Where the filled jars go (label), from the product's default storage. */
+  storage?: string | null;
   /** Packaging materials used per filled jar. */
   materials: { itemId: string; perJar: number }[];
 }
@@ -106,6 +108,7 @@ function Row({
         <div className="small muted">
           {size.fillMl} ml per jar
           {size.planned != null && size.planned > 0 && <> · planned {size.planned}</>}
+          {size.storage && <> · kept in: {size.storage}</>}
         </div>
       </div>
       <div>
