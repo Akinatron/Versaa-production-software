@@ -9,6 +9,7 @@ import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
 import { parseStorage, storageLabel } from "@/domain/storage";
+import { parseShelfLife, shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
 
 /*
  * Changing the catalog (Settings). Recipes and packaging lists are edited as
@@ -35,7 +36,9 @@ export async function startRecipeDraft(db: DB, sauceId: string) {
     if (active) {
       const lines = await tx.select().from(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, active.id));
       if (lines.length) {
-        await tx.insert(t.recipeLines).values(lines.map((l) => ({ recipeVersionId: v!.id, itemId: l.itemId, quantity: l.quantity, unit: l.unit, position: l.position })));
+        await tx
+          .insert(t.recipeLines)
+          .values(lines.map((l) => ({ recipeVersionId: v!.id, itemId: l.itemId, quantity: l.quantity, unit: l.unit, position: l.position })));
       }
     }
     return v!;
@@ -74,7 +77,10 @@ export async function saveRecipeDraft(db: DB, input: { versionId: string; batchR
     });
     await tx.delete(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, v.id));
     if (rows.length) await tx.insert(t.recipeLines).values(rows);
-    await tx.update(t.recipeVersions).set({ batchReferenceKg: ref.toString(), note: input.note?.trim() || null }).where(eq(t.recipeVersions.id, v.id));
+    await tx
+      .update(t.recipeVersions)
+      .set({ batchReferenceKg: ref.toString(), note: input.note?.trim() || null })
+      .where(eq(t.recipeVersions.id, v.id));
   });
 }
 
@@ -83,10 +89,19 @@ export async function activateRecipeDraft(db: DB, versionId: string) {
   return db.transaction(async (tx) => {
     const [v] = await tx.select().from(t.recipeVersions).where(eq(t.recipeVersions.id, versionId));
     if (!v || v.status !== "draft") throw new OperationError("Only a draft can be activated.");
-    const [{ n } = { n: 0 }] = await tx.select({ n: sql<number>`count(*)::int` }).from(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, v.id));
+    const [{ n } = { n: 0 }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(t.recipeLines)
+      .where(eq(t.recipeLines.recipeVersionId, v.id));
     if (n === 0) throw new OperationError("A recipe needs at least one ingredient.");
-    const [prev] = await tx.select().from(t.recipeVersions).where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
-    await tx.update(t.recipeVersions).set({ status: "retired" }).where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
+    const [prev] = await tx
+      .select()
+      .from(t.recipeVersions)
+      .where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
+    await tx
+      .update(t.recipeVersions)
+      .set({ status: "retired" })
+      .where(and(eq(t.recipeVersions.sauceId, v.sauceId), eq(t.recipeVersions.status, "active")));
     await tx.update(t.recipeVersions).set({ status: "active", activatedAt: new Date() }).where(eq(t.recipeVersions.id, v.id));
     const [sauce] = await tx.select().from(t.sauces).where(eq(t.sauces.id, v.sauceId));
     const lineText = async (versionId: string | undefined) => {
@@ -99,7 +114,8 @@ export async function activateRecipeDraft(db: DB, versionId: string) {
       return new Map(rows.map((r) => [r.name, `${new Decimal(r.quantity)} ${r.unit}`]));
     };
     const changes = versionChanges(await lineText(prev?.id), await lineText(v.id));
-    if (prev && !new Decimal(prev.batchReferenceKg).eq(v.batchReferenceKg)) changes.unshift({ label: "Batch size", before: `${new Decimal(prev.batchReferenceKg)} kg`, after: `${new Decimal(v.batchReferenceKg)} kg` });
+    if (prev && !new Decimal(prev.batchReferenceKg).eq(v.batchReferenceKg))
+      changes.unshift({ label: "Batch size", before: `${new Decimal(prev.batchReferenceKg)} kg`, after: `${new Decimal(v.batchReferenceKg)} kg` });
     await logChange(tx, {
       action: "update",
       area: "settings",
@@ -166,10 +182,19 @@ export async function activatePackagingDraft(db: DB, versionId: string) {
   return db.transaction(async (tx) => {
     const [v] = await tx.select().from(t.packagingVersions).where(eq(t.packagingVersions.id, versionId));
     if (!v || v.status !== "draft") throw new OperationError("Only a draft can be activated.");
-    const [{ n } = { n: 0 }] = await tx.select({ n: sql<number>`count(*)::int` }).from(t.packagingLines).where(eq(t.packagingLines.packagingVersionId, v.id));
+    const [{ n } = { n: 0 }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(t.packagingLines)
+      .where(eq(t.packagingLines.packagingVersionId, v.id));
     if (n === 0) throw new OperationError("A packaging list needs at least one item.");
-    const [prev] = await tx.select().from(t.packagingVersions).where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
-    await tx.update(t.packagingVersions).set({ status: "retired" }).where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
+    const [prev] = await tx
+      .select()
+      .from(t.packagingVersions)
+      .where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
+    await tx
+      .update(t.packagingVersions)
+      .set({ status: "retired" })
+      .where(and(eq(t.packagingVersions.productId, v.productId), eq(t.packagingVersions.status, "active")));
     await tx.update(t.packagingVersions).set({ status: "active", activatedAt: new Date() }).where(eq(t.packagingVersions.id, v.id));
     const [product] = await tx.select().from(t.products).where(eq(t.products.id, v.productId));
     const lineText = async (versionId: string | undefined) => {
@@ -224,7 +249,10 @@ export async function addItem(db: DB, input: { kind: "ingredient" | "packaging";
   if (!name) throw new OperationError("Name is required.");
   if (!isUnitCode(input.stockUnit)) throw new OperationError("Choose a stock unit.");
   if (input.kind === "packaging" && input.stockUnit !== "unit") throw new OperationError("Packaging is counted in units.");
-  const [dup] = await db.select().from(t.items).where(and(eq(t.items.name, name), eq(t.items.kind, input.kind)));
+  const [dup] = await db
+    .select()
+    .from(t.items)
+    .where(and(eq(t.items.name, name), eq(t.items.kind, input.kind)));
   if (dup) throw new OperationError(`${name} already exists.`);
   const code = await uniqueCode(db, `${input.kind === "ingredient" ? "ing" : "pkg"}-${slug(name)}`, t.items);
   const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit, storage }).returning();
@@ -243,7 +271,13 @@ export async function renameItem(db: DB, itemId: string, name: string) {
   if (!item) throw new OperationError("Item not found.");
   if (item.name === name.trim()) return;
   await db.update(t.items).set({ name: name.trim() }).where(eq(t.items.id, itemId));
-  await logChange(db, { action: "update", area: "settings", entity: { type: "item", id: itemId, code: name.trim() }, summary: `Renamed ${item.name} to ${name.trim()}`, changes: diff([["Name", item.name, name.trim()]]) });
+  await logChange(db, {
+    action: "update",
+    area: "settings",
+    entity: { type: "item", id: itemId, code: name.trim() },
+    summary: `Renamed ${item.name} to ${name.trim()}`,
+    changes: diff([["Name", item.name, name.trim()]]),
+  });
 }
 
 /**
@@ -260,13 +294,44 @@ export async function setItemStorage(db: DB, itemId: string, value: string | nul
   if (item.storage === storage) return;
   await db.transaction(async (tx) => {
     await tx.update(t.items).set({ storage }).where(eq(t.items.id, itemId));
-    if (storage) await tx.update(t.lots).set({ storage }).where(and(eq(t.lots.itemId, itemId), sql`${t.lots.storage} is null`));
+    if (storage)
+      await tx
+        .update(t.lots)
+        .set({ storage })
+        .where(and(eq(t.lots.itemId, itemId), sql`${t.lots.storage} is null`));
     await logChange(tx, {
       action: "update",
       area: "settings",
       entity: { type: "item", id: itemId, code: item.name },
       summary: `Storage of ${item.name} set to ${storageLabel(storage)}`,
       changes: diff([["Storage", storageLabel(item.storage), storageLabel(storage)]]),
+    });
+  });
+}
+
+/**
+ * Set an ingredient's or a finished jar's shelf life (empty clears it). Only
+ * new lots use it: lots already made keep their best-before.
+ */
+export async function setItemShelfLife(db: DB, itemId: string, value: string | null, unit: string | null) {
+  const shelf = parseShelfLife(value, unit);
+  if (shelf === "invalid") throw new OperationError("Enter the shelf life as a whole number of days, weeks or months (1 to 3650), or leave it empty.");
+  const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
+  if (!item) throw new OperationError("Item not found.");
+  if (item.kind === "packaging" || item.kind === "bulk") throw new OperationError("Only ingredients and filled jars have a shelf life.");
+  const before = shelfLifeOf(item);
+  if (shelfLifeLabel(before) === shelfLifeLabel(shelf)) return;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(t.items)
+      .set({ shelfLife: shelf?.value ?? null, shelfLifeUnit: shelf?.unit ?? null })
+      .where(eq(t.items.id, itemId));
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "item", id: itemId, code: item.name },
+      summary: `Shelf life of ${item.name} set to ${shelfLifeLabel(shelf).toLowerCase()}`,
+      changes: diff([["Shelf life", shelfLifeLabel(before), shelfLifeLabel(shelf)]]),
     });
   });
 }
@@ -293,8 +358,16 @@ export async function addSauce(db: DB, input: { name: string; batchPrefix?: stri
   const code = await uniqueCode(db, slug(name), t.sauces);
   const prefix = (input.batchPrefix?.trim() || batchPrefixFor(name)).toUpperCase().slice(0, 5);
   const used = (await db.select({ color: t.sauces.color }).from(t.sauces)).map((r) => r.color);
-  const [row] = await db.insert(t.sauces).values({ code, name, batchPrefix: prefix, color: nextSauceColor(used) }).returning();
-  await logChange(db, { action: "create", area: "settings", entity: { type: "sauce", id: row!.id, code: name }, summary: `Added sauce ${name} (batch codes ${prefix}-…)` });
+  const [row] = await db
+    .insert(t.sauces)
+    .values({ code, name, batchPrefix: prefix, color: nextSauceColor(used) })
+    .returning();
+  await logChange(db, {
+    action: "create",
+    area: "settings",
+    entity: { type: "sauce", id: row!.id, code: name },
+    summary: `Added sauce ${name} (batch codes ${prefix}-…)`,
+  });
   return row!;
 }
 
@@ -303,7 +376,13 @@ export async function setSauceColor(db: DB, sauceId: string, color: string) {
   const [s] = await db.select().from(t.sauces).where(eq(t.sauces.id, sauceId));
   if (!s || s.color === color) return;
   await db.update(t.sauces).set({ color }).where(eq(t.sauces.id, sauceId));
-  await logChange(db, { action: "update", area: "settings", entity: { type: "sauce", id: s.id, code: s.name }, summary: `Colour of ${s.name} changed`, changes: diff([["Colour", s.color, color]]) });
+  await logChange(db, {
+    action: "update",
+    area: "settings",
+    entity: { type: "sauce", id: s.id, code: s.name },
+    summary: `Colour of ${s.name} changed`,
+    changes: diff([["Colour", s.color, color]]),
+  });
 }
 
 export async function setSauceActive(db: DB, sauceId: string, active: boolean) {
@@ -319,7 +398,12 @@ export async function addFormat(db: DB, input: { name: string; capacityMl: numbe
   if (!Number.isInteger(fill) || fill <= 0 || fill > input.capacityMl) throw new OperationError("Fill must be between 1 ml and the capacity.");
   const code = await uniqueCode(db, `f${input.capacityMl}`, t.formats);
   const [row] = await db.insert(t.formats).values({ code, name, capacityMl: input.capacityMl, fillMl: fill }).returning();
-  await logChange(db, { action: "create", area: "settings", entity: { type: "format", id: row!.id, code: name }, summary: `Added size ${name} (${input.capacityMl} ml, filled to ${fill} ml)` });
+  await logChange(db, {
+    action: "create",
+    area: "settings",
+    entity: { type: "format", id: row!.id, code: name },
+    summary: `Added size ${name} (${input.capacityMl} ml, filled to ${fill} ml)`,
+  });
   return row!;
 }
 
@@ -330,7 +414,13 @@ export async function setFormatFill(db: DB, formatId: string, fillMl: number) {
   if (!Number.isInteger(fillMl) || fillMl <= 0 || fillMl > f.capacityMl) throw new OperationError(`Fill must be between 1 and ${f.capacityMl} ml.`);
   if (f.fillMl === fillMl) return;
   await db.update(t.formats).set({ fillMl }).where(eq(t.formats.id, formatId));
-  await logChange(db, { action: "update", area: "settings", entity: { type: "format", id: f.id, code: f.name }, summary: `Fill of ${f.name} changed`, changes: diff([["Fill", `${f.fillMl} ml`, `${fillMl} ml`]]) });
+  await logChange(db, {
+    action: "update",
+    area: "settings",
+    entity: { type: "format", id: f.id, code: f.name },
+    summary: `Fill of ${f.name} changed`,
+    changes: diff([["Fill", `${f.fillMl} ml`, `${fillMl} ml`]]),
+  });
 }
 
 export async function setFormatActive(db: DB, formatId: string, active: boolean) {
@@ -344,7 +434,10 @@ export async function addProduct(db: DB, input: { sauceId: string; formatId: str
     const [s] = await tx.select().from(t.sauces).where(eq(t.sauces.id, input.sauceId));
     const [f] = await tx.select().from(t.formats).where(eq(t.formats.id, input.formatId));
     if (!s || !f) throw new OperationError("Choose a sauce and a size.");
-    const [dup] = await tx.select().from(t.products).where(and(eq(t.products.sauceId, s.id), eq(t.products.formatId, f.id)));
+    const [dup] = await tx
+      .select()
+      .from(t.products)
+      .where(and(eq(t.products.sauceId, s.id), eq(t.products.formatId, f.id)));
     if (dup) {
       if (!dup.active) {
         await tx.update(t.products).set({ active: true }).where(eq(t.products.id, dup.id));
@@ -384,7 +477,12 @@ export async function addYieldFigure(db: DB, input: { sauceId: string; litresPer
   return db.transaction(async (tx) => {
     const [s] = await tx.select().from(t.sauces).where(eq(t.sauces.id, input.sauceId));
     if (!s) throw new OperationError("Sauce not found.");
-    const [prev] = await tx.select().from(t.yieldFigures).where(eq(t.yieldFigures.sauceId, s.id)).orderBy(sql`${t.yieldFigures.createdAt} desc`).limit(1);
+    const [prev] = await tx
+      .select()
+      .from(t.yieldFigures)
+      .where(eq(t.yieldFigures.sauceId, s.id))
+      .orderBy(sql`${t.yieldFigures.createdAt} desc`)
+      .limit(1);
     await tx.insert(t.yieldFigures).values({ sauceId: s.id, litresPerBatch: String(input.litresPerBatch), source: "estimate", note: input.note || null });
     await logChange(tx, {
       action: "update",
@@ -403,7 +501,12 @@ export async function addRejectFigure(db: DB, input: { productId: string; percen
   return db.transaction(async (tx) => {
     const [p] = await tx.select().from(t.products).where(eq(t.products.id, input.productId));
     if (!p) throw new OperationError("Product not found.");
-    const [prev] = await tx.select().from(t.rejectFigures).where(eq(t.rejectFigures.productId, p.id)).orderBy(sql`${t.rejectFigures.createdAt} desc`).limit(1);
+    const [prev] = await tx
+      .select()
+      .from(t.rejectFigures)
+      .where(eq(t.rejectFigures.productId, p.id))
+      .orderBy(sql`${t.rejectFigures.createdAt} desc`)
+      .limit(1);
     await tx.insert(t.rejectFigures).values({ productId: p.id, rate: String(input.percent / 100), source: "estimate", note: input.note || null });
     await logChange(tx, {
       action: "update",

@@ -90,6 +90,13 @@ export default async function LotTracePage({
             <Link href={`/stock/${lot.itemId}`}>{lot.itemName}</Link> · {KIND[lot.itemKind] ?? lot.itemKind}
           </>
         }
+        actions={
+          lot.itemKind === "finished" ? (
+            <Link href={`/trace/lot/${lot.id}/labels`} className="btn secondary">
+              Print labels
+            </Link>
+          ) : undefined
+        }
       />
       <EditedMark of={{ type: "lot", id: lot.id }} />
       <Flash params={flash} />
@@ -338,7 +345,9 @@ export default async function LotTracePage({
       )}
       <details className="card edit-only" style={{ marginTop: 32 }}>
         <summary>
-          {lot.itemKind === "packaging" ? "Correct the best-before or supplier batch" : `Move it or correct the best-before${isMade ? "" : " or supplier batch"}`}
+          {lot.itemKind === "packaging"
+            ? "Correct the best-before or supplier batch"
+            : `Move it or correct the best-before${isMade ? "" : " or supplier batch"}`}
         </summary>
         <form action={editLot} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
           <input type="hidden" name="lotId" value={lot.id} />

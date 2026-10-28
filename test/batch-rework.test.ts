@@ -10,6 +10,7 @@ import { traceBatch } from "@/db/trace";
 import { observedYields } from "@/db/history";
 import { batchBudget } from "@/db/budget";
 import { markOrderSent } from "@/db/purchasing";
+import { setItemShelfLife } from "@/db/catalog";
 import { freshDb, testDbUrl } from "./helpers";
 
 const suite = testDbUrl ? describe : describe.skip;
@@ -63,11 +64,27 @@ suite("batch: record, correct, edit packaging, cost", () => {
       supplierId: supplier.id,
       receivedOn: "2026-10-18",
       lines: [
-        { itemId: ids["ing-onions"]!, quantity: "4", supplierBatch: "OLD", bestBefore: "2026-10-25", purchaseOrderLineId: poLines.find((l) => l.unitPrice === "1.5")!.id },
-        { itemId: ids["ing-onions"]!, quantity: "20", supplierBatch: "NEW", bestBefore: "2026-12-01", purchaseOrderLineId: poLines.find((l) => l.unitPrice === "2")!.id },
+        {
+          itemId: ids["ing-onions"]!,
+          quantity: "4",
+          supplierBatch: "OLD",
+          bestBefore: "2026-10-25",
+          purchaseOrderLineId: poLines.find((l) => l.unitPrice === "1.5")!.id,
+        },
+        {
+          itemId: ids["ing-onions"]!,
+          quantity: "20",
+          supplierBatch: "NEW",
+          bestBefore: "2026-12-01",
+          purchaseOrderLineId: poLines.find((l) => l.unitPrice === "2")!.id,
+        },
       ],
     });
-    const lots = await db.select({ lot: t.lots }).from(t.receiptLines).innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id)).where(eq(t.receiptLines.receiptId, r.receipt.id));
+    const lots = await db
+      .select({ lot: t.lots })
+      .from(t.receiptLines)
+      .innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id))
+      .where(eq(t.receiptLines.receiptId, r.receipt.id));
     oldOnion = lots.find((l) => l.lot.supplierBatch === "OLD")!.lot.id;
     newOnion = lots.find((l) => l.lot.supplierBatch === "NEW")!.lot.id;
 
@@ -88,7 +105,13 @@ suite("batch: record, correct, edit packaging, cost", () => {
         itemId: l.itemId,
         quantity: l.itemId === ids["ing-garlic"] ? "2" : l.plannedQty,
         // Onions: 4 kg left over from the old delivery plus 3 kg of the new one.
-        lots: l.itemId === ids["ing-onions"] ? [{ lotId: oldOnion, quantity: "4" }, { lotId: newOnion, quantity: "3" }] : undefined,
+        lots:
+          l.itemId === ids["ing-onions"]
+            ? [
+                { lotId: oldOnion, quantity: "4" },
+                { lotId: newOnion, quantity: "3" },
+              ]
+            : undefined,
       })),
     };
     const r = await recordIngredients(db, input);
@@ -132,10 +155,18 @@ suite("batch: record, correct, edit packaging, cost", () => {
     // Less onion (automatic): given back to the latest-expiring lot first.
     await recordIngredients(db, { idempotencyKey: "fix-2", batchId, reason: "Weighed again", lines: [{ itemId: ids["ing-onions"]!, quantity: "5" }] });
     const onion = await useOf("ing-onions");
-    expect(onion.sources.map((s) => [s.lot.supplierBatch, s.quantity.toString()]).sort()).toEqual([["NEW", "1"], ["OLD", "4"]]);
+    expect(onion.sources.map((s) => [s.lot.supplierBatch, s.quantity.toString()]).sort()).toEqual([
+      ["NEW", "1"],
+      ["OLD", "4"],
+    ]);
 
     // Manual: move it all to the new lot.
-    await recordIngredients(db, { idempotencyKey: "fix-3", batchId, reason: "Other lot", lines: [{ itemId: ids["ing-onions"]!, quantity: "5", lots: [{ lotId: newOnion, quantity: "5" }] }] });
+    await recordIngredients(db, {
+      idempotencyKey: "fix-3",
+      batchId,
+      reason: "Other lot",
+      lines: [{ itemId: ids["ing-onions"]!, quantity: "5", lots: [{ lotId: newOnion, quantity: "5" }] }],
+    });
     const moved = await useOf("ing-onions");
     expect(moved.sources.map((s) => [s.lot.supplierBatch, s.quantity.toString()])).toEqual([["NEW", "5"]]);
     expect(await onHand("ing-onions")).toBe("19");
@@ -143,12 +174,30 @@ suite("batch: record, correct, edit packaging, cost", () => {
 
   it("packaging can be edited: stock moves by the difference", async () => {
     const big = ids["Liberiaanse Kip 700 ml"]!;
-    const { session } = await recordPackaging(db, { idempotencyKey: "pack-1", batchId, packedOn: "2026-10-21", bestBefore: "2027-01-21", lines: [{ productId: big, filled: 30, rejected: 2 }] });
+    const { session } = await recordPackaging(db, {
+      idempotencyKey: "pack-1",
+      batchId,
+      packedOn: "2026-10-21",
+      bestBefore: "2027-01-21",
+      lines: [{ productId: big, filled: 30, rejected: 2 }],
+    });
     expect(await onHand("pkg-700-ml-container")).toBe("470");
 
     // It was 25 filled, 1 rejected.
-    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
-    await changePackaging(db, { idempotencyKey: "edit-1", sessionId: session.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 25, rejected: 1 }] });
+    await changePackaging(db, {
+      idempotencyKey: "edit-1",
+      sessionId: session.id,
+      reason: "Miscounted",
+      packedOn: "2026-10-21",
+      lines: [{ productId: big, filled: 25, rejected: 1 }],
+    });
+    await changePackaging(db, {
+      idempotencyKey: "edit-1",
+      sessionId: session.id,
+      reason: "Miscounted",
+      packedOn: "2026-10-21",
+      lines: [{ productId: big, filled: 25, rejected: 1 }],
+    });
     expect(await onHand("pkg-700-ml-container")).toBe("475");
     const tr = await traceBatch(db, batchId);
     expect(tr!.jarsBySize.find((j) => j.productId === big)).toMatchObject({ filled: 25, rejected: 1, accepted: 24 });
@@ -176,15 +225,31 @@ suite("batch: record, correct, edit packaging, cost", () => {
     const big = ids["Liberiaanse Kip 700 ml"]!;
     const [session] = await db.select().from(t.packagingSessions).where(eq(t.packagingSessions.batchId, batchId));
     await recordOutflow(db, { idempotencyKey: "sample", type: "sample", destination: "Market", lines: [{ productId: big, jars: 20 }] });
-    await expect(changePackaging(db, { idempotencyKey: "del-1", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(/only has 4 left.*already left stock/);
+    await expect(changePackaging(db, { idempotencyKey: "del-1", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(
+      /only has 4 left.*already left stock/,
+    );
     await expect(
-      changePackaging(db, { idempotencyKey: "edit-2", sessionId: session!.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 10, rejected: 0 }] }),
+      changePackaging(db, {
+        idempotencyKey: "edit-2",
+        sessionId: session!.id,
+        reason: "Miscounted",
+        packedOn: "2026-10-21",
+        lines: [{ productId: big, filled: 10, rejected: 0 }],
+      }),
     ).rejects.toThrow(/already left stock/);
 
     // A second session on the same (closed) batch can't be recorded, but an existing one can be deleted.
-    await expect(recordPackaging(db, { idempotencyKey: "pack-2", batchId, packedOn: "2026-10-22", lines: [{ productId: big, filled: 1, rejected: 0 }] })).rejects.toThrow(/closed/);
+    await expect(
+      recordPackaging(db, { idempotencyKey: "pack-2", batchId, packedOn: "2026-10-22", lines: [{ productId: big, filled: 1, rejected: 0 }] }),
+    ).rejects.toThrow(/closed/);
     const lidsBefore = await onHand("pkg-large-lid");
-    await changePackaging(db, { idempotencyKey: "edit-3", sessionId: session!.id, reason: "Miscounted", packedOn: "2026-10-21", lines: [{ productId: big, filled: 22, rejected: 0 }] });
+    await changePackaging(db, {
+      idempotencyKey: "edit-3",
+      sessionId: session!.id,
+      reason: "Miscounted",
+      packedOn: "2026-10-21",
+      lines: [{ productId: big, filled: 22, rejected: 0 }],
+    });
     expect(await onHand("pkg-large-lid")).toBe(String(Number(lidsBefore) + 3));
     // 22 accepted, 20 out: 2 left. Now lower the jars back to 20 accepted and delete is still refused (20 out).
     await expect(changePackaging(db, { idempotencyKey: "del-2", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(/only has 2 left/);
@@ -197,18 +262,53 @@ suite("batch: record, correct, edit packaging, cost", () => {
     const [b] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
     const small = ids["Liberiaanse Kip 250 ml"]!;
     const before = await onHand("pkg-250-ml-container");
-    const { session } = await recordPackaging(db, { idempotencyKey: "pack-3", batchId: b!.id, packedOn: "2026-10-27", lines: [{ productId: small, filled: 10, rejected: 1 }] });
+    const { session } = await recordPackaging(db, {
+      idempotencyKey: "pack-3",
+      batchId: b!.id,
+      packedOn: "2026-10-27",
+      lines: [{ productId: small, filled: 10, rejected: 1 }],
+    });
     expect(await onHand("pkg-250-ml-container")).toBe(String(Number(before) - 10));
     await changePackaging(db, { idempotencyKey: "del-3", sessionId: session.id, delete: true, reason: "Recorded on the wrong batch" });
     expect(await onHand("pkg-250-ml-container")).toBe(before);
     const tr = await traceBatch(db, b!.id);
     expect(tr!.sessions).toHaveLength(0);
     expect(tr!.jarLots[0]!.balance.toString()).toBe("0");
-    const [kept] = await db.select().from(t.packagingSessions).where(and(eq(t.packagingSessions.id, session.id)));
+    const [kept] = await db
+      .select()
+      .from(t.packagingSessions)
+      .where(and(eq(t.packagingSessions.id, session.id)));
     expect(kept!.deletedAt).not.toBeNull();
     expect(kept!.deletedReason).toBe("Recorded on the wrong batch");
     await expect(changePackaging(db, { idempotencyKey: "del-4", sessionId: session.id, delete: true, reason: "test" })).rejects.toThrow(/already been deleted/);
     // Nothing recorded any more, so it can still be marked as not made.
     await closeBatch(db, { idempotencyKey: "nm", batchId: b!.id, notMade: true, leftoverReason: "Moved to next week" });
+  });
+
+  it("fills in best-before from shelf life when packing and receiving", async () => {
+    const small = ids["Liberiaanse Kip 250 ml"]!;
+    const [product] = await db.select().from(t.products).where(eq(t.products.id, small));
+    await setItemShelfLife(db, product!.itemId, "12", "months");
+    const run = await createRun(db, { idempotencyKey: "run-shelf", plannedFor: "2026-10-28", targets: { [small]: 10 } });
+    await confirmRun(db, run.id);
+    const [b] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
+    await recordPackaging(db, { idempotencyKey: "pack-shelf", batchId: b!.id, packedOn: "2026-10-28", lines: [{ productId: small, filled: 5, rejected: 0 }] });
+    expect((await traceBatch(db, b!.id))!.jarLots[0]!.bestBefore).toBe("2027-10-28");
+    await expect(setItemShelfLife(db, product!.itemId, "2.5", "months")).rejects.toThrow(/whole number/);
+
+    // An ingredient: received date + its shelf life, unless a date is typed.
+    await setItemShelfLife(db, ids["ing-onions"]!, "3", "weeks");
+    const sup = await addSupplier(db, { name: "Shelf test" });
+    const { receipt } = await recordReceipt(db, {
+      idempotencyKey: "rcv-shelf",
+      supplierId: sup.id,
+      receivedOn: "2026-10-28",
+      lines: [
+        { itemId: ids["ing-onions"]!, quantity: "5" },
+        { itemId: ids["ing-onions"]!, quantity: "5", bestBefore: "2026-11-02" },
+      ],
+    });
+    const lots = await db.select().from(t.receiptLines).innerJoin(t.lots, eq(t.receiptLines.lotId, t.lots.id)).where(eq(t.receiptLines.receiptId, receipt.id));
+    expect(lots.map((l) => l.lots.bestBefore).sort()).toEqual(["2026-11-02", "2026-11-18"]);
   });
 });

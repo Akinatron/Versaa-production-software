@@ -48,7 +48,13 @@ export function PackagingTable({ tr, editHref }: { tr: Trace; editHref?: (sessio
                 { content: s.rejected, num: true },
                 { content: s.accepted, num: true },
                 {
-                  content: lot ? <Link href={`/stock/${lot.itemId}`}>{lot.code}</Link> : "—",
+                  content: lot ? (
+                    <>
+                      <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link> · <Link href={`/trace/lot/${lot.id}/labels`}>Labels</Link>
+                    </>
+                  ) : (
+                    "—"
+                  ),
                 },
                 {
                   content: lot ? (lot.bestBefore ? fmtDate(lot.bestBefore) : "not recorded") : "—",

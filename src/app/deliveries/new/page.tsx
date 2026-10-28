@@ -1,3 +1,4 @@
+import { shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
 import { STORAGE, STORAGE_KEYS, storageLabel } from "@/domain/storage";
 import { eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -47,11 +48,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader
-        back={{ href: "/deliveries", label: "Deliveries" }}
-        title="Record a delivery"
-        lead="Only the accepted quantity goes into stock."
-      />
+      <PageHeader back={{ href: "/deliveries", label: "Deliveries" }} title="Record a delivery" lead="Only the accepted quantity goes into stock." />
       <Flash params={params} />
 
       <form method="get" className="card row" style={{ alignItems: "flex-end" }}>
@@ -145,6 +142,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                   </td>
                   <td>
                     <input name={`bb_${i}`} type="date" aria-label="Best before" />
+                    {shelfLifeOf(l.item) && <div className="small muted">empty = delivery date + {shelfLifeLabel(shelfLifeOf(l.item))}</div>}
                   </td>
                   <td>
                     {l.item.kind === "packaging" ? (
@@ -204,8 +202,8 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
             </tbody>
           </table>
           <p className="small muted">
-            Rows left empty are ignored. Set accepted to 0 for an ordered item that didn't arrive; it stays pending on the order. If something won't come at
-            all, close the order from its page.
+            Rows left empty are ignored. An empty best-before is worked out from the ingredient&apos;s shelf life when it has one (Settings → Ingredients). Set
+            accepted to 0 for an ordered item that didn't arrive; it stays pending on the order. If something won't come at all, close the order from its page.
           </p>
         </div>
         <div className="savebar">

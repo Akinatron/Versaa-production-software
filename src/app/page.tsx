@@ -10,10 +10,14 @@ import { PageHeader } from "./components/ui/header";
 import { fmtDate, plural, relDate } from "./components/ui/format";
 import { SauceName } from "./components/sauce-name";
 import { currentUser } from "@/lib/session";
+import { daysUntil } from "@/domain/shelf-life";
 import { listChanges } from "@/db/changes";
 import { fmtWhen, openHref, refLabel, ACTION_LABEL } from "./components/history-format";
 
 export const dynamic = "force-dynamic";
+
+/** Lots this close to their best-before show on Today. */
+const EXPIRY_WARN_DAYS = 30;
 
 type Alert = {
   level: "bad" | "warn";
@@ -294,6 +298,30 @@ export default async function Home() {
       action: { href: "/plan", label: "Plan production" },
     });
   }
+  // Lots in stock that are past or near their best-before: use or sell them first.
+  const soon = new Date(Date.parse(`${today}T00:00:00Z`) + EXPIRY_WARN_DAYS * 864e5).toISOString().slice(0, 10);
+  const expiring = await d.execute<{ id: string; code: string; best_before: string; name: string; kind: string; stock_unit: string; on_hand: string }>(sql`
+    select l.id, l.code, l.best_before::text, i.name, i.kind::text, i.stock_unit::text, sum(m.quantity)::text as on_hand
+    from lots l join items i on i.id = l.item_id join movements m on m.lot_id = l.id
+    where l.best_before is not null and l.best_before <= ${soon} and i.kind in ('ingredient', 'finished')
+    group by l.id, i.id having sum(m.quantity) > 0
+    order by l.best_before, l.code`);
+  for (const l of expiring) {
+    const days = daysUntil(l.best_before, today);
+    const left = l.kind === "finished" ? plural(Number(l.on_hand), "jar") : formatQty(new Decimal(l.on_hand), l.stock_unit as UnitCode);
+    alerts.push({
+      level: days < 0 ? "bad" : "warn",
+      text: (
+        <>
+          {l.name} lot {l.code}{" "}
+          {days < 0 ? "is past its best-before" : days === 0 ? "reaches its best-before today" : `reaches its best-before in ${plural(days, "day")}`}
+        </>
+      ),
+      sub: `Best before ${fmtDate(l.best_before, { year: true })} · ${left} left. ${l.kind === "finished" ? "Sell these first." : "Use this lot first."}`,
+      action: { href: `/trace/lot/${l.id}`, label: "Open lot" },
+    });
+  }
+
   alerts.sort((a, b) => (a.level === b.level ? 0 : a.level === "bad" ? -1 : 1));
 
   const upcoming = [...runs];
