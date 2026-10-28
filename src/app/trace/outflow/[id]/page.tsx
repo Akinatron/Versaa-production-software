@@ -34,7 +34,6 @@ export default async function OutflowTracePage({
   const priced = lines.filter((l) => l.line.unitPrice !== null);
   const revenue = priced.reduce((s, l) => s.plus(new Decimal(l.line.unitPrice!).mul(l.line.jars)), new Decimal(0));
   const total = lines.reduce((s, l) => s + l.line.jars, 0);
-  const [delBy] = out.deletedBy ? await db().select({ name: t.users.name }).from(t.users).where(eq(t.users.id, out.deletedBy)) : [];
   const customers = out.type === "sale" && !out.deletedAt ? await customerList() : [];
   const isSale = out.type === "sale";
 
@@ -52,7 +51,7 @@ export default async function OutflowTracePage({
       <EditedMark of={{ type: "outflow", id: out.id }} />
       <Flash params={flash} />
       {out.deletedAt && (
-        <DeletedNote what={isSale ? "sale" : "outflow"} at={out.deletedAt} by={delBy?.name} reason={out.deletedReason}>
+        <DeletedNote what={isSale ? "sale" : "outflow"} at={out.deletedAt} reason={out.deletedReason}>
           <form action={toggleOutflow} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="outflowId" value={out.id} />
             <input type="hidden" name="deleted" value="0" />
@@ -139,7 +138,7 @@ export default async function OutflowTracePage({
 
       {!out.deletedAt && (
         <>
-          <details className="card edit-only">
+          <details className="card">
             <summary>Correct the details</summary>
             <form action={editOutflow} className="grid" style={{ marginTop: 12 }}>
               <input type="hidden" name="outflowId" value={out.id} />
@@ -185,7 +184,7 @@ export default async function OutflowTracePage({
             </form>
             <p className="small muted">To change the jars or lots, delete this and record it again.</p>
           </details>
-          <details className="card edit-only">
+          <details className="card">
             <summary>Delete this {isSale ? "sale" : "outflow"}</summary>
             <form action={toggleOutflow} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
               <input type="hidden" name="outflowId" value={out.id} />

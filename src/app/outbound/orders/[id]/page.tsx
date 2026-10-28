@@ -82,7 +82,7 @@ export default async function SalesOrderPage({
         lead={`Sales order ${o.code}, ordered ${fmtDate(o.orderedOn)}${o.deliverBy ? `, to deliver by ${fmtDate(o.deliverBy)}` : ""}${o.reference ? `, customer reference ${o.reference}` : ""}.`}
         actions={
           pending ? (
-            <a href="#deliver" className="btn edit-only">
+            <a href="#deliver" className="btn">
               Deliver
             </a>
           ) : null
@@ -171,7 +171,7 @@ export default async function SalesOrderPage({
 
       {pending && (
         <>
-          <h2 id="deliver" className="edit-only">
+          <h2 id="deliver" >
             Deliver this order
           </h2>
           <form action={deliverOrder}>
@@ -283,7 +283,7 @@ export default async function SalesOrderPage({
               </span>
             </div>
           </form>
-          <details className="card edit-only" style={{ marginTop: 32 }} open={flash.edit === "1"}>
+          <details className="card" style={{ marginTop: 32 }} open={flash.edit === "1"}>
             <summary>Correct this order</summary>
             <GuardedForm action={editOrder}>
               <input type="hidden" name="orderId" value={o.id} />
@@ -358,7 +358,7 @@ export default async function SalesOrderPage({
               </div>
             </GuardedForm>
           </details>
-          <details className="card edit-only">
+          <details className="card">
             <summary>Cancel this order</summary>
             <form action={cancelOrder} className="row" style={{ alignItems: "flex-end" }}>
               <input type="hidden" name="orderId" value={o.id} />

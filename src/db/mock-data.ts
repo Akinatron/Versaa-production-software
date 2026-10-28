@@ -61,7 +61,7 @@ function testPdf(title: string): Uint8Array {
 export const MOCK_SUPPLIERS = ["Mock Foods A", "Mock Foods B", "Mock Packaging A", "Mock Packaging B"] as const;
 
 /** Fill an empty, freshly seeded database with test data for every stage. */
-export async function loadMockData(db: DB, opts: { userId?: string | null } = {}) {
+export async function loadMockData(db: DB) {
   // The 30 L per batch estimates, as `pnpm db:seed` adds them.
   await seedYieldEstimates(db);
   const items = await db.select().from(t.items);
@@ -227,13 +227,11 @@ export async function loadMockData(db: DB, opts: { userId?: string | null } = {}
     kind: "invoice",
     purchaseOrderId: poClosed.id,
     files: [{ name: "invoice-B-1001.pdf", data: testPdf("Invoice B-1001") }],
-    userId: opts.userId,
   });
   await attachDocuments(db, {
     kind: "delivery_note",
     receiptId: rxB.receipt.id,
     files: [{ name: "delivery-note-B-4471.pdf", data: testPdf("Delivery note DN-B-4471") }],
-    userId: opts.userId,
   });
 
   // Received in full: containers from Packaging A, with its delivery note.
@@ -258,7 +256,6 @@ export async function loadMockData(db: DB, opts: { userId?: string | null } = {}
     kind: "delivery_note",
     receiptId: rxJars.receipt.id,
     files: [{ name: "delivery-note-PA-9902.pdf", data: testPdf("Delivery note PA-9902") }],
-    userId: opts.userId,
   });
 
   // Cancelled before it was sent.

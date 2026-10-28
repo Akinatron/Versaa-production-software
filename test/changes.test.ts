@@ -8,8 +8,7 @@ import { changePackaging, closeBatch, recordIngredients, recordIncident, recordP
 import { cancelSalesOrder, createSalesOrder, deliverSalesOrder, finishedAvailability, restoreSalesOrder, setOutflowDeleted, updateSalesOrder } from "@/db/sales";
 import { correctReceipt, markOrderSent, setReceiptDeleted, updateDraftOrder, updateLot } from "@/db/purchasing";
 import { recordWriteOff, setAdjustmentDeleted } from "@/db/adjustments";
-import { createUser, setUserRole } from "@/db/auth";
-import { changesFor, editedInfo, listChanges, withActor } from "@/db/changes";
+import { changesFor, editedInfo, listChanges } from "@/db/changes";
 import { freshDb, testDbUrl } from "./helpers";
 
 const suite = testDbUrl ? describe : describe.skip;
@@ -22,13 +21,11 @@ const suite = testDbUrl ? describe : describe.skip;
 suite("change history, deleting and restoring", () => {
   let db: DB;
   const ids: Record<string, string> = {};
-  let ana: { id: string; name: string; role: "editor" };
   let runId = "";
   let batchId = "";
   let receiptId = "";
   let onionLot = "";
   const onHand = async (code: string) => (await loadStockPositions(db))[ids[code]!]!.onHand!.toString();
-  const asAna = <T>(fn: () => Promise<T>) => withActor(ana, fn);
 
   beforeAll(async () => {
     db = await freshDb();
@@ -36,10 +33,6 @@ suite("change history, deleting and restoring", () => {
     for (const p of await db.select().from(t.products)) ids[p.name] = p.id;
     for (const s of await db.select().from(t.sauces)) ids[s.code] = s.id;
     await db.insert(t.yieldFigures).values({ sauceId: ids["liberiaanse-kip"]!, litresPerBatch: "30", source: "estimate" });
-    const admin = await createUser(db, { email: "pablo@example.com", name: "Pablo", password: "a-long-password" }, { firstOnly: true });
-    const u = await createUser(db, { email: "ana@example.com", name: "Ana", password: "a-long-password", role: "editor" });
-    ana = { id: u.id, name: u.name, role: "editor" };
-    expect(admin.role).toBe("admin");
 
     const catalog = await loadPlanCatalog(db);
     const kip = catalog.sauces.find((s) => s.id === ids["liberiaanse-kip"])!;
@@ -71,16 +64,13 @@ suite("change history, deleting and restoring", () => {
   it("a delivery can be corrected and deleted while unused, and restored; the order follows", async () => {
     await expect(correctReceipt(db, { idempotencyKey: "c0", receiptId, reason: "", receivedOn: "2026-10-18", lines: [] })).rejects.toThrow(/reason/);
     const [rl] = await db.select().from(t.receiptLines).where(eq(t.receiptLines.receiptId, receiptId));
-    await asAna(() =>
-      correctReceipt(db, { idempotencyKey: "c1", receiptId, reason: "Scale was off", receivedOn: "2026-10-18", deliveryRef: "ALB-77", lines: [{ lineId: rl!.id, quantity: "25", bestBefore: "2026-12-01" }] }),
-    );
+    await correctReceipt(db, { idempotencyKey: "c1", receiptId, reason: "Scale was off", receivedOn: "2026-10-18", deliveryRef: "ALB-77", lines: [{ lineId: rl!.id, quantity: "25", bestBefore: "2026-12-01" }] });
     expect(await onHand("ing-onions")).toBe("25");
     const [po] = await db.select().from(t.purchaseOrders);
     expect(po!.status).toBe("partly_received");
 
     const onLot = await changesFor(db, { type: "lot", id: onionLot });
     const fix = onLot.find((c) => c.action === "update")!;
-    expect(fix.userName).toBe("Ana");
     expect(fix.reason).toBe("Scale was off");
     expect(fix.changes).toContainEqual({ label: "Onions accepted", before: "30 kg", after: "25 kg" });
     // The order's page shows it too.
@@ -105,9 +95,9 @@ suite("change history, deleting and restoring", () => {
     await confirmRun(db, run.id);
     batchId = (await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id)))[0]!.id;
     const lines = await db.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batchId));
-    await asAna(() => recordIngredients(db, { idempotencyKey: "rec-1", batchId, producedOn: "2026-10-20", lines: lines.map((l) => ({ itemId: l.itemId, quantity: l.itemId === ids["ing-onions"] ? "5" : l.plannedQty })) }));
+    await recordIngredients(db, { idempotencyKey: "rec-1", batchId, producedOn: "2026-10-20", lines: lines.map((l) => ({ itemId: l.itemId, quantity: l.itemId === ids["ing-onions"] ? "5" : l.plannedQty })) });
     await expect(recordIngredients(db, { idempotencyKey: "rec-2", batchId, lines: [{ itemId: ids["ing-onions"]!, quantity: "6" }] })).rejects.toThrow(/reason/);
-    await asAna(() => recordIngredients(db, { idempotencyKey: "rec-2", batchId, reason: "Weighed again", lines: [{ itemId: ids["ing-onions"]!, quantity: "6" }] }));
+    await recordIngredients(db, { idempotencyKey: "rec-2", batchId, reason: "Weighed again", lines: [{ itemId: ids["ing-onions"]!, quantity: "6" }] });
 
     const onRun = await changesFor(db, { type: "run", id: runId });
     const corrected = onRun.find((c) => c.summary.includes("corrected"))!;
@@ -197,21 +187,11 @@ suite("change history, deleting and restoring", () => {
     await expect(restoreRun(db, run.id, "x")).rejects.toThrow(/Plan it again/);
   });
 
-  it("the History page filters by area, person and code; the last admin stays an admin", async () => {
+  it("the History page filters by area and code", async () => {
     const packaging = await listChanges(db, { area: "packaging" });
     expect(packaging.length).toBeGreaterThan(0);
     expect(packaging.every((c) => c.area === "packaging")).toBe(true);
-    const byAna = await listChanges(db, { userId: ana.id });
-    expect(byAna.length).toBeGreaterThan(0);
-    expect(byAna.every((c) => c.userName === "Ana")).toBe(true);
     expect((await listChanges(db, { code: "ALB-77" })).length).toBeGreaterThan(0);
-    expect((await listChanges(db, { exceptUserId: ana.id })).some((c) => c.userId === ana.id)).toBe(false);
-
-    const [pablo] = await db.select().from(t.users).where(eq(t.users.email, "pablo@example.com"));
-    await expect(setUserRole(db, pablo!.id, "viewer")).rejects.toThrow(/only admin/);
-    await setUserRole(db, ana.id, "admin");
-    await setUserRole(db, pablo!.id, "editor");
-    expect((await listChanges(db, { area: "settings" })).some((c) => c.changes.some((x) => x.label === "Role"))).toBe(true);
   });
 
   it("history rows can't be changed or deleted", async () => {

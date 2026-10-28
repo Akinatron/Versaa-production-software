@@ -174,7 +174,7 @@ export default async function OrderPage({
         }
         actions={
           open ? (
-            <Link href={`/deliveries/new?po=${po.id}`} className="btn edit-only">
+            <Link href={`/deliveries/new?po=${po.id}`} className="btn">
               Record delivery
             </Link>
           ) : undefined
@@ -253,7 +253,7 @@ export default async function OrderPage({
         </div>
       )}
       {po.status !== "draft" && po.status !== "cancelled" && (
-        <details className="card edit-only">
+        <details className="card">
           <summary>Correct this order</summary>
           <p className="small muted">Change quantities, prices, the expected date or the reference. The change and its reason go in the history.</p>
           {editForm(true)}
@@ -359,7 +359,7 @@ export default async function OrderPage({
       )}
 
       {(open || po.status === "draft") && (
-        <details className="card edit-only" style={{ marginTop: 32 }}>
+        <details className="card" style={{ marginTop: 32 }}>
           <summary>{po.status === "partly_received" ? "Close this order" : "Cancel this order"}</summary>
           {po.status === "partly_received" ? (
             <form action={closeOrderAction} className="row">

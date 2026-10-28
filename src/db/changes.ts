@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { and, desc, eq, inArray, lt, sql, type SQL } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
@@ -35,7 +34,6 @@ export type EntityType =
   | "recipe"
   | "packaging_list"
   | "yield"
-  | "user"
   | "document";
 
 export type Area = "production" | "packaging" | "purchasing" | "sales" | "stock" | "settings";
@@ -52,23 +50,6 @@ export interface FieldChange {
   before?: string | null;
   after?: string | null;
 }
-
-// ---------------------------------------------------------------- who is acting
-
-export interface Actor {
-  id: string;
-  name: string;
-  role: (typeof t.userRole.enumValues)[number];
-}
-
-const store = new AsyncLocalStorage<Actor | null>();
-
-/** Run `fn` as this person: everything it records is put down to them. */
-export function withActor<T>(actor: Actor | null, fn: () => Promise<T>): Promise<T> {
-  return store.run(actor, fn);
-}
-
-export const currentActor = () => store.getStore() ?? null;
 
 // ---------------------------------------------------------------- writing
 
@@ -103,12 +84,9 @@ export async function logChange(
     links?: (Ref | null | undefined)[];
   },
 ): Promise<string> {
-  const actor = currentActor();
   const [row] = await tx
     .insert(t.changeLog)
     .values({
-      userId: actor?.id ?? null,
-      userName: actor?.name ?? null,
       action: input.action,
       area: input.area,
       entityType: input.entity.type,
@@ -135,8 +113,6 @@ export async function logChange(
 export interface ChangeView {
   id: string;
   at: Date;
-  userId: string | null;
-  userName: string | null;
   action: (typeof t.changeAction.enumValues)[number];
   area: string;
   entityType: EntityType;
@@ -150,8 +126,6 @@ export interface ChangeView {
 const cols = {
   id: t.changeLog.id,
   at: t.changeLog.at,
-  userId: t.changeLog.userId,
-  userName: t.changeLog.userName,
   action: t.changeLog.action,
   area: t.changeLog.area,
   entityType: t.changeLog.entityType,
@@ -189,14 +163,11 @@ export async function changesFor(db: DB, ref: { type: EntityType; id: string }, 
 
 export interface HistoryFilter {
   area?: string | null;
-  userId?: string | null;
   action?: string | null;
   from?: string | null;
   to?: string | null;
   /** Matches a record code (B-…, PO-…, a lot code) on the change or anything it touched. */
   code?: string | null;
-  /** Leave out this person's own changes. */
-  exceptUserId?: string | null;
   /** Older than this time (for "Show older"). */
   before?: Date | null;
   limit?: number;
@@ -206,8 +177,6 @@ export interface HistoryFilter {
 export async function listChanges(db: DB, f: HistoryFilter = {}): Promise<ChangeView[]> {
   const conds: SQL[] = [];
   if (f.area) conds.push(eq(t.changeLog.area, f.area));
-  if (f.userId) conds.push(eq(t.changeLog.userId, f.userId));
-  if (f.exceptUserId) conds.push(sql`${t.changeLog.userId} is distinct from ${f.exceptUserId}`);
   if (f.action && (t.changeAction.enumValues as readonly string[]).includes(f.action)) conds.push(eq(t.changeLog.action, f.action as ChangeView["action"]));
   if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(sql`${t.changeLog.at} >= ${f.from}::date`);
   if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(sql`${t.changeLog.at} < ${f.to}::date + 1`);
@@ -256,13 +225,4 @@ export async function editedInfo(db: DB, type: EntityType, ids: string[]) {
     else out.set(r.entityId, { count: 1, last: r });
   }
   return out;
-}
-
-/** People who appear in the history, for the History page's filter. */
-export async function historyPeople(db: DB) {
-  return db
-    .selectDistinct({ id: t.users.id, name: t.users.name })
-    .from(t.users)
-    .innerJoin(t.changeLog, eq(t.changeLog.userId, t.users.id))
-    .orderBy(t.users.name);
 }

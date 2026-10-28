@@ -349,7 +349,6 @@ export const receipts = pgTable("receipts", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   /** Set when deleted: the record stays for history and traceability, its stock effect is reversed. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  deletedBy: uuid("deleted_by"),
   deletedReason: text("deleted_reason"),
   createdAt: createdAt(),
 });
@@ -500,7 +499,6 @@ export const packagingSessions = pgTable("packaging_sessions", {
   /** Set when the session is deleted. It stays for traceability; its stock effect is reversed. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedReason: text("deleted_reason"),
-  deletedBy: uuid("deleted_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
   /** Idempotency key of the last edit or delete, so a retry doesn't apply it twice. */
   changeKey: text("change_key"),
@@ -542,7 +540,6 @@ export const incidents = pgTable("incidents", {
   idempotencyKey: text("idempotency_key").unique(),
   /** Set when deleted: the record stays for history and traceability, its stock effect is reversed. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  deletedBy: uuid("deleted_by"),
   deletedReason: text("deleted_reason"),
   createdAt: createdAt(),
 });
@@ -558,7 +555,6 @@ export const stockAdjustments = pgTable("stock_adjustments", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   /** Set when deleted: the record stays for history and traceability, its stock effect is reversed. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  deletedBy: uuid("deleted_by"),
   deletedReason: text("deleted_reason"),
   createdAt: createdAt(),
 });
@@ -618,7 +614,6 @@ export const outflows = pgTable("outflows", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   /** Set when deleted: the record stays for history and traceability, its stock effect is reversed. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  deletedBy: uuid("deleted_by"),
   deletedReason: text("deleted_reason"),
   createdAt: createdAt(),
 });
@@ -636,33 +631,6 @@ export const outflowLines = pgTable("outflow_lines", {
     .references(() => lots.id),
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
-});
-
-// ---------- Team logins ----------
-
-/** viewer: only looks. editor: creates, changes, deletes and restores. admin: also manages the team. */
-export const userRole = pgEnum("user_role", ["viewer", "editor", "admin"]);
-
-export const users = pgTable("users", {
-  id: id(),
-  /** Stored lower-case. */
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  role: userRole("role").notNull().default("viewer"),
-  active: boolean("active").notNull().default(true),
-  createdAt: createdAt(),
-});
-
-/** A signed-in browser. Only a hash of the cookie token is stored. */
-export const sessions = pgTable("sessions", {
-  id: id(),
-  tokenHash: text("token_hash").notNull().unique(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: createdAt(),
 });
 
 // ---------- Paperwork ----------
@@ -688,10 +656,8 @@ export const documents = pgTable(
     contentType: text("content_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     storageKey: text("storage_key").notNull().unique(),
-    uploadedBy: uuid("uploaded_by").references(() => users.id),
     createdAt: createdAt(),
     removedAt: timestamp("removed_at", { withTimezone: true }),
-    removedBy: uuid("removed_by").references(() => users.id),
   },
   (t) => [index("documents_receipt").on(t.receiptId), index("documents_po").on(t.purchaseOrderId), index("documents_supplier").on(t.supplierId)],
 );
@@ -701,7 +667,7 @@ export const documents = pgTable(
 export const changeAction = pgEnum("change_action", ["create", "update", "delete", "restore", "cancel", "status"]);
 
 /**
- * Who did what, when, from what to what, and why. One row per action a
+ * What was done, when, from what to what, and why. One row per action a
  * person takes. Rows are never changed or deleted.
  */
 export const changeLog = pgTable(
@@ -709,9 +675,6 @@ export const changeLog = pgTable(
   {
     id: id(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-    userId: uuid("user_id").references(() => users.id),
-    /** The name at the time, so the history reads the same after a rename. */
-    userName: text("user_name"),
     action: changeAction("action").notNull(),
     /** production, packaging, purchasing, sales, stock or settings: the History page's filter. */
     area: text("area").notNull(),

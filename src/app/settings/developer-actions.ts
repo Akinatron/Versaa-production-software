@@ -10,7 +10,6 @@ import { startMock, stopMock } from "@/db/mock";
 import { WIPE_INFO, wipeDatabase } from "@/db/wipe";
 import { desktopRequest, isDesktop } from "@/lib/desktop";
 import { uploadsRoot } from "@/lib/files";
-import { currentUser } from "@/lib/session";
 import { devToolsBuilt, isDeveloperMode, setDeveloperMode } from "@/lib/developer";
 import { attempt, withOk } from "../components/flash";
 
@@ -33,8 +32,7 @@ export async function enterDeveloperModeAction() {
     async () => {
       if (!devToolsBuilt()) throw new OperationError("This copy of Versaa has no developer mode.");
       await setDeveloperMode(true);
-    },
-    { role: "admin" },
+    }
   );
   refreshAll();
   redirect(toDev("Developer mode is on."));
@@ -46,22 +44,19 @@ export async function leaveDeveloperModeAction() {
     async () => {
       await stopMock();
       await setDeveloperMode(false);
-    },
-    { role: "admin" },
+    }
   );
   refreshAll();
   redirect(withOk(HERE, "Back to normal mode."));
 }
 
 export async function startMockAction() {
-  const me = await currentUser();
   await attempt(
     HERE,
     async () => {
       await needDeveloperMode();
-      await startMock(me?.id);
-    },
-    { role: "admin" },
+      await startMock();
+    }
   );
   refreshAll();
   redirect(toDev("Showing mock data. Nothing you change now is kept."));
@@ -69,7 +64,7 @@ export async function startMockAction() {
 
 /** Back to the real data. Lands on Settings: a page open on a mock record wouldn't exist in the real data. */
 export async function stopMockAction() {
-  await attempt(HERE, () => stopMock(), { role: "admin" });
+  await attempt(HERE, () => stopMock());
   refreshAll();
   redirect(toDev("Back to your real data. The mock data was thrown away."));
 }
@@ -96,8 +91,7 @@ export async function deleteDatabaseAction(form: FormData) {
       const done = await wipeDatabase(db(), parts);
       if (done.has("activity")) await emptyFolder(mock ? mock.uploadsDir : uploadsRoot());
       return done;
-    },
-    { role: "admin" },
+    }
   );
   refreshAll();
   const what = [...deleted].map((p) => WIPE_INFO[p].label).join(", ");

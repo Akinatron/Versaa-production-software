@@ -23,19 +23,12 @@ export function StorageOptions({ unset = true }: { unset?: boolean }) {
 
 /** A one-line form to change an item's default storage. */
 export function ItemStorageForm({ itemId, value, back, label }: { itemId: string; value: string | null; back: string; label: string }) {
-  return (
-    <>
-      <span className="view-only">
-        <StorageBadge value={value} />
-      </span>
-      <ItemStorageSelect itemId={itemId} value={value} back={back} label={label} />
-    </>
-  );
+  return <ItemStorageSelect itemId={itemId} value={value} back={back} label={label} />;
 }
 
 function ItemStorageSelect({ itemId, value, back, label }: { itemId: string; value: string | null; back: string; label: string }) {
   return (
-    <form action={setItemStorageAction} className="row edit-only" style={{ flexWrap: "nowrap", gap: 6 }}>
+    <form action={setItemStorageAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
       <input type="hidden" name="itemId" value={itemId} />
       <input type="hidden" name="back" value={back} />
       <select name="storage" defaultValue={value ?? ""} aria-label={label} style={{ minWidth: 150 }}>

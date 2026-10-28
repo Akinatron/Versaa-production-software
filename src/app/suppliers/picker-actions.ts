@@ -9,7 +9,6 @@ import { addItem } from "@/db/catalog";
 import { isBoughtKind } from "@/domain/item-kinds";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { isStorage } from "@/domain/storage";
-import { asUser } from "../components/flash";
 
 /*
  * "Create …" from the search boxes on the supplier and item cards. Called
@@ -42,9 +41,7 @@ export async function createItemFromPicker(input: { kind: string; name: string; 
     if (!isBoughtKind(kind)) throw new OperationError("Choose what it is: Ingredient, Packaging or Other.");
     if (!(input.stockUnit in UNITS)) throw new OperationError("Choose how it is counted.");
     if (kind === "ingredient" && !isStorage(input.storage)) throw new OperationError("Choose where it is kept.");
-    const item = await asUser(() =>
-      addItem(db(), { kind, name: input.name, stockUnit: input.stockUnit, storage: kind === "ingredient" ? input.storage : null }),
-    );
+    const item = await addItem(db(), { kind, name: input.name, stockUnit: input.stockUnit, storage: kind === "ingredient" ? input.storage : null });
     refresh();
     return {
       ok: true,
@@ -64,7 +61,7 @@ export async function createSupplierFromPicker(name: string): Promise<Created> {
       .from(t.suppliers)
       .where(sql`lower(${t.suppliers.name}) = lower(${name.trim()})`);
     if (dup) throw new OperationError(`${dup.name} already exists${dup.active ? "" : " (marked as not in use)"}.`);
-    const s = await asUser(() => addSupplier(db(), { name }));
+    const s = await addSupplier(db(), { name });
     refresh();
     return { ok: true, id: s.id, label: s.name };
   });

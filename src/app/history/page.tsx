@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db/client";
-import { AREAS, historyPeople, linksOf, listChanges } from "@/db/changes";
+import { AREAS, linksOf, listChanges } from "@/db/changes";
 import { PageHeader, Empty } from "../components/ui/header";
 import { ACTION_LABEL, AREA_LABEL, openHref, refLabel, toRow } from "../components/history-format";
 import { ChangeItem } from "../components/history-list";
@@ -10,20 +10,20 @@ export const metadata = { title: "History" };
 
 const PAGE = 100;
 
-/** Every change in the app, newest first: who did what, when, from what to what, and why. */
+/** Every change in the app, newest first: what was done, when, from what to what, and why. */
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const area = sp.area && (AREAS as string[]).includes(sp.area) ? sp.area : null;
   const before = sp.before && !Number.isNaN(Date.parse(sp.before)) ? new Date(sp.before) : null;
-  const filter = { area, userId: sp.who || null, action: sp.action || null, from: sp.from || null, to: sp.to || null, code: sp.code || null };
-  const [rows, people] = await Promise.all([listChanges(db(), { ...filter, before, limit: PAGE + 1 }), historyPeople(db())]);
+  const filter = { area, action: sp.action || null, from: sp.from || null, to: sp.to || null, code: sp.code || null };
+  const rows = await listChanges(db(), { ...filter, before, limit: PAGE + 1 });
   const more = rows.length > PAGE;
   const page = rows.slice(0, PAGE);
   const links = await linksOf(db(), page.map((c) => c.id));
 
   const href = (patch: Record<string, string | null>) => {
     const q = new URLSearchParams();
-    for (const [k, v] of Object.entries({ ...filter, area, ...patch })) if (v) q.set(k === "userId" ? "who" : k, v);
+    for (const [k, v] of Object.entries({ ...filter, area, ...patch })) if (v) q.set(k, v);
     const s = q.toString();
     return s ? `/history?${s}` : "/history";
   };
@@ -48,17 +48,6 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
         <div>
           <label htmlFor="h-code">Code</label>
           <input id="h-code" name="code" defaultValue={sp.code ?? ""} placeholder="Batch, order, lot…" />
-        </div>
-        <div>
-          <label htmlFor="h-who">Person</label>
-          <select id="h-who" name="who" defaultValue={sp.who ?? ""}>
-            <option value="">Everyone</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
         </div>
         <div>
           <label htmlFor="h-action">What</label>
@@ -92,7 +81,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       {page.length === 0 ? (
         <div className="card">
           <Empty title={filtered || area ? "No changes match" : "Nothing recorded yet"}>
-            <p>Every time someone creates, changes, deletes or restores something, it shows here with who, when and why.</p>
+            <p>Every time something is created, changed, deleted or restored, it shows here with when and why.</p>
           </Empty>
         </div>
       ) : (

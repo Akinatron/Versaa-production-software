@@ -344,7 +344,7 @@ export default async function LotTracePage({
           <BatchBackward batchId={lot.batchId} />
         </>
       )}
-      <details className="card edit-only" style={{ marginTop: 32 }}>
+      <details className="card" style={{ marginTop: 32 }}>
         <summary>
           {lot.itemKind === "packaging" || lot.itemKind === "other"
             ? "Correct the best-before or supplier batch"

@@ -4,7 +4,7 @@ import { getFile } from "@/lib/files";
 
 export const dynamic = "force-dynamic";
 
-/** Open a delivery note or invoice. Signing in is checked by the middleware, like every page. */
+/** Open a delivery note or invoice. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });

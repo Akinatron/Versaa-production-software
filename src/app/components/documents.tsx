@@ -70,19 +70,18 @@ export function DocList({
 }
 
 /** Files taken off, with the way to put one back. */
-export function RemovedDocs({ docs, back }: { docs: { doc: DocumentRow; by: string | null }[]; back: string }) {
+export function RemovedDocs({ docs, back }: { docs: { doc: DocumentRow }[]; back: string }) {
   if (docs.length === 0) return null;
   return (
     <details className="small" style={{ marginTop: 12 }}>
       <summary>Removed files · {docs.length}</summary>
       <ul className="doclist">
-        {docs.map(({ doc: d, by }) => (
+        {docs.map(({ doc: d }) => (
           <li key={d.id}>
             <div className="what">
               <span className="is-deleted">{d.fileName}</span>
               <span className="sub">
                 {DOC_KIND[d.kind]} · removed {d.removedAt ? fmtWhen(d.removedAt) : ""}
-                {by ? ` by ${by}` : ""}
               </span>
             </div>
             <form action={restoreDocumentAction} className="row" style={{ alignItems: "center" }}>

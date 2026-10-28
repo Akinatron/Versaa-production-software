@@ -70,9 +70,8 @@ export default async function BatchPage({
     .where(and(eq(t.productionBatches.runId, run.id), eq(t.productionBatches.sauceId, sauce.id), ne(t.productionBatches.status, "cancelled")));
 
   const deletedIncidents = await db()
-    .select({ i: t.incidents, by: t.users.name })
+    .select({ i: t.incidents })
     .from(t.incidents)
-    .leftJoin(t.users, eq(t.incidents.deletedBy, t.users.id))
     .where(and(eq(t.incidents.batchId, batch.id), sql`${t.incidents.deletedAt} is not null`))
     .orderBy(desc(t.incidents.deletedAt));
   const canRestore = batch.status === "cancelled" && run.status !== "closed" && run.status !== "cancelled";
@@ -348,7 +347,7 @@ export default async function BatchPage({
 
       {/* ------------------------------------------------ correct */}
       {batch.status !== "cancelled" && (
-        <details className="card edit-only">
+        <details className="card">
           <summary>Correct the cooking date or note</summary>
           <form action={editBatch} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="batchId" value={batch.id} />
@@ -384,7 +383,7 @@ export default async function BatchPage({
                 <div className="what">
                   {i.note}
                   <div className="sub">{fmtDate(i.occurredOn)}</div>
-                  <details className="small edit-only" style={{ marginTop: 6 }}>
+                  <details className="small" style={{ marginTop: 6 }}>
                     <summary>Correct or delete</summary>
                     <form action={editIncident} className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>
                       <input type="hidden" name="batchId" value={batch.id} />
@@ -457,17 +456,16 @@ export default async function BatchPage({
           A note for the batch record. It doesn&apos;t change stock; record lost jars as a write-off in Stock.
         </p>
         {deletedIncidents.length > 0 && (
-          <details className="small edit-only" style={{ marginTop: 12 }}>
+          <details className="small" style={{ marginTop: 12 }}>
             <summary>Deleted incidents · {deletedIncidents.length}</summary>
             <ul className="worklist">
-              {deletedIncidents.map(({ i, by }) => (
+              {deletedIncidents.map(({ i }) => (
                 <li key={i.id}>
                   <span className="badge neutral">{INCIDENT[i.type] ?? i.type}</span>
                   <div className="what">
                     <span className="is-deleted">{i.note}</span>
                     <div className="sub">
                       Deleted {fmtWhen(i.deletedAt!)}
-                      {by ? ` by ${by}` : ""}
                       {i.deletedReason ? `: “${i.deletedReason}”` : ""}
                     </div>
                     <form action={toggleIncident} className="row" style={{ marginTop: 8, alignItems: "flex-end" }}>

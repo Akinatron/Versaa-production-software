@@ -26,7 +26,7 @@ type Entry = {
  * The app's one navigation: grouped by the job (make, buy, keep, sell), with
  * a count wherever work is waiting. Collapses to a drawer on small screens.
  */
-export function Sidebar({ user, counts, signOut }: { user: { name: string }; counts: NavCounts; signOut: React.ReactNode }) {
+export function Sidebar({ counts }: { counts: NavCounts }) {
   const path = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
@@ -128,12 +128,6 @@ export function Sidebar({ user, counts, signOut }: { user: { name: string }; cou
         </nav>
         <div className="foot">
           {link({ href: "/settings", label: "Settings", icon: "settings" })}
-          <div className="who">
-            <Link href="/team" title="Team and your account">
-              {user.name}
-            </Link>
-            {signOut}
-          </div>
         </div>
       </aside>
     </>

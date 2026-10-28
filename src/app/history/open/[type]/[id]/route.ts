@@ -53,8 +53,6 @@ async function pathFor(type: EntityType, id: string): Promise<string> {
       return `/settings/packaging/${id}`;
     case "yield":
       return "/settings/yields";
-    case "user":
-      return "/team";
     case "document": {
       const [doc] = await d.select().from(t.documents).where(eq(t.documents.id, id));
       if (doc?.receiptId) return `/deliveries/${doc.receiptId}`;

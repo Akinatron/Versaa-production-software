@@ -9,7 +9,7 @@ import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal,
 import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor } from "@/domain/codes";
 import type { PlanResult } from "@/domain/planner";
-import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
  * Recording production and packaging.
@@ -769,9 +769,9 @@ export async function changePackaging(
       .update(t.packagingSessions)
       .set(
         input.delete
-          ? { deletedAt: at, deletedReason: reason, deletedBy: currentActor()?.id ?? null, updatedAt: at, changeKey: input.idempotencyKey }
+          ? { deletedAt: at, deletedReason: reason, updatedAt: at, changeKey: input.idempotencyKey }
           : input.restore
-            ? { deletedAt: null, deletedReason: null, deletedBy: null, updatedAt: at, changeKey: input.idempotencyKey }
+            ? { deletedAt: null, deletedReason: null, updatedAt: at, changeKey: input.idempotencyKey }
             : { packedOn: input.packedOn!, note: input.note?.trim() || null, updatedAt: at, changeKey: input.idempotencyKey },
       )
       .where(eq(t.packagingSessions.id, session.id));
@@ -881,8 +881,8 @@ export async function setIncidentDeleted(db: DB, input: { incidentId: string; de
       .update(t.incidents)
       .set(
         input.deleted
-          ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason }
-          : { deletedAt: null, deletedBy: null, deletedReason: null },
+          ? { deletedAt: new Date(), deletedReason: reason }
+          : { deletedAt: null, deletedReason: null },
       )
       .where(eq(t.incidents.id, row.id));
     await logChange(tx, {

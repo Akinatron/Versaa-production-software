@@ -157,12 +157,12 @@ async function startServer(databaseUrl: string): Promise<string> {
     }
   });
 
-  // Wait until the server answers (the sign-in page needs no account).
+  // Wait until the server answers (a plain page that needs no database).
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     if (!server) throw new Error("The server stopped while starting.");
     try {
-      const res = await fetch(`${url}/login`, { redirect: "manual" });
+      const res = await fetch(`${url}/health`, { redirect: "manual" });
       if (res.status < 500) return windowUrl;
     } catch {
       // Not listening yet.

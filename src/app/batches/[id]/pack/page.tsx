@@ -84,9 +84,8 @@ export default async function PackagingBatchPage({
   ]);
   const plannedOf = new Map(plan?.sizes.map((p) => [p.productId, p.perBatch]) ?? []);
   const deleted = await db()
-    .select({ s: t.packagingSessions, by: t.users.name })
+    .select({ s: t.packagingSessions })
     .from(t.packagingSessions)
-    .leftJoin(t.users, eq(t.packagingSessions.deletedBy, t.users.id))
     .where(and(eq(t.packagingSessions.batchId, batch.id), sql`${t.packagingSessions.deletedAt} is not null`))
     .orderBy(desc(t.packagingSessions.deletedAt));
   const editLot = editing ? tr.jarLots.find((l) => editing.lines.some((x) => x.line.finishedLotId === l.id && l.bestBefore)) : undefined;
@@ -103,7 +102,7 @@ export default async function PackagingBatchPage({
         progress={{ cooked: pending === 0, packed: tr.sessions.length > 0 }}
         actions={
           open && tr.sessions.length > 0 && !editing ? (
-            <Link href={`/batches/${batch.id}/close`} className="btn secondary edit-only">
+            <Link href={`/batches/${batch.id}/close`} className="btn secondary">
               Finished packing: close batch
             </Link>
           ) : undefined
@@ -244,7 +243,7 @@ export default async function PackagingBatchPage({
       )}
 
       {open && !editing && (
-        <div className="edit-only">
+        <div >
           <h2 style={tr.sessions.length === 0 && !plan ? { marginTop: 0 } : undefined}>
             {tr.sessions.length === 0 ? "Record the jars packed" : "Record another session"}
           </h2>
@@ -287,13 +286,12 @@ export default async function PackagingBatchPage({
             Kept for traceability. Restoring one puts its figures back: its jars go into stock again and its materials are used again.
           </p>
           <ul className="worklist">
-            {deleted.map(({ s, by }) => (
+            {deleted.map(({ s }) => (
               <li key={s.id}>
                 <div className="what">
                   <span className="is-deleted">Packaging of {fmtDate(s.packedOn)}</span>
                   <div className="sub">
                     Deleted {fmtWhen(s.deletedAt!)}
-                    {by ? ` by ${by}` : ""}
                     {s.deletedReason ? `: “${s.deletedReason}”` : ""}
                   </div>
                   {editable && (

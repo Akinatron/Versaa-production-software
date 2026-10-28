@@ -186,7 +186,7 @@ export function AddLinkForm({
 /** "Make favourite" for one supplier ↔ item link; the same action on both cards. */
 export function MakeFavourite({ supplierItemId, back }: { supplierItemId: string; back: string }) {
   return (
-    <form action={moveRankAction} className="edit-only">
+    <form action={moveRankAction}>
       <input type="hidden" name="supplierItemId" value={supplierItemId} />
       <input type="hidden" name="back" value={back} />
       <button type="submit" name="to" value="first" className="secondary sm">

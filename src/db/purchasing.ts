@@ -9,7 +9,7 @@ import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
 import { UNITS, type UnitCode } from "@/domain/quantity";
-import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
 
@@ -831,13 +831,12 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
         changeId,
       });
     }
-    const actor = currentActor();
     await tx
       .update(t.receipts)
       .set(
         input.deleted
-          ? { deletedAt: new Date(), deletedBy: actor?.id ?? null, deletedReason: reason }
-          : { deletedAt: null, deletedBy: null, deletedReason: null },
+          ? { deletedAt: new Date(), deletedReason: reason }
+          : { deletedAt: null, deletedReason: null },
       )
       .where(eq(t.receipts.id, r.id));
     for (const poId of await receiptOrders(tx, r.id)) await refreshOrderStatus(tx, poId);

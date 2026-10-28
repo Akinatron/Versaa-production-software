@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ChangeRow } from "./history-format";
 
-/** One change: when, who, what, from what to what, and why. */
+/** One change: when, what, from what to what, and why. */
 export function ChangeItem({ c, showEntity = true, children }: { c: ChangeRow; showEntity?: boolean; children?: React.ReactNode }) {
   return (
     <li className="change">
@@ -28,7 +28,7 @@ export function ChangeItem({ c, showEntity = true, children }: { c: ChangeRow; s
         </ul>
       )}
       <div className="change-meta small muted">
-        {c.when} · {c.who}
+        {c.when}
         {c.reason && <> · &ldquo;{c.reason}&rdquo;</>}
       </div>
       {children}

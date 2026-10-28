@@ -28,10 +28,9 @@ export default async function DeliveryPage({
   const { id } = await params;
   const flash = await searchParams;
   const [row] = await db()
-    .select({ r: t.receipts, supplier: t.suppliers, by: t.users.name })
+    .select({ r: t.receipts, supplier: t.suppliers })
     .from(t.receipts)
     .leftJoin(t.suppliers, eq(t.receipts.supplierId, t.suppliers.id))
-    .leftJoin(t.users, eq(t.receipts.deletedBy, t.users.id))
     .where(eq(t.receipts.id, id))
     .catch(() => []);
   if (!row) notFound();
@@ -73,7 +72,7 @@ export default async function DeliveryPage({
       <Flash params={flash} />
 
       {deleted && (
-        <DeletedNote what="delivery" at={r.deletedAt!} by={row.by} reason={r.deletedReason}>
+        <DeletedNote what="delivery" at={r.deletedAt!} reason={r.deletedReason}>
           <form action={toggleDelivery} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="receiptId" value={r.id} />
             <input type="hidden" name="deleted" value="0" />
@@ -133,7 +132,7 @@ export default async function DeliveryPage({
 
       {!deleted && (
         <>
-          <details className="card edit-only" style={{ marginTop: 32 }}>
+          <details className="card" style={{ marginTop: 32 }}>
             <summary>Correct this delivery</summary>
             <p className="small muted">
               A changed accepted amount moves the lot by the difference. It can&apos;t go below what has already been used from the lot.
@@ -225,7 +224,7 @@ export default async function DeliveryPage({
             </GuardedForm>
           </details>
 
-          <details className="card edit-only">
+          <details className="card">
             <summary>Delete this delivery</summary>
             <form action={toggleDelivery} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
               <input type="hidden" name="receiptId" value={r.id} />

@@ -111,7 +111,7 @@ export default async function ItemPage({
         actions={
           bought &&
           item.active && (
-            <Link href={`/orders/new?${offers[0] ? `supplier=${offers[0].supplierId}&` : ""}items=${id}:`} className="btn secondary edit-only">
+            <Link href={`/orders/new?${offers[0] ? `supplier=${offers[0].supplierId}&` : ""}items=${id}:`} className="btn secondary">
               Order
             </Link>
           )
@@ -161,7 +161,7 @@ export default async function ItemPage({
             )}
             <dt>Name</dt>
             <dd>
-              <form action={renameItemAction} className="row edit-only" style={{ flexWrap: "nowrap", gap: 6 }}>
+              <form action={renameItemAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
                 <input type="hidden" name="itemId" value={item.id} />
                 <input type="hidden" name="back" value={here} />
                 <input name="name" type="text" defaultValue={item.name} required aria-label={`New name for ${item.name}`} style={{ minWidth: 180 }} />
@@ -169,13 +169,12 @@ export default async function ItemPage({
                   Rename
                 </button>
               </form>
-              <span className="view-only">{item.name}</span>
             </dd>
             <dt>Status</dt>
             <dd>
               <div className="row" style={{ gap: 10 }}>
                 {item.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}
-                <form action={setItemActiveAction} className="edit-only">
+                <form action={setItemActiveAction}>
                   <input type="hidden" name="itemId" value={item.id} />
                   <input type="hidden" name="active" value={item.active ? "0" : "1"} />
                   <input type="hidden" name="back" value={here} />
@@ -286,7 +285,7 @@ async function StockTab({
 
   return (
     <>
-      <div className="row edit-only" style={{ gap: 8, margin: "4px 0 12px" }}>
+      <div className="row" style={{ gap: 8, margin: "4px 0 12px" }}>
         <Link href={`/stock/adjust?item=${item.id}`} className="btn secondary">
           Correct the count
         </Link>

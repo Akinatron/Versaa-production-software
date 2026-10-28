@@ -130,7 +130,6 @@ export function DeleteDatabase({ counts, mock }: { counts: WipeCounts; mock: boo
                 </label>
               );
             })}
-            <p className="small muted">Team logins are never deleted.</p>
           </fieldset>
           {lines.length > 0 && (
             <p className="wipe-summary">
