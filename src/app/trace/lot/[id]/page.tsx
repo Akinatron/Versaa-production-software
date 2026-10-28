@@ -24,6 +24,7 @@ export const dynamic = "force-dynamic";
 const KIND: Record<string, string> = {
   ingredient: "Ingredient",
   packaging: "Packaging",
+  other: "Other",
   finished: "Finished jars",
   bulk: "Bulk sauce",
 };
@@ -116,7 +117,7 @@ export default async function LotTracePage({
           <div className="small muted">Best before</div>
           {lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : "not recorded"}
         </div>
-        {lot.itemKind !== "packaging" && (
+        {lot.itemKind !== "packaging" && lot.itemKind !== "other" && (
           <div>
             <div className="small muted">Kept in</div>
             <StorageBadge value={lot.storage} />
@@ -178,7 +179,7 @@ export default async function LotTracePage({
           <li>
             <strong>Batches affected:</strong>{" "}
             {affected.length === 0
-              ? lot.itemKind === "ingredient" || lot.itemKind === "packaging"
+              ? lot.itemKind === "ingredient" || lot.itemKind === "packaging" || lot.itemKind === "other"
                 ? "none, this lot hasn't been used in production."
                 : "none recorded."
               : affected.map((b, i) => (
@@ -345,7 +346,7 @@ export default async function LotTracePage({
       )}
       <details className="card edit-only" style={{ marginTop: 32 }}>
         <summary>
-          {lot.itemKind === "packaging"
+          {lot.itemKind === "packaging" || lot.itemKind === "other"
             ? "Correct the best-before or supplier batch"
             : `Move it or correct the best-before${isMade ? "" : " or supplier batch"}`}
         </summary>
@@ -361,7 +362,7 @@ export default async function LotTracePage({
             <label htmlFor="l-bb">Best before</label>
             <input id="l-bb" name="bestBefore" type="date" defaultValue={lot.bestBefore ?? ""} />
           </div>
-          {lot.itemKind !== "packaging" && (
+          {lot.itemKind !== "packaging" && lot.itemKind !== "other" && (
             <div>
               <label htmlFor="l-storage">Kept in</label>
               <select id="l-storage" name="storage" defaultValue={lot.storage ?? ""}>

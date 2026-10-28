@@ -15,7 +15,7 @@ import { pgTable, pgEnum, uuid, text, integer, numeric, boolean, timestamp, date
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-export const itemKind = pgEnum("item_kind", ["ingredient", "packaging", "finished", "bulk"]);
+export const itemKind = pgEnum("item_kind", ["ingredient", "packaging", "finished", "bulk", "other"]);
 export const unitCode = pgEnum("unit_code", ["g", "kg", "ml", "L", "unit"]);
 export const versionStatus = pgEnum("version_status", ["draft", "active", "retired"]);
 export const estimateSource = pgEnum("estimate_source", ["estimate", "observed"]);
@@ -739,3 +739,12 @@ export const changeLogLinks = pgTable(
   },
   (t) => [index("change_log_links_entity").on(t.entityType, t.entityId)],
 );
+
+// ---------- App settings ----------
+
+/** Small app-wide settings by key, such as whether developer mode is on. */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

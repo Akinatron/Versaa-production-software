@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { db } from "@/db/client";
+import { realDb } from "@/db/client";
 import { countUsers } from "@/db/auth";
 import { Flash } from "../components/flash";
 import { login } from "./actions";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  if ((await countUsers(db())) === 0) redirect("/setup");
+  if ((await countUsers(realDb())) === 0) redirect("/setup");
   return (
     <>
       <div className="brand">

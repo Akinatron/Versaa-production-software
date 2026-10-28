@@ -33,6 +33,7 @@ import {
 } from "@/db/catalog";
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
+import { isBoughtKind } from "@/domain/item-kinds";
 
 const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const back = (form: FormData, fallback: string) => {
@@ -172,7 +173,8 @@ export async function discardPackaging(form: FormData) {
 // ---------------------------------------------------------------- items
 
 export async function addItemAction(form: FormData) {
-  const kind = str(form, "kind") === "packaging" ? "packaging" : "ingredient";
+  const k = str(form, "kind");
+  const kind = isBoughtKind(k) ? k : "ingredient";
   const item = await attempt("/settings/items", () =>
     addItem(db(), { kind, name: str(form, "name"), stockUnit: str(form, "stockUnit"), storage: str(form, "storage") }),
   );

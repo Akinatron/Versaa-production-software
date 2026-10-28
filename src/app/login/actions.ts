@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db/client";
+import { realDb } from "@/db/client";
 import { SESSION_COOKIE, createUser, signIn, signOut } from "@/db/auth";
 import { attempt } from "../components/flash";
 
@@ -25,7 +25,7 @@ export async function login(form: FormData) {
   const next = safeNext(form.get("next"));
   const { token, expiresAt } = await attempt(
     `/login?next=${encodeURIComponent(next)}`,
-    () => signIn(db(), String(form.get("email") ?? ""), String(form.get("password") ?? "")),
+    () => signIn(realDb(), String(form.get("email") ?? ""), String(form.get("password") ?? "")),
     // Anyone may sign in, also over a viewer's session.
     { role: "viewer" },
   );
@@ -36,15 +36,15 @@ export async function login(form: FormData) {
 export async function setupFirstAccount(form: FormData) {
   const email = String(form.get("email") ?? "");
   const password = String(form.get("password") ?? "");
-  await attempt("/setup", () => createUser(db(), { email, name: String(form.get("name") ?? ""), password }, { firstOnly: true }));
-  const { token, expiresAt } = await signIn(db(), email, password);
+  await attempt("/setup", () => createUser(realDb(), { email, name: String(form.get("name") ?? ""), password }, { firstOnly: true }));
+  const { token, expiresAt } = await signIn(realDb(), email, password);
   await startSession(token, expiresAt);
   redirect("/");
 }
 
 export async function logout() {
   const jar = await cookies();
-  await signOut(db(), jar.get(SESSION_COOKIE)?.value);
+  await signOut(realDb(), jar.get(SESSION_COOKIE)?.value);
   jar.delete(SESSION_COOKIE);
   redirect("/login");
 }

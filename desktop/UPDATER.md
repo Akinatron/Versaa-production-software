@@ -1,6 +1,6 @@
 # Check for updates (development only)
 
-While Versaa is being built, the Mac app can update itself from GitHub: **Settings → App updates → Check for updates**. It is meant for development and is easy to leave out or remove before the app goes to other people.
+While Versaa is being built, the Mac app can update itself from GitHub: **Settings → Developer mode → Check for updates**. It is meant for development and is easy to leave out or remove before the app goes to other people.
 
 ## How it works
 
@@ -28,12 +28,20 @@ The copy installed now has no updater. Build and install it once by hand on the 
 VERSAA_UPDATER=0 pnpm desktop:mac
 ```
 
-That build contains no updater code and no bridge to the page, and the **App updates** card does not show.
+That build contains no updater code and no bridge to the page; developer mode says "Only in the Mac app" where the button was.
+
+To leave out developer mode as a whole (Check for updates, Mock data and Delete database), build with `VERSAA_DEVTOOLS=0` too:
+
+```sh
+VERSAA_UPDATER=0 VERSAA_DEVTOOLS=0 pnpm desktop:mac
+```
+
+For the web version, set `VERSAA_DEVTOOLS=0` in the server's environment.
 
 ## Removing it completely
 
 1. Delete `desktop/src/updater/`, `desktop/scripts/release-manifest.mjs`, `.github/workflows/desktop-release.yml`, `src/app/settings/app-updates.tsx`, `test/desktop-updater.test.ts` and this file.
-2. In `src/app/settings/page.tsx`, remove the `AppUpdates` import and `<AppUpdates />`.
+2. In `src/app/settings/page.tsx`, remove the `AppUpdates` import and `<AppUpdates />` (in the developer mode section), and the "Check for updates" line of the developer mode notice in `src/app/settings/developer-dialogs.tsx`.
 3. In `desktop/src/main.ts`, remove the lines that mention `updater` (`__VERSAA_UPDATER__`, `preload: updater?.preloadPath`, `setupUpdater`, `markStarted`, `recoverFromFailedStart`).
 4. In `desktop/scripts/build.mjs`, remove the `updater` / `buildInfo` lines, the `define` entry and the preload build. In `desktop/package.json`, remove `build/preload.cjs` from `files`. In `desktop/.gitignore`, remove `release/`.
 5. On GitHub, delete the `desktop-*` releases and tags.

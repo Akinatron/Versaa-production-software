@@ -7,11 +7,12 @@ export interface ItemOption {
   stockUnit: UnitCode;
 }
 
-/** Item dropdown grouped into ingredients and packaging, with the stock unit shown. */
+/** Item dropdown grouped into ingredients, packaging and other items, with the stock unit shown. */
 export function ItemSelect({ name, items, defaultValue }: { name: string; items: ItemOption[]; defaultValue?: string }) {
   const groups = [
     ["Ingredients", items.filter((i) => i.kind === "ingredient")],
     ["Packaging", items.filter((i) => i.kind === "packaging")],
+    ["Other", items.filter((i) => i.kind === "other")],
   ] as const;
   return (
     <select name={name} defaultValue={defaultValue ?? ""} aria-label="Item">

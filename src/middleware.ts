@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/db/client";
+import { realDb } from "@/db/client";
 import { SESSION_COOKIE, userForToken } from "@/db/auth";
 
 /*
@@ -10,7 +10,7 @@ import { SESSION_COOKIE, userForToken } from "@/db/auth";
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   if (pathname === "/login" || pathname === "/setup" || pathname === "/health") return NextResponse.next();
-  const user = await userForToken(db(), req.cookies.get(SESSION_COOKIE)?.value);
+  const user = await userForToken(realDb(), req.cookies.get(SESSION_COOKIE)?.value);
   if (user) return NextResponse.next();
   if (req.method !== "GET") return new NextResponse("Sign in first.", { status: 401 });
   const url = req.nextUrl.clone();

@@ -12,6 +12,8 @@ import { moveRankAction } from "../../suppliers/actions";
 import { PageHeader } from "../../components/ui/header";
 import { History } from "../../components/history";
 import { ItemStorageForm } from "../../components/storage";
+import { isBoughtKind } from "@/domain/item-kinds";
+import { SupplierPicker } from "../../components/pickers";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export default async function ItemPage({
   const { id } = await params;
   const flash = await searchParams;
   const [item] = await db().select().from(t.items).where(eq(t.items.id, id));
-  if (!item || (item.kind !== "ingredient" && item.kind !== "packaging")) notFound();
+  if (!item || !isBoughtKind(item.kind)) notFound();
   const unit = item.stockUnit as UnitCode;
   const [offers, suppliers, stock, links, usedBy] = await Promise.all([
     loadOffers(db(), { itemIds: [id] }),
@@ -57,7 +59,7 @@ export default async function ItemPage({
         status={item.active ? null : { label: "Retired", cls: "neutral" }}
         lead={
           <>
-            {item.kind === "ingredient" ? "Ingredient" : "Packaging item"} · counted in {u} · in stock{" "}
+            {item.kind === "packaging" ? "Packaging item" : item.kind === "other" ? "Other item" : "Ingredient"} · counted in {u} · in stock{" "}
             <Link href={`/stock/${id}`}>{onHand == null ? "not counted yet" : formatQty(new Decimal(onHand), unit)}</Link>
             {[...usedBy].length > 0 && <> · used by {[...usedBy].map((r) => r.name).join(", ")}</>}
           </>
@@ -100,7 +102,7 @@ export default async function ItemPage({
           {offers.map((o, i) => {
             const link = links.find((l) => l.id === o.supplierItemId);
             return (
-              <li key={o.supplierItemId}>
+              <li key={o.supplierItemId} id={`offer-${o.supplierItemId}`}>
                 <div className="card-head">
                   <span className="small muted">{i + 1}.</span>
                   <Link href={`/suppliers/${o.supplierId}`}>
@@ -130,7 +132,7 @@ export default async function ItemPage({
                   )}
                 </div>
                 <PriceText offer={o} unit={unit} />
-                <OfferForm offer={o} unit={unit} back={back} supplierCode={link?.supplierCode} />
+                <OfferForm offer={o} unit={unit} back={back} supplierCode={link?.supplierCode} open={flash.edit === o.supplierItemId} />
                 <PriceHistory rows={history.filter((h) => h.supplierItemId === o.supplierItemId)} unit={unit} />
               </li>
             );
@@ -139,34 +141,14 @@ export default async function ItemPage({
       )}
 
       <h2>Add a supplier for {item.name}</h2>
-      {suppliers.filter((s) => !linked.has(s.id)).length === 0 ? (
-        <p className="card small muted">
-          Every supplier is already linked. <Link href="/suppliers">Add a new supplier</Link> first.
-        </p>
-      ) : (
-        <AddLinkForm
-          itemId={id}
-          back={back}
-          unitLabel={u}
-          button="Add supplier"
-          canBeFavourite={offers.length > 0}
-          chooser={
-            <div style={{ minWidth: 200 }}>
-              <label>Supplier (required)</label>
-              <select name="supplierId" required defaultValue="">
-                <option value="">Choose…</option>
-                {suppliers
-                  .filter((s) => !linked.has(s.id))
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          }
-        />
-      )}
+      <AddLinkForm
+        itemId={id}
+        back={back}
+        unitLabel={u}
+        button="Add supplier"
+        canBeFavourite={offers.length > 0}
+        chooser={<SupplierPicker suppliers={suppliers.filter((s) => !linked.has(s.id)).map((s) => ({ id: s.id, label: s.name }))} />}
+      />
       <History of={{ type: "item", id }} />
     </>
   );

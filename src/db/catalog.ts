@@ -9,6 +9,7 @@ import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
 import { parseStorage, storageLabel } from "@/domain/storage";
+import { isBoughtKind, KIND_CODE_PREFIX, type BoughtKind } from "@/domain/item-kinds";
 import { parseShelfLife, shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
 
 /*
@@ -242,9 +243,10 @@ async function uniqueCode(db: DB, base: string, table: typeof t.items | typeof t
   }
 }
 
-export async function addItem(db: DB, input: { kind: "ingredient" | "packaging"; name: string; stockUnit: string; storage?: string | null }) {
+export async function addItem(db: DB, input: { kind: BoughtKind; name: string; stockUnit: string; storage?: string | null }) {
   const name = input.name.trim();
-  const storage = input.kind === "packaging" ? null : parseStorage(input.storage);
+  if (!isBoughtKind(input.kind)) throw new OperationError("Choose Ingredient, Packaging or Other.");
+  const storage = input.kind === "ingredient" ? parseStorage(input.storage) : null;
   if (storage === "invalid") throw new OperationError("Choose Fridge, Freezer or Room temperature.");
   if (!name) throw new OperationError("Name is required.");
   if (!isUnitCode(input.stockUnit)) throw new OperationError("Choose a stock unit.");
@@ -252,15 +254,15 @@ export async function addItem(db: DB, input: { kind: "ingredient" | "packaging";
   const [dup] = await db
     .select()
     .from(t.items)
-    .where(and(eq(t.items.name, name), eq(t.items.kind, input.kind)));
-  if (dup) throw new OperationError(`${name} already exists.`);
-  const code = await uniqueCode(db, `${input.kind === "ingredient" ? "ing" : "pkg"}-${slug(name)}`, t.items);
+    .where(and(sql`lower(${t.items.name}) = lower(${name})`, eq(t.items.kind, input.kind)));
+  if (dup) throw new OperationError(`${dup.name} already exists.`);
+  const code = await uniqueCode(db, `${KIND_CODE_PREFIX[input.kind]}-${slug(name)}`, t.items);
   const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit, storage }).returning();
   await logChange(db, {
     action: "create",
     area: "settings",
     entity: { type: "item", id: row!.id, code: name },
-    summary: `Added ${input.kind} ${name} (${input.stockUnit}${storage ? `, ${storageLabel(storage).toLowerCase()}` : ""})`,
+    summary: `Added ${input.kind === "other" ? "other item" : input.kind} ${name} (${input.stockUnit}${storage ? `, ${storageLabel(storage).toLowerCase()}` : ""})`,
   });
   return row!;
 }
@@ -291,6 +293,7 @@ export async function setItemStorage(db: DB, itemId: string, value: string | nul
   const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
   if (!item) throw new OperationError("Item not found.");
   if (item.kind === "packaging") throw new OperationError("Packaging items don't have a storage place.");
+  if (item.kind === "other") throw new OperationError("Other items don't have a storage place.");
   if (item.storage === storage) return;
   await db.transaction(async (tx) => {
     await tx.update(t.items).set({ storage }).where(eq(t.items.id, itemId));
@@ -318,7 +321,8 @@ export async function setItemShelfLife(db: DB, itemId: string, value: string | n
   if (shelf === "invalid") throw new OperationError("Enter the shelf life as a whole number of days, weeks or months (1 to 3650), or leave it empty.");
   const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
   if (!item) throw new OperationError("Item not found.");
-  if (item.kind === "packaging" || item.kind === "bulk") throw new OperationError("Only ingredients and filled jars have a shelf life.");
+  if (item.kind === "packaging" || item.kind === "bulk" || item.kind === "other")
+    throw new OperationError("Only ingredients and filled jars have a shelf life.");
   const before = shelfLifeOf(item);
   if (shelfLifeLabel(before) === shelfLifeLabel(shelf)) return;
   await db.transaction(async (tx) => {

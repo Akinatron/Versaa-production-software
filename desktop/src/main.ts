@@ -12,14 +12,19 @@
  */
 import { app, BrowserWindow, dialog, Menu, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, appendFileSync } from "node:fs";
+import { cp, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { startDatabase, type Database } from "./database";
+import { startDatabase, startMemoryDatabase, type Database } from "./database";
 import { backupDatabase } from "./backup";
 
 // "Check for updates" (development only, see desktop/UPDATER.md). Left out of
 // the app entirely when it is built with VERSAA_UPDATER=0.
 declare const __VERSAA_UPDATER__: boolean;
+// Developer mode (Settings): off in a build made with VERSAA_DEVTOOLS=0.
+declare const __VERSAA_DEVTOOLS__: boolean;
 const updater = __VERSAA_UPDATER__ ? (require("./updater") as typeof import("./updater")) : undefined;
 
 // Everything Versaa keeps: on a Mac, ~/Library/Application Support/Versaa/data.
@@ -63,6 +68,54 @@ function freePort(): Promise<number> {
   });
 }
 
+// ---------------------------------------------------------------- requests from the app's server
+// Developer mode asks the shell for things only it can do: a backup of the
+// built-in database before "Delete database", and an in-memory database for
+// "Mock data". Private local port, and a secret only the server knows.
+let mockDatabase: Awaited<ReturnType<typeof startMemoryDatabase>> | undefined;
+const controlToken = randomBytes(24).toString("hex");
+
+/** A copy of the database and the uploaded files in the backups folder. */
+async function backupAll(): Promise<string> {
+  const file = await backupDatabase(database!.pg, paths.backups);
+  if (existsSync(paths.uploads)) {
+    const stamp = path.basename(file).replace(/^versaa-|\.tar\.gz$/g, "");
+    await cp(paths.uploads, path.join(paths.backups, `uploads-${stamp}`), { recursive: true });
+    // Keep the uploads of the last 3 such copies.
+    const old = (await readdir(paths.backups)).filter((f) => f.startsWith("uploads-")).sort();
+    for (const f of old.slice(0, Math.max(0, old.length - 3))) await rm(path.join(paths.backups, f), { recursive: true, force: true });
+  }
+  return file;
+}
+
+function startControl(): Promise<string> {
+  const server = createHttpServer(async (req, res) => {
+    const reply = (status: number, body: unknown) => {
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(body));
+    };
+    if (req.method !== "POST" || req.headers.authorization !== `Bearer ${controlToken}`) return reply(403, { error: "Not allowed." });
+    try {
+      if (req.url === "/backup") return reply(200, { file: await backupAll() });
+      if (req.url === "/mock/start") {
+        await mockDatabase?.stop().catch((e) => log("mock stop failed", e));
+        mockDatabase = await startMemoryDatabase(log);
+        return reply(200, { url: mockDatabase.url });
+      }
+      if (req.url === "/mock/stop") {
+        await mockDatabase?.stop();
+        mockDatabase = undefined;
+        return reply(200, { ok: true });
+      }
+      return reply(404, { error: "Unknown request." });
+    } catch (err) {
+      log("control request failed", req.url, err);
+      return reply(500, { error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(server.address() as { port: number }).port}`)));
+}
+
 async function startServer(databaseUrl: string): Promise<string> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -81,6 +134,10 @@ async function startServer(databaseUrl: string): Promise<string> {
       // The built-in database serves one connection at a time.
       DATABASE_POOL_MAX: "1",
       UPLOADS_DIR: paths.uploads,
+      MIGRATIONS_DIR: migrationsDir,
+      VERSAA_DEVTOOLS: __VERSAA_DEVTOOLS__ ? "1" : "0",
+      VERSAA_DESKTOP_CONTROL: await startControl(),
+      VERSAA_DESKTOP_TOKEN: controlToken,
       // Plain http on this computer only, so the sign-in cookie can't be "secure only".
       INSECURE_COOKIES: "1",
       NEXT_TELEMETRY_DISABLED: "1",
@@ -240,7 +297,7 @@ async function start() {
       log("startup backup failed", err);
     }
   }
-  await database.prepare();
+  await database.prepare({ seedCatalog: firstRun });
   appUrl = await startServer(database.url);
   log("ready at", appUrl);
   await updater?.markStarted().catch((err) => log("updater: could not record the update", err));

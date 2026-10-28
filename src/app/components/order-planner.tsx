@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemKind } from "@/domain/planner";
 import { useState } from "react";
 import Decimal from "decimal.js";
 import { OrderItems } from "./order-items";
@@ -16,7 +17,7 @@ export interface PlannerOffer {
 export interface PlannerLine {
   itemId: string;
   name: string;
-  kind: "ingredient" | "packaging";
+  kind: ItemKind;
   unitLabel: string;
   wholeUnits: boolean;
   /** Still to order, as a decimal string. */

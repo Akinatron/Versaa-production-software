@@ -1,3 +1,4 @@
+import { isBoughtKind } from "@/domain/item-kinds";
 import Decimal from "decimal.js";
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -43,7 +44,7 @@ export default async function PlanOrdersPage({ searchParams }: { searchParams: P
   const lines: PlannerLine[] = wanted
     .map((w) => {
       const item = items.find((i) => i.id === w.itemId);
-      if (!item || (item.kind !== "ingredient" && item.kind !== "packaging")) return null;
+      if (!item || !isBoughtKind(item.kind)) return null;
       return {
         itemId: item.id,
         name: item.name,

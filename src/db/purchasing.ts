@@ -1,3 +1,4 @@
+import type { ItemKind } from "@/domain/planner";
 import { bestBeforeFrom, shelfLifeOf } from "@/domain/shelf-life";
 import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -481,7 +482,7 @@ export async function recordReceipt(
       }
       let lotId: string | null = null;
       if (line.accepted.gt(0)) {
-        const storage = item.kind === "packaging" ? null : parseStorage(line.storage);
+        const storage = item.kind === "packaging" || item.kind === "other" ? null : parseStorage(line.storage);
         if (storage === "invalid") throw new OperationError(`${item.name}: choose Fridge, Freezer or Room temperature.`);
         const code = await nextLotCode(tx, `RCV-${input.receivedOn.replaceAll("-", "")}`);
         const [lot] = await tx
@@ -971,7 +972,7 @@ export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: strin
 export interface OrderPlanLine {
   itemId: string;
   name: string;
-  kind: "ingredient" | "packaging";
+  kind: ItemKind;
   unit: UnitCode;
   /** Missing after stock, other runs' reservations, sent orders and this run's drafts. */
   missing: Decimal;

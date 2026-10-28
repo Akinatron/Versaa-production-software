@@ -57,6 +57,16 @@ pnpm dev            # http://localhost:3000, then create the first account
 
 Uploaded delivery notes and invoices are saved in an `uploads` folder next to the app (set `UPLOADS_DIR` to keep them elsewhere). That folder is not in git; back it up together with the database.
 
+## Developer mode
+
+At the bottom of Settings an admin can turn on **Developer mode** (off by default; it stays on until "Back to normal mode"). It adds:
+
+- **Check for updates** (Mac app only, see below).
+- **Mock data**: the app switches to a separate test database with four test suppliers and an example of every stage. The real database is not touched, and the test database is thrown away when it is turned off or the server restarts. In the web version it is a second database on the same PostgreSQL server, named after yours with `_mock` (`versaa_mock`), so the `DATABASE_URL` user must be allowed to create databases. In the Mac app it lives in memory.
+- **Delete database**: delete activity, suppliers, recipes, items and/or sauces & products, with what depends on them. Team logins are kept. The Mac app saves a backup first.
+
+Build or run with `VERSAA_DEVTOOLS=0` to leave developer mode out.
+
 Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty database to also run the database tests; that database is wiped on each run.
 
 ## Desktop app (Mac)
@@ -71,7 +81,7 @@ pnpm desktop:mac    # builds Versaa.app and copies it into /Applications
 
 Then open **Versaa** from Applications or Launchpad. The first start takes a few seconds longer while it creates the database; then it asks for the first account, as the web version does. Run the same command again after pulling an update: the app is replaced, the data is kept, and migrations run by themselves when it opens.
 
-While the app is in development it can also update itself from GitHub (Settings → App updates). See [desktop/UPDATER.md](desktop/UPDATER.md), which also says how to build it without that or remove it.
+While the app is in development it can also update itself from GitHub (Settings → Developer mode → Check for updates). See [desktop/UPDATER.md](desktop/UPDATER.md), which also says how to build it without that or remove it.
 
 The app isn't signed with an Apple developer account. A copy built on the same Mac opens normally. A copy brought from another Mac (the zip in `desktop/dist`) is blocked the first time: right-click it, choose **Open**, then **Open** again (or allow it in System Settings → Privacy & Security).
 

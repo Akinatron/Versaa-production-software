@@ -1,3 +1,4 @@
+import { isBoughtKind } from "@/domain/item-kinds";
 import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
@@ -97,7 +98,7 @@ export async function linkSupplierItem(
   const offer = parseOffer(input);
   return db.transaction(async (tx) => {
     const [item] = await tx.select().from(t.items).where(eq(t.items.id, input.itemId));
-    if (!item || (item.kind !== "ingredient" && item.kind !== "packaging")) throw new OperationError("Only ingredients and packaging are bought from suppliers.");
+    if (!item || !isBoughtKind(item.kind)) throw new OperationError("Only ingredients, packaging and other items are bought from suppliers.");
     if (offer.packQty && item.stockUnit === "unit" && !offer.packQty.isInteger()) throw new OperationError(`${item.name} is counted in whole units, so the pack size must be whole.`);
     const [existing] = await tx
       .select()

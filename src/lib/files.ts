@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { activeMock } from "@/db/client";
 
 /*
  * Where uploaded paperwork (delivery notes, invoices) is kept. For now that
@@ -10,6 +11,13 @@ import { randomUUID } from "node:crypto";
  */
 
 function root() {
+  // While mock data is shown, its files go to its own throw-away folder.
+  const mock = activeMock()?.uploadsDir;
+  return path.resolve(mock || uploadsRoot());
+}
+
+/** The real uploads folder. */
+export function uploadsRoot() {
   return path.resolve(process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads"));
 }
 

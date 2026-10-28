@@ -10,6 +10,8 @@ import { PageHeader } from "../../components/ui/header";
 import { ItemStorageForm, StorageOptions } from "../../components/storage";
 import { ShelfLifeForm } from "../../components/shelf-life";
 import { shelfLifeOf } from "@/domain/shelf-life";
+import { BOUGHT_KINDS } from "@/domain/item-kinds";
+import { describePrice, type Offer } from "@/domain/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     db()
       .select()
       .from(t.items)
-      .where(inArray(t.items.kind, ["ingredient", "packaging"])),
+      .where(inArray(t.items.kind, [...BOUGHT_KINDS])),
     db().execute<{ item_id: string; name: string }>(sql`
       select l.item_id, s.name from recipe_lines l join recipe_versions v on v.id = l.recipe_version_id join sauces s on s.id = v.sauce_id
       where v.status = 'active'
@@ -27,14 +29,15 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       select l.item_id, p.name from packaging_lines l join packaging_versions v on v.id = l.packaging_version_id join products p on p.id = v.product_id
       where v.status = 'active'`),
   ]);
-  const suppliersOf = new Map<string, string[]>();
-  for (const o of await loadOffers(db(), {})) suppliersOf.set(o.itemId, [...(suppliersOf.get(o.itemId) ?? []), o.supplierName]);
+  const offersOf = new Map<string, Offer[]>();
+  for (const o of await loadOffers(db(), {})) offersOf.set(o.itemId, [...(offersOf.get(o.itemId) ?? []), o]);
   const usedBy = new Map<string, string[]>();
   for (const r of usedRows) usedBy.set(r.item_id, [...(usedBy.get(r.item_id) ?? []), r.name]);
 
   const groups = [
     { kind: "ingredient", title: "Ingredients" },
     { kind: "packaging", title: "Packaging items" },
+    { kind: "other", title: "Other items" },
   ] as const;
 
   const noStorage = items.filter((i) => i.kind === "ingredient" && i.active && !i.storage).length;
@@ -43,7 +46,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         back={{ href: "/settings", label: "Settings" }}
-        title="Ingredients & packaging items"
+        title="Items"
         lead={
           <>
             Everything you buy and keep in stock. Nothing is deleted: a retired item disappears from lists and new recipes, but its stock and history stay. The
@@ -100,6 +103,31 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
           <p className="small muted">Packaging is always counted in units (pieces).</p>
           <button type="submit">Add packaging item</button>
         </form>
+        <form action={addItemAction} className="card">
+          <strong>New other item</strong>
+          <input type="hidden" name="kind" value="other" />
+          <label htmlFor="oname" style={{ marginTop: 8 }}>
+            Name (required)
+          </label>
+          <input id="oname" name="name" type="text" required />
+          <label htmlFor="ounit" style={{ marginTop: 8 }}>
+            Stock unit (required)
+          </label>
+          <select id="ounit" name="stockUnit" defaultValue="" required>
+            <option value="" disabled>
+              Choose…
+            </option>
+            <option value="unit">units</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="L">L</option>
+            <option value="ml">ml</option>
+          </select>
+          <p className="small muted">
+            For things you buy that are neither an ingredient nor packaging, like cleaning products or gloves. They are never planned.
+          </p>
+          <button type="submit">Add other item</button>
+        </form>
       </div>
 
       {groups.map((g) => {
@@ -137,7 +165,9 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                             </Link>
                           </div>
                         </td>
-                        <td className="small">{suppliersOf.get(i.id)?.join(", ") ?? <span className="badge warn">none</span>}</td>
+                        <td className="small">
+                          <SupplierPrices itemId={i.id} offers={offersOf.get(i.id) ?? []} unit={i.stockUnit as UnitCode} />
+                        </td>
                         <td>{UNITS[i.stockUnit as UnitCode].label}</td>
                         {g.kind === "ingredient" && (
                           <td>
@@ -187,5 +217,29 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
       })}
       <p className="small muted">An item still used by an active recipe or packaging list can't be retired: make a new version without it first.</p>
     </>
+  );
+}
+
+/** Each supplier with its current price, and a link straight to that price's form on the item's card. */
+function SupplierPrices({ itemId, offers, unit }: { itemId: string; offers: Offer[]; unit: UnitCode }) {
+  if (offers.length === 0)
+    return (
+      <Link href={`/items/${itemId}`} className="badge warn">
+        none, add one
+      </Link>
+    );
+  return (
+    <ul className="supplier-prices">
+      {offers.map((o) => (
+        <li key={o.supplierItemId}>
+          <span>
+            {o.supplierName}
+            {o.rank === 1 && offers.length > 1 && <span className="muted"> (favourite)</span>}
+          </span>{" "}
+          <span className={o.price === null ? "text-warn" : "muted"}>{describePrice(o, UNITS[unit].label)}</span>{" "}
+          <Link href={`/items/${itemId}?edit=${o.supplierItemId}#offer-${o.supplierItemId}`}>Edit</Link>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -2,8 +2,8 @@
 
 /*
  * "Check for updates" card for the Mac app (development only, see
- * desktop/UPDATER.md). It shows only inside the desktop app built with the
- * updater; in a browser it renders nothing.
+ * desktop/UPDATER.md), shown in Settings → Developer mode. It works only
+ * inside the desktop app built with the updater; in a browser it says so.
  */
 import { useEffect, useState } from "react";
 
@@ -29,14 +29,25 @@ export function AppUpdates() {
   const [state, setState] = useState<"idle" | "checking" | "installing">("idle");
   const [error, setError] = useState<string>();
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     bridge()
       ?.status()
       .then(setStatus)
       .catch((e) => setError(message(e)));
   }, []);
 
-  if (!bridge() || !status) return null;
+  if (!mounted) return null;
+  if (!bridge())
+    return (
+      <section className="card" aria-labelledby="app-updates-title">
+        <h3 id="app-updates-title">Check for updates</h3>
+        <p className="small muted">Only in the Mac app. Here, update with git pull and pnpm db:migrate.</p>
+      </section>
+    );
+  if (!status) return null;
 
   async function onCheck() {
     setState("checking");
@@ -66,7 +77,7 @@ export function AppUpdates() {
   return (
     <section className="card" aria-labelledby="app-updates-title">
       <div className="card-head">
-        <h2 id="app-updates-title">App updates</h2>
+        <h3 id="app-updates-title">Check for updates</h3>
       </div>
       <p className="small muted">This copy: {label(status.current)}</p>
 

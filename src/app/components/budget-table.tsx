@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemKind } from "@/domain/planner";
 import { Fragment, useState } from "react";
 
 /*
@@ -24,7 +25,7 @@ export interface BudgetTableRow {
 }
 
 export interface BudgetTableGroup {
-  kind: "ingredient" | "packaging";
+  kind: ItemKind;
   rows: BudgetTableRow[];
   totals: Record<string, string>;
 }
@@ -35,7 +36,7 @@ export interface BudgetTableData {
   total: Record<string, string>;
 }
 
-const TITLE = { ingredient: "Ingredients", packaging: "Packaging" } as const;
+const TITLE = { ingredient: "Ingredients", packaging: "Packaging", other: "Other" } as const;
 
 export function BudgetTable({ data, note }: { data: BudgetTableData; note?: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});

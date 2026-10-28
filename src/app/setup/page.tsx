@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { db } from "@/db/client";
+import { realDb } from "@/db/client";
 import { countUsers } from "@/db/auth";
 import { Flash } from "../components/flash";
 import { setupFirstAccount } from "../login/actions";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Shown only while no account exists yet. */
 export default async function SetupPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  if ((await countUsers(db())) > 0) redirect("/login");
+  if ((await countUsers(realDb())) > 0) redirect("/login");
   return (
     <>
       <div className="brand">
