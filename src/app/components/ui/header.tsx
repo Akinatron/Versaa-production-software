@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "./icons";
+import { HelpLink } from "./help-link";
 
 /**
  * The top of every page: an optional way back, the title (with its status),
@@ -33,7 +34,10 @@ export function PageHeader({
         </h1>
         {lead && <div className="lead">{lead}</div>}
       </div>
-      {actions && <div className="actions">{actions}</div>}
+      <div className="actions">
+        {actions}
+        <HelpLink />
+      </div>
     </header>
   );
 }

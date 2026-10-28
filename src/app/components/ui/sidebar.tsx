@@ -127,6 +127,7 @@ export function Sidebar({ counts }: { counts: NavCounts }) {
           ))}
         </nav>
         <div className="foot">
+          {link({ href: "/help", label: "Help", icon: "help" })}
           {link({ href: "/settings", label: "Settings", icon: "settings" })}
         </div>
       </aside>

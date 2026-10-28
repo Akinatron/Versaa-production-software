@@ -98,6 +98,13 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M7 16v-5M12 16V6M17 16v-8" />
     </>
   ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7" />
+      <path d="M12 17h.01" />
+    </>
+  ),
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
