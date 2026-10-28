@@ -1,3 +1,4 @@
+import { bestBeforeFrom, shelfLifeOf } from "@/domain/shelf-life";
 import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
@@ -93,7 +94,10 @@ export async function createBatchesForRun(tx: Tx, runId: string) {
       .where(and(eq(t.recipeVersions.sauceId, s.sauceId), eq(t.recipeVersions.versionNo, s.recipeVersionNo ?? -1)));
     if (!sauce || !version) throw new OperationError(`${s.name}: the recipe version in the forecast was not found.`);
     const lines = await tx.select().from(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, version.id));
-    const items = await itemsById(tx, lines.map((l) => l.itemId));
+    const items = await itemsById(
+      tx,
+      lines.map((l) => l.itemId),
+    );
 
     const prefix = `${sauce.batchPrefix ?? batchPrefixFor(sauce.name)}-${run.plannedFor.replaceAll("-", "")}`;
     const [{ n } = { n: 0 }] = await tx
@@ -206,10 +210,20 @@ export async function recordIngredients(
       if (seen.has(l.itemId)) throw new OperationError("The same ingredient is listed twice.");
       seen.add(l.itemId);
     }
-    const items = await itemsById(tx, input.lines.map((l) => l.itemId));
+    const items = await itemsById(
+      tx,
+      input.lines.map((l) => l.itemId),
+    );
     const byItem = new Map(existing.map((l) => [l.itemId, l]));
-    const used = await usedByDocs(tx, "batch_consumption", existing.map((l) => l.id));
-    const lots = await lotsOf(tx, input.lines.map((l) => l.itemId));
+    const used = await usedByDocs(
+      tx,
+      "batch_consumption",
+      existing.map((l) => l.id),
+    );
+    const lots = await lotsOf(
+      tx,
+      input.lines.map((l) => l.itemId),
+    );
 
     const errors: string[] = [];
     const plans: { item: typeof t.items.$inferSelect; line?: typeof t.batchConsumption.$inferSelect; current: LotSplit; target: LotSplit; qty: Decimal }[] = [];
@@ -290,7 +304,10 @@ export async function recordIngredients(
     for (const p of plans) {
       let line = p.line;
       if (!line) {
-        [line] = await tx.insert(t.batchConsumption).values({ batchId: batch.id, itemId: p.item.id, standardQty: "0", plannedQty: "0", extra: true }).returning();
+        [line] = await tx
+          .insert(t.batchConsumption)
+          .values({ batchId: batch.id, itemId: p.item.id, standardQty: "0", plannedQty: "0", extra: true })
+          .returning();
       }
       const first = !line!.confirmedAt;
       const before = splitTotal(p.current);
@@ -373,10 +390,17 @@ function checkJarNumbers(lines: PackagingLineInput[]) {
 async function packagingNeeds(tx: Tx, sauce: { id: string; name: string }, lines: (PackagingLineInput & { packagingVersionId?: string | null })[]) {
   const productIds = lines.map((l) => l.productId);
   const productRows = productIds.length
-    ? await tx.select({ product: t.products, format: t.formats }).from(t.products).innerJoin(t.formats, eq(t.products.formatId, t.formats.id)).where(inArray(t.products.id, productIds))
+    ? await tx
+        .select({ product: t.products, format: t.formats })
+        .from(t.products)
+        .innerJoin(t.formats, eq(t.products.formatId, t.formats.id))
+        .where(inArray(t.products.id, productIds))
     : [];
   const active = productIds.length
-    ? await tx.select().from(t.packagingVersions).where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
+    ? await tx
+        .select()
+        .from(t.packagingVersions)
+        .where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
     : [];
   const versionOf = new Map<string, string>();
   for (const l of lines) {
@@ -407,7 +431,12 @@ async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<strin
   for (const itemId of itemIds) {
     const current = used.get(itemId) ?? new Map<string, Decimal>();
     try {
-      const target = autoSplit(items.get(itemId)!, current, lots.filter((l) => l.itemId === itemId), need.get(itemId) ?? D0);
+      const target = autoSplit(
+        items.get(itemId)!,
+        current,
+        lots.filter((l) => l.itemId === itemId),
+        need.get(itemId) ?? D0,
+      );
       if (!sameSplit(current, target)) plans.push({ itemId, current, target });
     } catch (e) {
       if (e instanceof OperationError) errors.push(e.message);
@@ -418,8 +447,25 @@ async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<strin
 }
 
 /** The finished lot for this batch and size (one per batch and size), created if needed. */
-async function finishedLot(tx: Tx, batch: { id: string; code: string }, p: { product: typeof t.products.$inferSelect; format: typeof t.formats.$inferSelect }, on: string, bestBefore: string | null) {
-  let [lot] = await tx.select().from(t.lots).where(and(eq(t.lots.batchId, batch.id), eq(t.lots.itemId, p.product.itemId)));
+async function finishedLot(
+  tx: Tx,
+  batch: { id: string; code: string },
+  p: { product: typeof t.products.$inferSelect; format: typeof t.formats.$inferSelect },
+  on: string,
+  bestBefore: string | null,
+) {
+  let [lot] = await tx
+    .select()
+    .from(t.lots)
+    .where(and(eq(t.lots.batchId, batch.id), eq(t.lots.itemId, p.product.itemId)));
+  if (!bestBefore) {
+    // No date given: packing date + this product's shelf life, when it has one.
+    const [item] = await tx
+      .select({ shelfLife: t.items.shelfLife, shelfLifeUnit: t.items.shelfLifeUnit })
+      .from(t.items)
+      .where(eq(t.items.id, p.product.itemId));
+    bestBefore = item ? bestBeforeFrom(on, shelfLifeOf(item)) : null;
+  }
   if (!lot) {
     [lot] = await tx
       .insert(t.lots)
@@ -521,7 +567,8 @@ export async function recordPackaging(
 
 type SessionLine = typeof t.packagingSessionLines.$inferSelect;
 
-const jarsText = (l: { filled: number; rejected: number }) => (l.filled || l.rejected ? `${l.filled} filled${l.rejected ? `, ${l.rejected} rejected` : ""}` : null);
+const jarsText = (l: { filled: number; rejected: number }) =>
+  l.filled || l.rejected ? `${l.filled} filled${l.rejected ? `, ${l.rejected} rejected` : ""}` : null;
 
 /** One line per size with the sum of a session's lines (the original plus any corrections). */
 export function netLines(lines: SessionLine[]): SessionLine[] {
@@ -575,7 +622,10 @@ export async function changePackaging(
     if (!input.restore && session.deletedAt) throw new OperationError("This packaging session has already been deleted.");
     const { batch, sauce, run } = await getBatch(tx, session.batchId);
     if (batch.status === "cancelled") throw new OperationError(`${batch.code} was marked as not made.`);
-    const reason = needReason(input.reason, input.delete ? "Say why the session is deleted" : input.restore ? "Say why the session is restored" : "Say why the packaging is corrected");
+    const reason = needReason(
+      input.reason,
+      input.delete ? "Say why the session is deleted" : input.restore ? "Say why the session is restored" : "Say why the packaging is corrected",
+    );
 
     // The session's current figures per size: original lines plus earlier corrections.
     const allLines = await tx.select().from(t.packagingSessionLines).where(eq(t.packagingSessionLines.sessionId, session.id));
@@ -589,8 +639,16 @@ export async function changePackaging(
     const wanted = new Map(requested.map((l) => [l.productId, l]));
     const packedOn = input.restore ? session.packedOn : input.packedOn;
     const lines = [
-      ...old.map((o) => ({ productId: o.productId, filled: wanted.get(o.productId)?.filled ?? 0, rejected: wanted.get(o.productId)?.rejected ?? 0, packagingVersionId: o.packagingVersionId, old: o })),
-      ...[...wanted.values()].filter((w) => !old.some((o) => o.productId === w.productId) && (w.filled > 0 || w.rejected > 0)).map((w) => ({ ...w, packagingVersionId: null, old: null })),
+      ...old.map((o) => ({
+        productId: o.productId,
+        filled: wanted.get(o.productId)?.filled ?? 0,
+        rejected: wanted.get(o.productId)?.rejected ?? 0,
+        packagingVersionId: o.packagingVersionId,
+        old: o,
+      })),
+      ...[...wanted.values()]
+        .filter((w) => !old.some((o) => o.productId === w.productId) && (w.filled > 0 || w.rejected > 0))
+        .map((w) => ({ ...w, packagingVersionId: null, old: null })),
     ];
     if (!input.delete && !input.restore && !lines.some((l) => l.filled > 0 || l.rejected > 0)) {
       throw new OperationError("Enter the jars filled for at least one size, or delete the session.");
@@ -703,7 +761,8 @@ export async function changePackaging(
           changeKey: input.idempotencyKey,
         });
       }
-      if (!input.delete && !input.restore && input.bestBefore && lotId && l.filled > 0) await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
+      if (!input.delete && !input.restore && input.bestBefore && lotId && l.filled > 0)
+        await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
     }
 
     await tx
@@ -725,7 +784,14 @@ export async function changePackaging(
 
 export async function recordIncident(
   db: DB,
-  input: { idempotencyKey?: string; batchId?: string | null; lotId?: string | null; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn?: string },
+  input: {
+    idempotencyKey?: string;
+    batchId?: string | null;
+    lotId?: string | null;
+    type: (typeof t.incidentType.enumValues)[number];
+    note: string;
+    occurredOn?: string;
+  },
 ) {
   if (!input.note.trim()) throw new OperationError("Describe what happened.");
   if (!input.batchId && !input.lotId) throw new OperationError("Link the incident to a batch or a lot.");
@@ -774,7 +840,10 @@ async function incidentRefs(tx: Tx, row: typeof t.incidents.$inferSelect): Promi
 }
 
 /** Correct an incident's kind, date or description. It never moved stock. */
-export async function updateIncident(db: DB, input: { incidentId: string; reason: string; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn: string }) {
+export async function updateIncident(
+  db: DB,
+  input: { incidentId: string; reason: string; type: (typeof t.incidentType.enumValues)[number]; note: string; occurredOn: string },
+) {
   const reason = needReason(input.reason, "Say why the incident is corrected");
   if (!input.note.trim()) throw new OperationError("Describe what happened.");
   if (!isDate(input.occurredOn)) throw new OperationError("Enter the date.");
@@ -810,7 +879,11 @@ export async function setIncidentDeleted(db: DB, input: { incidentId: string; de
     if (!!row.deletedAt === input.deleted) return;
     await tx
       .update(t.incidents)
-      .set(input.deleted ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .set(
+        input.deleted
+          ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason }
+          : { deletedAt: null, deletedBy: null, deletedReason: null },
+      )
       .where(eq(t.incidents.id, row.id));
     await logChange(tx, {
       action: input.deleted ? "delete" : "restore",
@@ -840,7 +913,15 @@ export async function updateBatch(db: DB, input: { batchId: string; reason: stri
     ]);
     if (!changes.length) return;
     await tx.update(t.productionBatches).set(upd).where(eq(t.productionBatches.id, batch.id));
-    await logChange(tx, { action: "update", area: "production", entity: { type: "batch", id: batch.id, code: batch.code }, summary: `${batch.code} corrected`, changes, reason, links: batchRefs(batch, run) });
+    await logChange(tx, {
+      action: "update",
+      area: "production",
+      entity: { type: "batch", id: batch.id, code: batch.code },
+      summary: `${batch.code} corrected`,
+      changes,
+      reason,
+      links: batchRefs(batch, run),
+    });
   });
 }
 
@@ -853,7 +934,8 @@ export async function restoreBatch(db: DB, input: { batchId: string; reason: str
   return db.transaction(async (tx) => {
     const { batch, run } = await getBatch(tx, input.batchId);
     if (batch.status !== "cancelled") throw new OperationError(`${batch.code} isn't marked as not made.`);
-    if (run.status === "closed" || run.status === "cancelled") throw new OperationError(`Run ${run.code} is ${run.status}, so its batches can't come back. Plan a new run instead.`);
+    if (run.status === "closed" || run.status === "cancelled")
+      throw new OperationError(`Run ${run.code} is ${run.status}, so its batches can't come back. Plan a new run instead.`);
     await tx.update(t.productionBatches).set({ status: "planned", closedAt: null }).where(eq(t.productionBatches.id, batch.id));
     const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
     for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);
@@ -917,7 +999,10 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
       .from(t.productionBatches)
       .where(and(eq(t.productionBatches.runId, batch.runId), sql`${t.productionBatches.status} not in ('closed', 'cancelled')`));
     if (open.length === 0) {
-      await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.runId, batch.runId), isNull(t.reservations.releasedAt)));
+      await tx
+        .update(t.reservations)
+        .set({ releasedAt: new Date() })
+        .where(and(eq(t.reservations.runId, batch.runId), isNull(t.reservations.releasedAt)));
       await tx.update(t.productionRuns).set({ status: "closed" }).where(eq(t.productionRuns.id, batch.runId));
     }
     await logChange(tx, {
@@ -925,7 +1010,10 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
       area: "production",
       entity: { type: "batch", id: batch.id, code: batch.code },
       summary: input.notMade ? `${batch.code} marked as not made` : `${batch.code} closed`,
-      changes: diff([["Status", "Open", input.notMade ? "Not made" : "Closed"], ...(open.length === 0 ? [["Run", null, `${run.code} closed`] as [string, unknown, unknown]] : [])]),
+      changes: diff([
+        ["Status", "Open", input.notMade ? "Not made" : "Closed"],
+        ...(open.length === 0 ? [["Run", null, `${run.code} closed`] as [string, unknown, unknown]] : []),
+      ]),
       reason: input.notMade ? input.leftoverReason : null,
       links: batchRefs(batch, run),
     });
@@ -956,13 +1044,17 @@ export interface PackStock {
 export async function packFormMaterials(db: DB, sizes: { productId: string; packagingVersionId?: string | null }[], editingSessionId?: string) {
   const productIds = sizes.map((s) => s.productId);
   const active = productIds.length
-    ? await db.select().from(t.packagingVersions).where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
+    ? await db
+        .select()
+        .from(t.packagingVersions)
+        .where(and(inArray(t.packagingVersions.productId, productIds), eq(t.packagingVersions.status, "active")))
     : [];
   const versionOf = new Map(sizes.map((s) => [s.productId, s.packagingVersionId ?? active.find((v) => v.productId === s.productId)?.id ?? null]));
   const versionIds = [...new Set([...versionOf.values()].filter((v): v is string => !!v))];
   const lines = versionIds.length ? await db.select().from(t.packagingLines).where(inArray(t.packagingLines.packagingVersionId, versionIds)) : [];
   const materials: Record<string, PackMaterial[]> = {};
-  for (const id of productIds) materials[id] = lines.filter((l) => l.packagingVersionId === versionOf.get(id)).map((l) => ({ itemId: l.itemId, perJar: l.perJar }));
+  for (const id of productIds)
+    materials[id] = lines.filter((l) => l.packagingVersionId === versionOf.get(id)).map((l) => ({ itemId: l.itemId, perJar: l.perJar }));
 
   const itemIds = [...new Set(lines.map((l) => l.itemId))];
   const stock: Record<string, PackStock> = {};

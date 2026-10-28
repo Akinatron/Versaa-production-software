@@ -8,6 +8,8 @@ import { Flash } from "../../components/flash";
 import { addItemAction, renameItemAction, setItemActiveAction } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { ItemStorageForm, StorageOptions } from "../../components/storage";
+import { ShelfLifeForm } from "../../components/shelf-life";
+import { shelfLifeOf } from "@/domain/shelf-life";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +117,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                     <th>Suppliers</th>
                     <th>Stock unit</th>
                     {g.kind === "ingredient" && <th>Storage</th>}
+                    {g.kind === "ingredient" && <th>Shelf life (optional)</th>}
                     <th>Status</th>
                     <th>Used by (active)</th>
                     <th>Rename</th>
@@ -139,6 +142,11 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                         {g.kind === "ingredient" && (
                           <td>
                             <ItemStorageForm itemId={i.id} value={i.storage} back="/settings/items" label={`Storage for ${i.name}`} />
+                          </td>
+                        )}
+                        {g.kind === "ingredient" && (
+                          <td>
+                            <ShelfLifeForm itemId={i.id} value={shelfLifeOf(i)} back="/settings/items" label={`Shelf life of ${i.name}`} quietUnset />
                           </td>
                         )}
                         <td>{i.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>

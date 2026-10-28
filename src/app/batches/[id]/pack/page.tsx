@@ -8,6 +8,8 @@ import { traceBatch } from "@/db/trace";
 import { Flash } from "../../../components/flash";
 import { BatchSteps } from "../../../components/batch-steps";
 import { PackRows } from "../../../components/batch-pack-row";
+import { PackDates } from "../../../components/pack-dates";
+import { shelfLifeOf } from "@/domain/shelf-life";
 import { SauceName } from "../../../components/sauce-name";
 import { packFormMaterials, plannedJarsForBatch, type PackMaterial, type PackStock } from "@/db/production";
 import { PackagingTable } from "../../../components/packaging-table";
@@ -38,7 +40,7 @@ export default async function PackagingBatchPage({
   const pending = tr.ingredientUse.filter((l) => l.actual === null).length;
 
   const products = await db()
-    .select({ product: t.products, format: t.formats, storage: t.items.storage })
+    .select({ product: t.products, format: t.formats, storage: t.items.storage, shelfLife: t.items.shelfLife, shelfLifeUnit: t.items.shelfLifeUnit })
     .from(t.products)
     .innerJoin(t.formats, eq(t.products.formatId, t.formats.id))
     .innerJoin(t.items, eq(t.products.itemId, t.items.id))
@@ -164,6 +166,15 @@ export default async function PackagingBatchPage({
           </h2>
           <div className="card scroll">
             <PackagingTable tr={tr} editHref={editable ? (sid) => `/batches/${batch.id}/pack?edit=${sid}#edit` : undefined} />
+            {tr.jarLots.length > 0 && (
+              <div className="row" style={{ gap: 8, margin: "10px 10px 6px" }}>
+                {tr.jarLots.map((l) => (
+                  <Link key={l.id} href={`/trace/lot/${l.id}/labels`} className="btn secondary sm">
+                    Print labels · {l.itemName}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -244,16 +255,7 @@ export default async function PackagingBatchPage({
           <GuardedForm action={recordPack} className="card">
             <input type="hidden" name="batchId" value={batch.id} />
             <input type="hidden" name="key" value={crypto.randomUUID()} />
-            <div className="row" style={{ marginBottom: 16 }}>
-              <div>
-                <label htmlFor="packedOn">Packed on</label>
-                <input id="packedOn" name="packedOn" type="date" required defaultValue={todayIso()} />
-              </div>
-              <div>
-                <label htmlFor="bestBefore">Best-before (if you have one)</label>
-                <input id="bestBefore" name="bestBefore" type="date" />
-              </div>
-            </div>
+            <PackDates today={todayIso()} sizes={products.map((p) => ({ name: p.product.name, shelf: shelfLifeOf(p) }))} />
             {products.length === 0 && <p className="muted">No active jar sizes for {sauce.name}.</p>}
             <PackRows
               stock={pack.stock}

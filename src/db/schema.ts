@@ -1,17 +1,4 @@
-import {
-  pgTable,
-  pgEnum,
-  uuid,
-  text,
-  integer,
-  numeric,
-  boolean,
-  timestamp,
-  date,
-  jsonb,
-  uniqueIndex,
-  index,
-} from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, integer, numeric, boolean, timestamp, date, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 /*
  * Data model. Three rules shape it:
@@ -34,6 +21,8 @@ export const versionStatus = pgEnum("version_status", ["draft", "active", "retir
 export const estimateSource = pgEnum("estimate_source", ["estimate", "observed"]);
 /** Where something is kept. Labels live in domain/storage.ts. */
 export const storagePlace = pgEnum("storage_place", ["fridge", "freezer", "room"]);
+/** Unit of an item's shelf life. Labels live in domain/shelf-life.ts. */
+export const shelfLifeUnit = pgEnum("shelf_life_unit", ["days", "weeks", "months"]);
 
 // ---------- Catalog (Settings) ----------
 
@@ -45,6 +34,9 @@ export const items = pgTable("items", {
   stockUnit: unitCode("stock_unit").notNull(),
   /** Default storage for new lots of this item (ingredients and finished jars). Null = not set yet. */
   storage: storagePlace("storage"),
+  /** How long a new lot keeps from packing (jars) or receipt (ingredients); fills in its best-before. Null = not set. */
+  shelfLife: integer("shelf_life"),
+  shelfLifeUnit: shelfLifeUnit("shelf_life_unit"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });
@@ -76,10 +68,16 @@ export const products = pgTable(
   "products",
   {
     id: id(),
-    sauceId: uuid("sauce_id").notNull().references(() => sauces.id),
-    formatId: uuid("format_id").notNull().references(() => formats.id),
+    sauceId: uuid("sauce_id")
+      .notNull()
+      .references(() => sauces.id),
+    formatId: uuid("format_id")
+      .notNull()
+      .references(() => formats.id),
     /** The finished-jar stock item for this product. */
-    itemId: uuid("item_id").notNull().references(() => items.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id),
     name: text("name").notNull(),
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
@@ -91,7 +89,9 @@ export const recipeVersions = pgTable(
   "recipe_versions",
   {
     id: id(),
-    sauceId: uuid("sauce_id").notNull().references(() => sauces.id),
+    sauceId: uuid("sauce_id")
+      .notNull()
+      .references(() => sauces.id),
     versionNo: integer("version_no").notNull(),
     batchReferenceKg: numeric("batch_reference_kg").notNull(),
     status: versionStatus("status").notNull().default("draft"),
@@ -104,8 +104,12 @@ export const recipeVersions = pgTable(
 
 export const recipeLines = pgTable("recipe_lines", {
   id: id(),
-  recipeVersionId: uuid("recipe_version_id").notNull().references(() => recipeVersions.id),
-  itemId: uuid("item_id").notNull().references(() => items.id),
+  recipeVersionId: uuid("recipe_version_id")
+    .notNull()
+    .references(() => recipeVersions.id),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id),
   quantity: numeric("quantity").notNull(),
   unit: unitCode("unit").notNull(),
   position: integer("position").notNull(),
@@ -115,7 +119,9 @@ export const packagingVersions = pgTable(
   "packaging_versions",
   {
     id: id(),
-    productId: uuid("product_id").notNull().references(() => products.id),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
     versionNo: integer("version_no").notNull(),
     status: versionStatus("status").notNull().default("draft"),
     activatedAt: timestamp("activated_at", { withTimezone: true }),
@@ -126,15 +132,21 @@ export const packagingVersions = pgTable(
 
 export const packagingLines = pgTable("packaging_lines", {
   id: id(),
-  packagingVersionId: uuid("packaging_version_id").notNull().references(() => packagingVersions.id),
-  itemId: uuid("item_id").notNull().references(() => items.id),
+  packagingVersionId: uuid("packaging_version_id")
+    .notNull()
+    .references(() => packagingVersions.id),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id),
   perJar: integer("per_jar").notNull(),
 });
 
 /** Append-only. The newest row per sauce is the current figure. */
 export const yieldFigures = pgTable("yield_figures", {
   id: id(),
-  sauceId: uuid("sauce_id").notNull().references(() => sauces.id),
+  sauceId: uuid("sauce_id")
+    .notNull()
+    .references(() => sauces.id),
   litresPerBatch: numeric("litres_per_batch").notNull(),
   source: estimateSource("source").notNull(),
   note: text("note"),
@@ -144,7 +156,9 @@ export const yieldFigures = pgTable("yield_figures", {
 /** Append-only. The newest row per product is the current figure (0–1). */
 export const rejectFigures = pgTable("reject_figures", {
   id: id(),
-  productId: uuid("product_id").notNull().references(() => products.id),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   rate: numeric("rate").notNull(),
   source: estimateSource("source").notNull(),
   note: text("note"),
@@ -169,8 +183,12 @@ export const supplierItems = pgTable(
   "supplier_items",
   {
     id: id(),
-    supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
-    itemId: uuid("item_id").notNull().references(() => items.id),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id),
     rank: integer("rank").notNull(),
     supplierCode: text("supplier_code"),
     note: text("note"),
@@ -190,7 +208,9 @@ export const supplierItemPrices = pgTable(
   "supplier_item_prices",
   {
     id: id(),
-    supplierItemId: uuid("supplier_item_id").notNull().references(() => supplierItems.id),
+    supplierItemId: uuid("supplier_item_id")
+      .notNull()
+      .references(() => supplierItems.id),
     /** Pack size in the item's stock unit, e.g. 25 (kg) or 100 (units). */
     packQty: numeric("pack_qty"),
     /** Optional name of the pack, e.g. "sack", "box". */
@@ -208,7 +228,9 @@ export const lots = pgTable(
   "lots",
   {
     id: id(),
-    itemId: uuid("item_id").notNull().references(() => items.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id),
     code: text("code").notNull().unique(),
     supplierId: uuid("supplier_id").references(() => suppliers.id),
     deliveryRef: text("delivery_ref"),
@@ -244,8 +266,12 @@ export const movements = pgTable(
   "movements",
   {
     id: id(),
-    lotId: uuid("lot_id").notNull().references(() => lots.id),
-    itemId: uuid("item_id").notNull().references(() => items.id),
+    lotId: uuid("lot_id")
+      .notNull()
+      .references(() => lots.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id),
     /** Signed: positive in, negative out. In the item's stock unit. */
     quantity: numeric("quantity").notNull(),
     type: movementType("type").notNull(),
@@ -273,7 +299,9 @@ export const purchaseOrders = pgTable(
   {
     id: id(),
     code: text("code").notNull().unique(),
-    supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id),
     /** Optional: the production run this order is for. */
     runId: uuid("run_id").references(() => productionRuns.id),
     status: poStatus("status").notNull().default("draft"),
@@ -291,8 +319,12 @@ export const purchaseOrders = pgTable(
 
 export const purchaseOrderLines = pgTable("purchase_order_lines", {
   id: id(),
-  purchaseOrderId: uuid("purchase_order_id").notNull().references(() => purchaseOrders.id),
-  itemId: uuid("item_id").notNull().references(() => items.id),
+  purchaseOrderId: uuid("purchase_order_id")
+    .notNull()
+    .references(() => purchaseOrders.id),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id),
   /** Ordered quantity in the item's stock unit (packs × pack size when packs are used). */
   quantity: numeric("quantity").notNull(),
   /** Price per stock unit, so every line and lot can be costed the same way. */
@@ -324,11 +356,15 @@ export const receipts = pgTable("receipts", {
 
 export const receiptLines = pgTable("receipt_lines", {
   id: id(),
-  receiptId: uuid("receipt_id").notNull().references(() => receipts.id),
+  receiptId: uuid("receipt_id")
+    .notNull()
+    .references(() => receipts.id),
   purchaseOrderLineId: uuid("purchase_order_line_id").references(() => purchaseOrderLines.id),
   /** The lot made from the accepted quantity; null when nothing was accepted. */
   lotId: uuid("lot_id").references(() => lots.id),
-  itemId: uuid("item_id").notNull().references(() => items.id),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id),
   /** Accepted quantity: the only part that goes into stock. */
   quantity: numeric("quantity").notNull(),
   /** Refused at delivery (damaged, wrong). Counts as not received. */
@@ -353,8 +389,12 @@ export const runTargets = pgTable(
   "run_targets",
   {
     id: id(),
-    runId: uuid("run_id").notNull().references(() => productionRuns.id),
-    productId: uuid("product_id").notNull().references(() => products.id),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => productionRuns.id),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
     targetJars: integer("target_jars").notNull(),
   },
   (t) => [uniqueIndex("run_targets_run_product").on(t.runId, t.productId)],
@@ -363,7 +403,10 @@ export const runTargets = pgTable(
 /** Frozen at confirmation; never updated, so plan vs actual stays comparable. */
 export const forecastSnapshots = pgTable("forecast_snapshots", {
   id: id(),
-  runId: uuid("run_id").notNull().unique().references(() => productionRuns.id),
+  runId: uuid("run_id")
+    .notNull()
+    .unique()
+    .references(() => productionRuns.id),
   data: jsonb("data").notNull(),
   createdAt: createdAt(),
 });
@@ -377,7 +420,9 @@ export const reservations = pgTable("reservations", {
   id: id(),
   runId: uuid("run_id").references(() => productionRuns.id),
   salesOrderId: uuid("sales_order_id"),
-  itemId: uuid("item_id").notNull().references(() => items.id),
+  itemId: uuid("item_id")
+    .notNull()
+    .references(() => items.id),
   quantity: numeric("quantity").notNull(),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   createdAt: createdAt(),
@@ -392,10 +437,16 @@ export const productionBatches = pgTable(
   {
     id: id(),
     code: text("code").notNull().unique(),
-    runId: uuid("run_id").notNull().references(() => productionRuns.id),
-    sauceId: uuid("sauce_id").notNull().references(() => sauces.id),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => productionRuns.id),
+    sauceId: uuid("sauce_id")
+      .notNull()
+      .references(() => sauces.id),
     /** The recipe version this batch follows. Never changes once set. */
-    recipeVersionId: uuid("recipe_version_id").notNull().references(() => recipeVersions.id),
+    recipeVersionId: uuid("recipe_version_id")
+      .notNull()
+      .references(() => recipeVersions.id),
     seq: integer("seq").notNull(),
     status: batchStatus("status").notNull().default("planned"),
     producedOn: date("produced_on"),
@@ -420,8 +471,12 @@ export const batchConsumption = pgTable(
   "batch_consumption",
   {
     id: id(),
-    batchId: uuid("batch_id").notNull().references(() => productionBatches.id),
-    itemId: uuid("item_id").notNull().references(() => items.id),
+    batchId: uuid("batch_id")
+      .notNull()
+      .references(() => productionBatches.id),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => items.id),
     /** Recipe quantity for one batch, in the item's stock unit. */
     standardQty: numeric("standard_qty").notNull(),
     /** What the run planned for this batch, in the item's stock unit. */
@@ -436,7 +491,9 @@ export const batchConsumption = pgTable(
 
 export const packagingSessions = pgTable("packaging_sessions", {
   id: id(),
-  batchId: uuid("batch_id").notNull().references(() => productionBatches.id),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => productionBatches.id),
   packedOn: date("packed_on").notNull(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   note: text("note"),
@@ -452,8 +509,12 @@ export const packagingSessions = pgTable("packaging_sessions", {
 
 export const packagingSessionLines = pgTable("packaging_session_lines", {
   id: id(),
-  sessionId: uuid("session_id").notNull().references(() => packagingSessions.id),
-  productId: uuid("product_id").notNull().references(() => products.id),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => packagingSessions.id),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   packagingVersionId: uuid("packaging_version_id").references(() => packagingVersions.id),
   /** Fill per jar at the time, so later format changes don't rewrite history. */
   fillMl: integer("fill_ml").notNull(),
@@ -531,8 +592,12 @@ export const salesOrders = pgTable("sales_orders", {
 
 export const salesOrderLines = pgTable("sales_order_lines", {
   id: id(),
-  salesOrderId: uuid("sales_order_id").notNull().references(() => salesOrders.id),
-  productId: uuid("product_id").notNull().references(() => products.id),
+  salesOrderId: uuid("sales_order_id")
+    .notNull()
+    .references(() => salesOrders.id),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
 });
@@ -560,9 +625,15 @@ export const outflows = pgTable("outflows", {
 
 export const outflowLines = pgTable("outflow_lines", {
   id: id(),
-  outflowId: uuid("outflow_id").notNull().references(() => outflows.id),
-  productId: uuid("product_id").notNull().references(() => products.id),
-  lotId: uuid("lot_id").notNull().references(() => lots.id),
+  outflowId: uuid("outflow_id")
+    .notNull()
+    .references(() => outflows.id),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
+  lotId: uuid("lot_id")
+    .notNull()
+    .references(() => lots.id),
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
 });
@@ -587,7 +658,9 @@ export const users = pgTable("users", {
 export const sessions = pgTable("sessions", {
   id: id(),
   tokenHash: text("token_hash").notNull().unique(),
-  userId: uuid("user_id").notNull().references(() => users.id),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: createdAt(),
 });
@@ -657,7 +730,9 @@ export const changeLog = pgTable(
 export const changeLogLinks = pgTable(
   "change_log_links",
   {
-    changeId: uuid("change_id").notNull().references(() => changeLog.id),
+    changeId: uuid("change_id")
+      .notNull()
+      .references(() => changeLog.id),
     entityType: text("entity_type").notNull(),
     entityId: uuid("entity_id").notNull(),
     entityCode: text("entity_code"),

@@ -36,7 +36,10 @@ export async function recordPack(form: FormData) {
       lines: jarLines(form),
     }),
   );
-  done(batchId, "Packaging session recorded. Accepted jars are in stock; materials were used for every filled jar.");
+  done(
+    batchId,
+    "Packaging session recorded. Accepted jars are in stock; materials were used for every filled jar. Print the jar labels from the buttons under Jars packed.",
+  );
 }
 
 export async function editPack(form: FormData) {

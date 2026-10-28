@@ -6,7 +6,7 @@ import { loadOrders } from "@/db/purchasing";
 import { money } from "@/domain/pricing";
 import { linePrice, lineQuantity, longDate, orderTotal } from "@/domain/order-message";
 import { orderMessageData } from "../../message-data";
-import { PrintButton } from "./print-button";
+import { PrintButton } from "../../../components/print-button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export default async function PrintOrderPage({
     <div className="print-doc">
       <div className="row no-print" style={{ justifyContent: "space-between", marginBottom: 20 }}>
         <Link href={`/orders/${id}`}>{w.back}</Link>
-        <PrintButton label={w.print} />
+        <PrintButton label={w.print} auto />
       </div>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "flex-start" }}>
         <div>
@@ -89,11 +89,7 @@ export default async function PrintOrderPage({
               <td>{l.name}</td>
               {hasCodes && <td>{l.supplierCode ?? ""}</td>}
               <td className="num">{lineQuantity(l)}</td>
-              {withPrices && (
-                <td className="num">
-                  {linePrice(l)?.replace(/ each$/, "") ?? ""}
-                </td>
-              )}
+              {withPrices && <td className="num">{linePrice(l)?.replace(/ each$/, "") ?? ""}</td>}
               {withPrices && <td className="num">{l.unitPrice ? money(new Decimal(l.quantity).mul(l.unitPrice)) : ""}</td>}
             </tr>
           ))}

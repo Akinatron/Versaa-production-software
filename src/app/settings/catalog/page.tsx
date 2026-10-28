@@ -17,6 +17,8 @@ import { PageHeader } from "../../components/ui/header";
 import { SauceName } from "../../components/sauce-name";
 import { SAUCE_COLORS } from "@/domain/sauce-colors";
 import { ItemStorageForm } from "../../components/storage";
+import { ShelfLifeForm } from "../../components/shelf-life";
+import { shelfLifeOf } from "@/domain/shelf-life";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +44,15 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     db().select().from(t.products),
     db().select().from(t.recipeVersions),
     db().select().from(t.packagingVersions),
-    db().select({ id: t.items.id, storage: t.items.storage }).from(t.items).where(eq(t.items.kind, "finished")),
+    db()
+      .select({ id: t.items.id, storage: t.items.storage, shelfLife: t.items.shelfLife, shelfLifeUnit: t.items.shelfLifeUnit })
+      .from(t.items)
+      .where(eq(t.items.kind, "finished")),
   ]);
   const jarStorage = new Map(jarItems.map((i) => [i.id, i.storage]));
   const noStorage = products.filter((p) => p.active && !jarStorage.get(p.itemId)).length;
+  const jarShelf = new Map(jarItems.map((i) => [i.id, shelfLifeOf(i)]));
+  const noShelf = products.filter((p) => p.active && !jarShelf.get(p.itemId)).length;
   const sauceName = new Map(sauces.map((s) => [s.id, s]));
   const formatOf = new Map(formats.map((f) => [f.id, f]));
   const sortedProducts = [...products].sort(
@@ -206,6 +213,14 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           </li>
         </ul>
       )}
+      {noShelf > 0 && (
+        <ul className="issues">
+          <li className="warn">
+            {noShelf} {noShelf === 1 ? "product doesn't say its" : "products don't say their"} shelf life. Set it in the Shelf life column so each new lot of
+            jars gets its best-before when packed.
+          </li>
+        </ul>
+      )}
       <div className="card scroll">
         <table>
           <thead>
@@ -213,6 +228,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               <th>Product</th>
               <th>Packaging list</th>
               <th>Storage (filled jars)</th>
+              <th>Shelf life (from packing)</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -236,6 +252,9 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                   </td>
                   <td>
                     <ItemStorageForm itemId={p.itemId} value={jarStorage.get(p.itemId) ?? null} back="/settings/catalog" label={`Storage for ${p.name} jars`} />
+                  </td>
+                  <td>
+                    <ShelfLifeForm itemId={p.itemId} value={jarShelf.get(p.itemId) ?? null} back="/settings/catalog" label={`Shelf life of ${p.name} jars`} />
                   </td>
                   <td>{p.active ? <span className="badge ok">In use</span> : <span className="badge">Retired</span>}</td>
                   <td>

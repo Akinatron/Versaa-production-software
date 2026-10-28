@@ -1,3 +1,4 @@
+import { bestBeforeFrom, shelfLifeOf } from "@/domain/shelf-life";
 import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
@@ -492,7 +493,8 @@ export async function recordReceipt(
             deliveryRef: input.deliveryRef?.trim() || null,
             supplierBatch: line.supplierBatch?.trim() || null,
             receivedOn: input.receivedOn,
-            bestBefore: line.bestBefore || null,
+            // Empty: worked out from the item's shelf life, when it has one.
+            bestBefore: line.bestBefore || bestBeforeFrom(input.receivedOn, shelfLifeOf(item)),
             // Null lets the database fill in the item's default.
             storage,
           })
