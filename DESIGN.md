@@ -22,6 +22,8 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 - Mock data shows a sticky band across every page (`.mock-banner`), so test data is never taken for real data.
 - Trace diagram (`TraceFlow`): the lot trace opens with supplier → lot → batch → jar lots → destinations, drawn column by column; pointing at a box lights its path.
 
+- Help (`src/help/`): every screen has a guide, mapped in `src/help/screens.ts`; the same text feeds the Help screens and the AI manual. When a screen or button changes, change its guide in the same PR. Help text names screens and buttons exactly as the app shows them, in **bold**.
+
 ## Avoid
 Coloured side borders on cards, gradients, emoji or arrow characters as icons, kicker labels above headings, modals (the one exception: developer mode's full-screen confirmations, `dialog.takeover`, for turning it on and deleting data), and more than one primary button per screen.
 Big-number "hero" stat tiles: key facts sit on one quiet line (`.stats`). Explanatory subtitles on pages people use every day: the title and the content say enough. Long lists inside table cells: fold them (`OrderItems`) and keep the full detail on the record's own page.
