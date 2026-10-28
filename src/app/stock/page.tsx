@@ -123,7 +123,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       return (
                         <tr key={i.id}>
                           <td>
-                            <Link href={`/stock/${i.id}`}>{i.name}</Link>
+                            <Link href={`/items/${i.id}?tab=stock`}>{i.name}</Link>
                           </td>
                           {kind === "ingredient" && (
                             <td>
@@ -169,7 +169,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                       <tr key={a.productId}>
                         <td>
                           {lc ? (
-                            <Link href={`/stock/${lc.item_id}`}>
+                            <Link href={`/items/${lc.item_id}?tab=stock`}>
                               <SauceName name={a.name} color={colors.byProduct.get(a.productId)} />
                             </Link>
                           ) : (

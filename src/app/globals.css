@@ -304,6 +304,14 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 
 .supplier-prices { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; white-space: nowrap; }
 
+/* The item card: "Item details" folds open under the stats; the Stock / Suppliers tabs sit above the tab's content. */
+.item-details > summary { font-weight: 600; cursor: pointer; }
+.item-facts { display: grid; grid-template-columns: max-content 1fr; gap: 12px 20px; align-items: start; margin: 14px 0 0; }
+.item-facts dt { font-weight: 600; padding-top: 6px; }
+.item-facts dd { margin: 0; display: grid; gap: 4px; justify-items: start; }
+.item-tabs { margin-top: 20px; }
+@media (max-width: 560px) { .item-facts { grid-template-columns: 1fr; gap: 4px; } .item-facts dd { margin-bottom: 10px; } }
+
 /* ---------------------------------------------------------------- search picker */
 .picker { position: relative; min-width: 240px; }
 .picker:has(.new-record) { flex-basis: 100%; }

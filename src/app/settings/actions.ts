@@ -182,10 +182,18 @@ export async function addItemAction(form: FormData) {
   redirect(withOk("/settings/items", `${item.name} added. Count its stock before planning with it.`));
 }
 
+/** The page to go back to: the form's "back" when it is a path in this app, otherwise the fallback. */
+function backOr(form: FormData, fallback: string) {
+  const back = str(form, "back");
+  return back.startsWith("/") && !back.startsWith("//") ? back : fallback;
+}
+
 export async function renameItemAction(form: FormData) {
-  await attempt("/settings/items", () => renameItem(db(), str(form, "itemId"), str(form, "name")));
+  const path = backOr(form, "/settings/items");
+  await attempt(path, () => renameItem(db(), str(form, "itemId"), str(form, "name")));
   refresh();
-  redirect(withOk("/settings/items", `Renamed to ${str(form, "name")}.`));
+  revalidatePath("/items", "layout");
+  redirect(withOk(path, `Renamed to ${str(form, "name")}.`));
 }
 
 export async function setItemStorageAction(form: FormData) {
@@ -211,9 +219,11 @@ export async function setItemShelfLifeAction(form: FormData) {
 
 export async function setItemActiveAction(form: FormData) {
   const active = str(form, "active") === "1";
-  await attempt("/settings/items", () => setItemActive(db(), str(form, "itemId"), active));
+  const path = backOr(form, "/settings/items");
+  await attempt(path, () => setItemActive(db(), str(form, "itemId"), active));
   refresh();
-  redirect(withOk("/settings/items", active ? "Item is back in use." : "Item retired. Its stock and history are kept."));
+  revalidatePath("/items", "layout");
+  redirect(withOk(path, active ? "Item is back in use." : "Item retired. Its stock and history are kept."));
 }
 
 // ---------------------------------------------------------------- sauces, sizes, products

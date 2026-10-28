@@ -66,14 +66,13 @@ export function Sidebar({ user, counts, signOut }: { user: { name: string }; cou
           href: "/suppliers",
           label: "Suppliers",
           icon: "suppliers",
-          also: ["/items"],
         },
       ],
     },
     {
       label: "Keep",
       entries: [
-        { href: "/stock", label: "Stock", icon: "stock" },
+        { href: "/stock", label: "Stock", icon: "stock", also: ["/items"] },
         { href: "/trace", label: "Trace", icon: "trace" },
         { href: "/history", label: "History", icon: "history" },
       ],
