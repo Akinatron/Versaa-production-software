@@ -594,8 +594,6 @@ button.linkish:hover { background: none; }
   body:has(.labels-page) main { max-width: none !important; margin: 0 !important; }
 }
 
-}
-
 /* ---------------------------------------------------------------- developer mode */
 /* Mock data: a band across the top of every page, so test data is never taken for real data. */
 .mock-banner { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--warn-bg, #fff3d6); color: var(--text); border-bottom: 1px solid var(--warn); font-size: 0.9rem; }
@@ -627,3 +625,4 @@ dialog.takeover::backdrop { background: rgb(0 0 0 / 0.35); }
 .wipe-all input { width: auto; margin-top: 3px; }
 .wipe-part.forced { background: var(--surface-2); }
 .wipe-all { font-weight: 600; }
+.wipe-summary { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bad-bg); }
