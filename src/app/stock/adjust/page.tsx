@@ -74,7 +74,7 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader
-        back={item ? { href: `/stock/${item.id}`, label: item.name } : { href: "/stock", label: "Stock" }}
+        back={item ? { href: `/items/${item.id}?tab=stock`, label: item.name } : { href: "/stock", label: "Stock" }}
         title="Correct stock"
         lead="Each correction is kept in the history with its reason."
       />

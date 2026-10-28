@@ -75,7 +75,7 @@ export default async function AdjustmentPage({
                   {m.changeId && <div className="small">{m.reason}</div>}
                 </td>
                 <td>
-                  <Link href={`/stock/${item.id}`}>{item.name}</Link>
+                  <Link href={`/items/${item.id}?tab=stock`}>{item.name}</Link>
                 </td>
                 <td>
                   <Link href={`/trace/lot/${lot.id}`}>{lot.code}</Link>

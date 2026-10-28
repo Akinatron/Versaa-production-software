@@ -105,7 +105,7 @@ export default async function SupplierPage({
             return (
               <li key={o.supplierItemId} id={`offer-${o.supplierItemId}`}>
                 <div className="card-head">
-                  <Link href={`/items/${item.id}`}>
+                  <Link href={`/items/${item.id}?tab=suppliers`}>
                     <strong>{item.name}</strong>
                   </Link>
                   <span className={`badge ${o.rank === 1 ? "ok" : "neutral"}`}>{ordinal(o.rank)}</span>

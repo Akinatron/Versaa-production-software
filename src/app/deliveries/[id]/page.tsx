@@ -103,7 +103,7 @@ export default async function DeliveryPage({
             {lines.map(({ line, item, lot }) => (
               <tr key={line.id}>
                 <td>
-                  <Link href={`/stock/${item.id}`}>{item.name}</Link>
+                  <Link href={`/items/${item.id}?tab=stock`}>{item.name}</Link>
                 </td>
                 <td className="num">{formatQty(new Decimal(line.quantity), item.stockUnit as UnitCode)}</td>
                 <td className="num">{new Decimal(line.rejectedQty).gt(0) ? formatQty(new Decimal(line.rejectedQty), item.stockUnit as UnitCode) : "—"}</td>

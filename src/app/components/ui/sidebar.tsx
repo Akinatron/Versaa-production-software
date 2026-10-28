@@ -66,14 +66,13 @@ export function Sidebar({ counts }: { counts: NavCounts }) {
           href: "/suppliers",
           label: "Suppliers",
           icon: "suppliers",
-          also: ["/items"],
         },
       ],
     },
     {
       label: "Keep",
       entries: [
-        { href: "/stock", label: "Stock", icon: "stock" },
+        { href: "/stock", label: "Stock", icon: "stock", also: ["/items"] },
         { href: "/trace", label: "Trace", icon: "trace" },
         { href: "/history", label: "History", icon: "history" },
       ],

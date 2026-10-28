@@ -88,7 +88,7 @@ export default async function LotTracePage({
         title={`Lot ${lot.code}`}
         lead={
           <>
-            <Link href={`/stock/${lot.itemId}`}>{lot.itemName}</Link> · {KIND[lot.itemKind] ?? lot.itemKind}
+            <Link href={`/items/${lot.itemId}?tab=stock`}>{lot.itemName}</Link> · {KIND[lot.itemKind] ?? lot.itemKind}
           </>
         }
         actions={
