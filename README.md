@@ -52,8 +52,10 @@ pnpm install
 export DATABASE_URL=postgres://user:pass@localhost/versaa
 pnpm db:migrate     # create or update tables (run again after every update)
 pnpm db:seed        # load the starting catalog (safe to repeat)
-pnpm dev            # http://localhost:3000, then create the first account
+pnpm dev            # http://localhost:3000
 ```
+
+`pnpm dev` and `pnpm start` only answer on this computer (127.0.0.1). Other devices on the same Wi-Fi can't open the app, because it has no sign-in.
 
 Uploaded delivery notes and invoices are saved in an `uploads` folder next to the app (set `UPLOADS_DIR` to keep them elsewhere). That folder is not in git; back it up together with the database.
 
