@@ -7,7 +7,7 @@ import { finishedAvailability } from "@/db/sales";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { RUN_STATUS } from "./components/labels";
 import { PageHeader } from "./components/ui/header";
-import { fmtDate, plural, relDate } from "./components/ui/format";
+import { daysFromToday, fmtDate, plural, relDate } from "./components/ui/format";
 import { SauceName } from "./components/sauce-name";
 import { currentUser } from "@/lib/session";
 import { daysUntil } from "@/domain/shelf-life";
@@ -341,8 +341,10 @@ export default async function Home() {
     title: React.ReactNode;
     sub?: React.ReactNode;
     href: string;
+    /** A run already being made: past its day it is ongoing, not late. */
+    started?: boolean;
   };
-  const agenda: Ev[] = [
+  const events: Ev[] = [
     ...upcoming.map((r) => ({
       date: r.planned_for,
       kind: "Production",
@@ -354,6 +356,7 @@ export default async function Home() {
         </>
       ),
       href: `/runs/${r.id}`,
+      started: r.status === "in_progress",
     })),
     ...pendingOrders.map((o) => ({
       date: o.expected_on,
@@ -362,12 +365,6 @@ export default async function Home() {
       sub: (
         <>
           {o.code} · {plural(o.lines, "item")}
-          {o.expected_on && o.expected_on < today && (
-            <>
-              {" "}
-              <span className="badge bad">late</span>
-            </>
-          )}
         </>
       ),
       href: `/deliveries/new?po=${o.id}`,
@@ -388,6 +385,10 @@ export default async function Home() {
       };
     }),
   ].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
+  // Anything dated before today and still open goes in "Now / late", so "Coming up" only shows what's ahead.
+  const isPast = (e: Ev) => e.date !== null && daysFromToday(e.date) < 0;
+  const overdue = events.filter(isPast);
+  const agenda = events.filter((e) => !isPast(e));
 
   return (
     <>
@@ -462,6 +463,42 @@ export default async function Home() {
       </section>
 
       <div className="split">
+        {overdue.length > 0 && (
+          <section className="card">
+            <div className="card-head">
+              <h2>Now / late</h2>
+            </div>
+            <ul className="worklist">
+              {overdue.map((e, i) => {
+                const days = -daysFromToday(e.date!);
+                return (
+                  <li key={i}>
+                    <div style={{ width: 96, flex: "none" }}>
+                      {e.started ? (
+                        <div style={{ fontWeight: 650 }}>Ongoing</div>
+                      ) : (
+                        <div style={{ fontWeight: 650 }} className="text-bad">
+                          Late · {plural(days, "day")}
+                        </div>
+                      )}
+                      <div className="small muted">{e.kind}</div>
+                    </div>
+                    <div className="what">
+                      <Link href={e.href}>{e.title}</Link>
+                      <div className="sub">
+                        {e.sub}
+                        <div className="small muted">
+                          {e.started ? `Started ${relDate(e.date)}` : e.kind === "Delivery" ? `Expected ${relDate(e.date)}` : `Planned for ${relDate(e.date)}`}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <section className="card">
           <div className="card-head">
             <h2>Coming up</h2>
