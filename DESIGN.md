@@ -19,8 +19,10 @@ The app is a work tool used daily on laptops, tablets and phones. It should feel
 - Motion (`components/motion.tsx` + the motion block in globals.css): only to explain. Pages rise in, the step bar and tab pill slide from the previous one, notices drop in, a pressed button shows a spinner until the server answers. 120–300 ms, ease-out, no bounce. Reduced motion keeps fades only.
 - History (`components/history.tsx`): a collapsed **History** card at the bottom of a record's page, an "Edited · last by …" mark under its title, a `DeletedNote` card on a deleted record with its Restore form, and `ReasonField` on every correct/delete/restore form. Deleted rows in lists are struck through (`.is-deleted`) and folded under "Deleted …".
 - Viewers: `body.viewer` hides every POST form except those marked `.keep` (sign out, sign in); the server refuses them anyway.
+- Search boxes (`SearchPicker`, `components/pickers.tsx`) replace long dropdowns where a record can also be created in place: type, the first match is highlighted, Enter picks it; with no match, "Create …" opens a small form where every choice is made explicitly (nothing preselected) and a sentence sums up what will be created.
+- Mock data shows a sticky band across every page (`.mock-banner`), so test data is never taken for real data.
 - Trace diagram (`TraceFlow`): the lot trace opens with supplier → lot → batch → jar lots → destinations, drawn column by column; pointing at a box lights its path.
 
 ## Avoid
-Coloured side borders on cards, gradients, emoji or arrow characters as icons, kicker labels above headings, modals, and more than one primary button per screen.
+Coloured side borders on cards, gradients, emoji or arrow characters as icons, kicker labels above headings, modals (the one exception: developer mode's full-screen confirmations, `dialog.takeover`, for turning it on and deleting data), and more than one primary button per screen.
 Big-number "hero" stat tiles: key facts sit on one quiet line (`.stats`). Explanatory subtitles on pages people use every day: the title and the content say enough. Long lists inside table cells: fold them (`OrderItems`) and keep the full detail on the record's own page.

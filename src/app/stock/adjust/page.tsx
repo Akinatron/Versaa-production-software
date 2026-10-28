@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 const KINDS = [
   ["ingredient", "Ingredients"],
   ["packaging", "Packaging"],
+  ["other", "Other"],
   ["finished", "Finished jars"],
 ] as const;
 
@@ -100,7 +101,7 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
         <input type="hidden" name="mode" value="count" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Item you counted</label>
-          <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "finished"]} />
+          <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "other", "finished"]} />
         </div>
         <button type="submit" className="secondary">
           Show its lots
@@ -200,7 +201,7 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
         <input type="hidden" name="mode" value="writeoff" />
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Show lots of (optional)</label>
-          <AnyItemSelect items={items} value={item?.kind !== "finished" ? item?.id : undefined} kinds={["ingredient", "packaging"]} />
+          <AnyItemSelect items={items} value={item?.kind !== "finished" ? item?.id : undefined} kinds={["ingredient", "packaging", "other"]} />
         </div>
         <button type="submit" className="secondary">
           Filter

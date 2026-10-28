@@ -15,7 +15,8 @@ import { convert, type UnitCode } from "./quantity";
  * - Planning reads stock; it never changes it.
  */
 
-export type ItemKind = "ingredient" | "packaging";
+/** "other" items (cleaning, gloves…) are bought and stocked but never in a recipe or packaging list. */
+export type ItemKind = "ingredient" | "packaging" | "other";
 export type Source = "observed" | "estimate" | "missing";
 
 export interface PlanItem {

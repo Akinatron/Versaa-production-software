@@ -5,9 +5,9 @@ import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { loadOffers, priceHistory } from "@/db/suppliers";
 import { money } from "@/domain/pricing";
-import { type UnitCode } from "@/domain/quantity";
+import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
-import { ItemSelect } from "../../components/item-select";
+import { ItemPicker } from "../../components/pickers";
 import { PO_STATUS } from "../../components/labels";
 import { AddLinkForm, MakeFavourite, OfferForm, PriceHistory, PriceText } from "../../components/supplier-offer";
 import { setSupplierActiveAction, updateSupplierAction } from "../actions";
@@ -17,6 +17,7 @@ import { History } from "../../components/history";
 import { fmtDate } from "../../components/ui/format";
 import { supplierDocuments } from "@/db/documents";
 import { DocList } from "../../components/documents";
+import { BOUGHT_KINDS, KIND_PLURAL, type BoughtKind } from "@/domain/item-kinds";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function SupplierPage({
     db()
       .select()
       .from(t.items)
-      .where(and(inArray(t.items.kind, ["ingredient", "packaging"]), eq(t.items.active, true))),
+      .where(and(inArray(t.items.kind, [...BOUGHT_KINDS]), eq(t.items.active, true))),
     db().select().from(t.supplierItems).where(eq(t.supplierItems.supplierId, id)),
     // How many suppliers each item has, to show the favourite order.
     offers.length ? loadOffers(db(), { itemIds: offers.map((o) => o.itemId) }) : Promise.resolve([]),
@@ -102,7 +103,7 @@ export default async function SupplierPage({
             const count = others.filter((x) => x.itemId === o.itemId).length;
             const link = links.find((l) => l.id === o.supplierItemId);
             return (
-              <li key={o.supplierItemId}>
+              <li key={o.supplierItemId} id={`offer-${o.supplierItemId}`}>
                 <div className="card-head">
                   <Link href={`/items/${item.id}`}>
                     <strong>{item.name}</strong>
@@ -118,7 +119,7 @@ export default async function SupplierPage({
                 <div>
                   <PriceText offer={o} unit={unit} />
                 </div>
-                <OfferForm offer={o} unit={unit} back={back} supplierCode={link?.supplierCode} />
+                <OfferForm offer={o} unit={unit} back={back} supplierCode={link?.supplierCode} open={flash.edit === o.supplierItemId} />
                 <PriceHistory rows={history.filter((h) => h.supplierItemId === o.supplierItemId)} unit={unit} />
               </li>
             );
@@ -133,20 +134,17 @@ export default async function SupplierPage({
         button="Add item"
         canBeFavourite
         chooser={
-          <div style={{ minWidth: 220 }}>
-            <label>Item (required)</label>
-            <ItemSelect
-              name="itemId"
-              items={items
-                .filter((i) => !linked.has(i.id))
-                .map((i) => ({
-                  id: i.id,
-                  name: i.name,
-                  kind: i.kind,
-                  stockUnit: i.stockUnit as UnitCode,
-                }))}
-            />
-          </div>
+          <ItemPicker
+            items={items
+              .filter((i) => !linked.has(i.id))
+              .sort((a, b) => BOUGHT_KINDS.indexOf(a.kind as BoughtKind) - BOUGHT_KINDS.indexOf(b.kind as BoughtKind) || a.name.localeCompare(b.name))
+              .map((i) => ({
+                id: i.id,
+                label: i.name,
+                hint: UNITS[i.stockUnit as UnitCode].label,
+                group: KIND_PLURAL[i.kind as BoughtKind],
+              }))}
+          />
         }
       />
 

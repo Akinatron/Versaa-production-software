@@ -52,7 +52,7 @@ export default async function ItemStockPage({
   const withStock = lots.filter((l) => new Decimal(l.balance).gt(0));
   const empty = lots.filter((l) => !new Decimal(l.balance).gt(0));
   const total = lots.reduce((s, l) => s.plus(l.balance), new Decimal(0));
-  const bought = item.kind === "ingredient" || item.kind === "packaging";
+  const bought = item.kind === "ingredient" || item.kind === "packaging" || item.kind === "other";
   const offers = bought ? await loadOffers(db(), { itemIds: [itemId] }) : [];
   const unitWord = item.kind === "finished" ? "jars" : UNITS[unit].label;
   const storageHref = item.kind === "ingredient" ? `/items/${item.id}` : item.kind === "finished" ? "/settings/catalog" : "/settings";
@@ -65,7 +65,7 @@ export default async function ItemStockPage({
           <th>Where it came from</th>
           <th>{item.kind === "finished" || item.kind === "bulk" ? "Made / packed" : "Received"}</th>
           <th>Best before</th>
-          {item.kind !== "packaging" && <th>Kept in</th>}
+          {item.kind !== "packaging" && item.kind !== "other" && <th>Kept in</th>}
           <th className="num">Left</th>
         </tr>
       </thead>
@@ -80,7 +80,7 @@ export default async function ItemStockPage({
             </td>
             <td>{lot.receivedOn ? fmtDate(lot.receivedOn, { year: true }) : "—"}</td>
             <td>{lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
-            {item.kind !== "packaging" && (
+            {item.kind !== "packaging" && item.kind !== "other" && (
               <td>
                 <StorageBadge value={lot.storage} quietUnset />
               </td>
@@ -96,7 +96,14 @@ export default async function ItemStockPage({
     <>
       <PageHeader
         back={{
-          href: item.kind === "finished" ? "/stock?show=jars" : item.kind === "packaging" ? "/stock?show=packaging" : "/stock",
+          href:
+            item.kind === "finished"
+              ? "/stock?show=jars"
+              : item.kind === "packaging"
+                ? "/stock?show=packaging"
+                : item.kind === "other"
+                  ? "/stock?show=other"
+                  : "/stock",
           label: "Stock",
         }}
         title={item.name}
@@ -132,7 +139,7 @@ export default async function ItemStockPage({
           <div className="v">{withStock.length}</div>
           <div className="l">{withStock.length === 1 ? "lot" : "lots"} with stock</div>
         </div>
-        {item.kind !== "packaging" && (
+        {item.kind !== "packaging" && item.kind !== "other" && (
           <Link href={storageHref}>
             <div className="v">{storageLabel(item.storage)}</div>
             <div className="l">default storage · change</div>

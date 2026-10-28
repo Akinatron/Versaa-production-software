@@ -5,6 +5,7 @@
 //   preload.cjs  the updater's bridge to the Settings page (only with the updater)
 //
 // VERSAA_UPDATER=0 leaves "Check for updates" out completely (see UPDATER.md).
+// VERSAA_DEVTOOLS=0 leaves out developer mode (mock data, delete database).
 import { execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -54,7 +55,11 @@ await build({
   target: "node22",
   tsconfig: path.join(root, "tsconfig.json"),
   external: ["electron", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
-  define: { __VERSAA_UPDATER__: String(updater), __VERSAA_BUILD__: JSON.stringify(buildInfo) },
+  define: {
+    __VERSAA_UPDATER__: String(updater),
+    __VERSAA_DEVTOOLS__: String(process.env.VERSAA_DEVTOOLS !== "0"),
+    __VERSAA_BUILD__: JSON.stringify(buildInfo),
+  },
   logLevel: "warning",
 });
 if (updater) {

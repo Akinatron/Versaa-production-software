@@ -49,11 +49,11 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
   ]);
   const lotsByProduct = new Map([...lotCounts].map((r) => [r.product_id, r]));
   const jarItem = (productId: string) => lotsByProduct.get(productId)?.item_id ?? "";
-  const finished = avail.filter((a) => (a.onHand.gt(0) || a.reserved.gt(0)) && keep(jarItem(a.productId)));
   const uncounted = catalog.items.filter((i) => stock[i.id]?.onHand == null).length;
-  const show = params.show === "packaging" || params.show === "jars" ? params.show : "ingredient";
+  const show = params.show === "packaging" || params.show === "other" || params.show === "jars" ? params.show : "ingredient";
   const where = params.where === "unset" || isStorage(params.where) ? params.where : null;
   const keep = (itemId: string) => !where || keptIn(storage.get(itemId), where);
+  const finished = avail.filter((a) => (a.onHand.gt(0) || a.reserved.gt(0)) && keep(jarItem(a.productId)));
   const base = show === "ingredient" ? "/stock" : `/stock?show=${show}`;
   const whereHref = (w: string | null) => (w ? `${base}${base.includes("?") ? "&" : "?"}where=${w}` : base);
   const tab = (key: string, label: string, href: string) => (
@@ -84,9 +84,10 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
       <nav className="tabs" aria-label="Show">
         {tab("ingredient", "Ingredients", "/stock")}
         {tab("packaging", "Packaging", "/stock?show=packaging")}
+        {tab("other", "Other", "/stock?show=other")}
         {tab("jars", "Finished jars", "/stock?show=jars")}
       </nav>
-      {show !== "packaging" && (
+      {show !== "packaging" && show !== "other" && (
         <nav className="tabs" aria-label="Kept in" style={{ marginLeft: 8 }}>
           {[null, ...STORAGE_KEYS, "unset"].map((w) => (
             <Link key={w ?? "all"} href={whereHref(w)} aria-current={where === w ? "page" : undefined}>
@@ -95,7 +96,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
           ))}
         </nav>
       )}
-      {(["ingredient", "packaging"] as const)
+      {(["ingredient", "packaging", "other"] as const)
         .filter((k) => k === show)
         .map((kind) => (
           <div key={kind}>
@@ -113,7 +114,7 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
                 </thead>
                 <tbody>
                   {catalog.items
-                    .filter((i) => i.kind === kind && (kind === "packaging" || keep(i.id)))
+                    .filter((i) => i.kind === kind && (kind !== "ingredient" || keep(i.id)))
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((i) => {
                       const s = stock[i.id];

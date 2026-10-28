@@ -145,7 +145,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                     {shelfLifeOf(l.item) && <div className="small muted">empty = delivery date + {shelfLifeLabel(shelfLifeOf(l.item))}</div>}
                   </td>
                   <td>
-                    {l.item.kind === "packaging" ? (
+                    {l.item.kind === "packaging" || l.item.kind === "other" ? (
                       <>
                         <input type="hidden" name={`st_${i}`} value="" />
                         <span className="muted">—</span>

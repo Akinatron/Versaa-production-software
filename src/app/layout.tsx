@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { activeMock, db } from "@/db/client";
+import { stopMockAction } from "./settings/developer-actions";
 import { currentUser } from "@/lib/session";
 import { logout } from "./login/actions";
 import { Sidebar, type NavCounts } from "./components/ui/sidebar";
@@ -66,6 +67,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             }
           />
           <div className="content">
+            {activeMock() && (
+              <div className="mock-banner" role="status">
+                <span>
+                  <strong>Mock data:</strong> changes are not saved.
+                </span>
+                <form action={stopMockAction}>
+                  <button type="submit" className="sm">
+                    Back to real data
+                  </button>
+                </form>
+              </div>
+            )}
             <main>{children}</main>
             <Suspense fallback={null}>
               <Motion />

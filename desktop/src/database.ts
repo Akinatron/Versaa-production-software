@@ -9,8 +9,12 @@ import { seedCatalog, seedYieldEstimates } from "../../src/db/seed";
 export type Database = {
   pg: PGlite;
   url: string;
-  /** Apply migrations and load the starting catalog, like `pnpm db:migrate` and `pnpm db:seed`. */
-  prepare(): Promise<void>;
+  /**
+   * Apply migrations, like `pnpm db:migrate`. A new database also gets the
+   * starting catalog (`pnpm db:seed`); an existing one is left as it is, so
+   * what was deleted in developer mode stays deleted.
+   */
+  prepare(opts: { seedCatalog: boolean }): Promise<void>;
   stop(): Promise<void>;
 };
 
@@ -38,15 +42,17 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
   return {
     pg,
     url,
-    async prepare() {
+    async prepare({ seedCatalog: seed }) {
       const db = createDb(url);
       try {
         await refuseNewerDatabase(db.$client, opts.migrationsDir);
         await migrate(db, { migrationsFolder: opts.migrationsDir });
         opts.log("migrations applied");
-        await seedCatalog(db);
-        const { added } = await seedYieldEstimates(db);
-        opts.log("starting catalog checked", added > 0 ? `(added ${added} yield estimate(s))` : "");
+        if (seed) {
+          await seedCatalog(db);
+          const { added } = await seedYieldEstimates(db);
+          opts.log("starting catalog loaded", added > 0 ? `(with ${added} yield estimate(s))` : "");
+        }
       } finally {
         await db.$client.end();
       }
@@ -55,6 +61,30 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
       await socket.stop();
       await pg.close();
       opts.log("database closed");
+    },
+  };
+}
+
+/**
+ * An empty database in memory, served the same way, for developer mode's
+ * "Mock data". The app migrates and fills it; it disappears when stopped or
+ * when the app quits, and never touches the real database.
+ */
+export async function startMemoryDatabase(log: (...p: unknown[]) => void): Promise<{ url: string; stop(): Promise<void> }> {
+  const pg = await PGlite.create();
+  const socket = new PGLiteSocketServer({ db: pg, host: "127.0.0.1", port: 0, maxConnections: 1 });
+  const listening = new Promise<number>((resolve) =>
+    socket.addEventListener("listening", (e) => resolve((e as CustomEvent<{ port: number }>).detail.port), { once: true }),
+  );
+  await socket.start();
+  const port = await listening;
+  log("mock database ready on port", port);
+  return {
+    url: `postgres://postgres@127.0.0.1:${port}/postgres`,
+    async stop() {
+      await socket.stop();
+      await pg.close();
+      log("mock database closed");
     },
   };
 }

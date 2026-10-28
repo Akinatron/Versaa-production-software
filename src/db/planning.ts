@@ -1,3 +1,4 @@
+import { BOUGHT_KINDS, type BoughtKind } from "@/domain/item-kinds";
 import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
@@ -15,7 +16,7 @@ export interface PlanCatalog {
 /** The active catalog as the planner needs it. */
 export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
   const [itemRows, sauceRows, recipeRows, lineRows, productRows, pkgRows, yieldRows, rejectRows, seenYields, seenRejects] = await Promise.all([
-    db.select().from(t.items).where(inArray(t.items.kind, ["ingredient", "packaging"])),
+    db.select().from(t.items).where(inArray(t.items.kind, [...BOUGHT_KINDS])),
     db.select().from(t.sauces).where(eq(t.sauces.active, true)),
     db.select().from(t.recipeVersions).where(eq(t.recipeVersions.status, "active")),
     db.select().from(t.recipeLines),
@@ -96,7 +97,7 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
     });
 
   return {
-    items: itemRows.map((i) => ({ id: i.id, name: i.name, kind: i.kind as "ingredient" | "packaging", stockUnit: i.stockUnit as UnitCode })),
+    items: itemRows.map((i) => ({ id: i.id, name: i.name, kind: i.kind as BoughtKind, stockUnit: i.stockUnit as UnitCode })),
     sauces,
     products,
   };

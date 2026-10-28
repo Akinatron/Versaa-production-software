@@ -5,11 +5,24 @@ import { linkAction, moveRankAction, setOfferAction, unlinkAction } from "../sup
 import { fmtDate } from "./ui/format";
 
 /** Edit one supplier ↔ item link: pack size, pack name and price. Used on both cards. */
-export function OfferForm({ offer, unit, back, supplierCode }: { offer: Offer; unit: UnitCode; back: string; supplierCode?: string | null }) {
+export function OfferForm({
+  offer,
+  unit,
+  back,
+  supplierCode,
+  open,
+}: {
+  offer: Offer;
+  unit: UnitCode;
+  back: string;
+  supplierCode?: string | null;
+  /** Start opened (when arriving from an "Edit" link elsewhere). */
+  open?: boolean;
+}) {
   const u = UNITS[unit].label;
   return (
-    <details className="inline-edit">
-      <summary className="small">Change price or pack</summary>
+    <details className="inline-edit price-edit" open={open}>
+      <summary>{offer.price === null ? "Set price" : "Edit price"}</summary>
       <form action={setOfferAction} className="row" style={{ gap: 8, alignItems: "end", marginTop: 8 }}>
         <input type="hidden" name="supplierItemId" value={offer.supplierItemId} />
         <input type="hidden" name="back" value={back} />
@@ -31,7 +44,7 @@ export function OfferForm({ offer, unit, back, supplierCode }: { offer: Offer; u
         </div>
         <div>
           <label className="small">Price (€)</label>
-          <input name="price" type="number" min="0" step="any" defaultValue={offer.price?.toString() ?? ""} style={{ maxWidth: 100 }} />
+          <input name="price" type="number" min="0" step="any" defaultValue={offer.price?.toString() ?? ""} style={{ maxWidth: 100 }} autoFocus={open} />
         </div>
         <div>
           <label className="small">Supplier ref</label>
