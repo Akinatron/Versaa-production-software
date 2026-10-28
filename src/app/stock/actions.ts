@@ -42,7 +42,7 @@ export async function saveStockCount(form: FormData) {
   revalidatePath("/outbound");
   redirect(
     withOk(
-      `/stock/${itemId}`,
+      `/items/${itemId}?tab=stock`,
       r.alreadyRecorded
         ? "That count was already saved."
         : r.changed === 0
@@ -72,7 +72,7 @@ export async function saveWriteOff(form: FormData) {
     .from(t.lots)
     .where(eq(t.lots.id, s(form, "lotId")));
   redirect(
-    withOk(lot ? `/stock/${lot.itemId}` : "/stock", r.alreadyRecorded ? "That was already recorded." : "Written off. The stock and history are updated."),
+    withOk(lot ? `/items/${lot.itemId}?tab=stock` : "/stock", r.alreadyRecorded ? "That was already recorded." : "Written off. The stock and history are updated."),
   );
 }
 

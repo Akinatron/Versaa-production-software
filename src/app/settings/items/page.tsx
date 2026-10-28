@@ -158,9 +158,9 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
                     return (
                       <tr key={i.id} style={i.active ? undefined : { opacity: 0.7 }}>
                         <td>
-                          <Link href={`/items/${i.id}`}>{i.name}</Link>
+                          <Link href={`/items/${i.id}?tab=suppliers`}>{i.name}</Link>
                           <div className="small">
-                            <Link href={`/stock/${i.id}`} className="muted">
+                            <Link href={`/items/${i.id}?tab=stock`} className="muted">
                               stock
                             </Link>
                           </div>
@@ -224,7 +224,7 @@ export default async function ItemsPage({ searchParams }: { searchParams: Promis
 function SupplierPrices({ itemId, offers, unit }: { itemId: string; offers: Offer[]; unit: UnitCode }) {
   if (offers.length === 0)
     return (
-      <Link href={`/items/${itemId}`} className="badge warn">
+      <Link href={`/items/${itemId}?tab=suppliers`} className="badge warn">
         none, add one
       </Link>
     );
@@ -237,7 +237,7 @@ function SupplierPrices({ itemId, offers, unit }: { itemId: string; offers: Offe
             {o.rank === 1 && offers.length > 1 && <span className="muted"> (favourite)</span>}
           </span>{" "}
           <span className={o.price === null ? "text-warn" : "muted"}>{describePrice(o, UNITS[unit].label)}</span>{" "}
-          <Link href={`/items/${itemId}?edit=${o.supplierItemId}#offer-${o.supplierItemId}`}>Edit</Link>
+          <Link href={`/items/${itemId}?tab=suppliers&edit=${o.supplierItemId}#offer-${o.supplierItemId}`}>Edit</Link>
         </li>
       ))}
     </ul>

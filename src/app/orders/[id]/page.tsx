@@ -229,7 +229,7 @@ export default async function OrderPage({
                 return (
                   <tr key={l.line.id}>
                     <td>
-                      <Link href={`/items/${l.item.id}`}>{l.item.name}</Link>
+                      <Link href={`/items/${l.item.id}?tab=suppliers`}>{l.item.name}</Link>
                       {l.line.packs !== null && l.line.packQty && (
                         <div className="small muted">
                           {l.line.packs} × {l.line.packQty} {u(unit)}
