@@ -80,10 +80,8 @@ suite("mock data and delete database", () => {
     }
   }, 120_000);
 
-  it("everything at once leaves an empty app, team logins kept", async () => {
-    await db.insert(t.users).values({ email: "a@example.com", name: "A", passwordHash: "x", role: "admin" });
+  it("everything at once leaves an empty app", async () => {
     await wipeDatabase(db, ["activity", "suppliers", "recipes", "items", "catalog"]);
     expect(await count("items")).toBe(0);
-    expect(await count("users")).toBe(1);
   });
 });

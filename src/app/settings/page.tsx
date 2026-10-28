@@ -9,7 +9,6 @@ import { PageHeader } from "../components/ui/header";
 import { AppUpdates } from "./app-updates";
 import { activeMock } from "@/db/client";
 import { wipeCounts } from "@/db/wipe";
-import { currentUser, can } from "@/lib/session";
 import { devToolsBuilt, isDeveloperMode } from "@/lib/developer";
 import { DeleteDatabase, EnterDeveloperMode } from "./developer-dialogs";
 import { leaveDeveloperModeAction, startMockAction, stopMockAction } from "./developer-actions";
@@ -18,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, drafts, items, me, devMode] = await Promise.all([
+  const [catalog, drafts, items, devMode] = await Promise.all([
     loadPlanCatalog(db()),
     db().execute<{ n: number; kind: string }>(
       // Open drafts, so nobody forgets a half-finished change.
@@ -26,10 +25,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         union all select 'packaging', count(*)::int from packaging_versions where status = 'draft'`,
     ),
     db().select().from(t.items),
-    currentUser(),
     isDeveloperMode(),
   ]);
-  const admin = can(me?.role, "admin");
   const draftCount = (k: string) => [...drafts].find((d) => d.kind === k)?.n ?? 0;
   const noRecipe = catalog.sauces.filter((s) => !s.recipe);
   const noPackaging = catalog.products.filter((p) => p.packaging.length === 0);
@@ -135,18 +132,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <span className="chev" aria-hidden />
           </Link>
         ))}
-        <Link href="/team">
-          <span className="dot neutral" aria-hidden />
-          <span className="what">
-            <strong>Team</strong>
-            <span className="sub">Who can sign in.</span>
-          </span>
-          <span className="state small muted" />
-          <span className="chev" aria-hidden />
-        </Link>
       </nav>
 
-      {devToolsBuilt() && admin && (devMode ? <DeveloperTools /> : <DeveloperOff />)}
+      {devToolsBuilt() && (devMode ? <DeveloperTools /> : <DeveloperOff />)}
     </>
   );
 }

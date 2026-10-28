@@ -63,7 +63,7 @@ export function checkUploads(files: UploadFile[]) {
 
 export async function attachDocuments(
   db: DB,
-  input: { kind: DocumentKind; receiptId?: string | null; purchaseOrderId?: string | null; files: UploadFile[]; userId?: string | null },
+  input: { kind: DocumentKind; receiptId?: string | null; purchaseOrderId?: string | null; files: UploadFile[] },
 ): Promise<DocumentRow[]> {
   const files = checkUploads(input.files);
   if (files.length === 0) throw new OperationError("Choose a photo or PDF first.");
@@ -97,7 +97,6 @@ export async function attachDocuments(
           contentType: f.contentType,
           sizeBytes: f.data.length,
           storageKey,
-          uploadedBy: input.userId ?? null,
         })
         .returning();
       saved.push(row!);
@@ -145,12 +144,12 @@ async function logDocument(db: DB | Tx, row: DocumentRow, action: "create" | "de
 }
 
 /** Take a document off the delivery or order. The row and the file are kept, only marked removed. */
-export async function removeDocument(db: DB, id: string, userId?: string | null, reason?: string | null) {
+export async function removeDocument(db: DB, id: string, reason?: string | null) {
   const why = needReason(reason, "Say why the file is removed");
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(t.documents)
-      .set({ removedAt: new Date(), removedBy: userId ?? null })
+      .set({ removedAt: new Date() })
       .where(and(eq(t.documents.id, id), isNull(t.documents.removedAt)))
       .returning();
     if (row) await logDocument(tx, row, "delete", why);
@@ -164,7 +163,7 @@ export async function restoreDocument(db: DB, id: string, reason?: string | null
   return db.transaction(async (tx) => {
     const [row] = await tx
       .update(t.documents)
-      .set({ removedAt: null, removedBy: null })
+      .set({ removedAt: null })
       .where(and(eq(t.documents.id, id), sql`${t.documents.removedAt} is not null`))
       .returning();
     if (row) await logDocument(tx, row, "restore", why);
@@ -193,16 +192,15 @@ export async function documentsFor(db: DB, f: { receiptIds?: string[]; purchaseO
     .orderBy(t.documents.createdAt);
 }
 
-/** Files taken off these deliveries and/or orders, newest removal first, with who removed them. */
+/** Files taken off these deliveries and/or orders, newest removal first. */
 export async function removedDocumentsFor(db: DB, f: { receiptIds?: string[]; purchaseOrderIds?: string[] }) {
   const any: SQL[] = [];
   if (f.receiptIds?.length) any.push(inArray(t.documents.receiptId, f.receiptIds));
   if (f.purchaseOrderIds?.length) any.push(inArray(t.documents.purchaseOrderId, f.purchaseOrderIds));
   if (any.length === 0) return [];
   return db
-    .select({ doc: t.documents, by: t.users.name })
+    .select({ doc: t.documents })
     .from(t.documents)
-    .leftJoin(t.users, eq(t.documents.removedBy, t.users.id))
     .where(and(sql`${t.documents.removedAt} is not null`, or(...any)))
     .orderBy(desc(t.documents.removedAt));
 }

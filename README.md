@@ -4,7 +4,7 @@ Operations app for Versaa: production planning, purchasing, inventory, productio
 
 ## What works now
 
-Everyone signs in with their own email and password. The first time the app opens with no accounts it asks you to create one; that person adds the rest of the team under **Team** (click your name, top right).
+The app is for one person on one computer: there are no accounts, no sign-in and no roles. It opens straight on Today.
 
 - **Home** (`/`): what needs attention (missing figures, shortages for confirmed runs, late deliveries, batches waiting on something, orders that stock can't cover), upcoming runs, open batches, purchases on the way, jars available and sales this month.
 - **Plan** (`/plan`): sellable jars per sauce and size, or batches per sauce with a % split across sizes. Both give the same plan: litres, batches, surplus, ingredients, packaging, stock coverage and what to buy. Planning never changes stock.
@@ -23,9 +23,8 @@ Everyone signs in with their own email and password. The first time the app open
 - **Outbound** (`/outbound`, formerly Sales): every jar that leaves stock. "Record a stock exit" starts by choosing the reason: Sale, Own use, Test, Sample / gift or Waste / loss. Sales keep customer, price and order (sales orders reserve jars; delivering takes them out once, from specific batch lots). The other reasons only ask for product, lot, jars, date and note. All of them take jars out of stock and stay traceable; only sales count in the sales reports. Old `/sales` links redirect.
 - **Trace** (`/trace`): search any lot, batch, delivery note or supplier batch. Forward: where an ingredient lot went, which jars are still in stock and who received the rest (recall summary). Backward: from a sale or jar lot to the batch, its ingredient lots and suppliers.
 - **Reports** (`/reports`): sales by sauce and size for a period (revenue only from recorded prices, never called profit), other outflows, production and rejects, plan vs actual per run, and CSV downloads (movements, lots, sales, batches).
-- **History** (`/history`, under Keep): every create, change, delete and restore in the app, newest first, with who, when, what changed (before → after) and why. Filter by area (Production, Packaging, Purchasing, Sales, Stock, Settings), person, kind of action, dates or a code (B-…, PO-…, a lot). Each record's own page has a **History** section at the bottom with its changes and those of what hangs from it (a run shows its batches' changes; switch to "Only this run" to hide them), and an "Edited" mark under the title. Today has a **Latest changes** card with what other people changed.
+- **History** (`/history`, under Keep): every create, change, delete and restore in the app, newest first, with when, what changed (before → after) and why. Filter by area (Production, Packaging, Purchasing, Sales, Stock, Settings), kind of action, dates or a code (B-…, PO-…, a lot). Each record's own page has a **History** section at the bottom with its changes and those of what hangs from it (a run shows its batches' changes; switch to "Only this run" to hide them), and an "Edited" mark under the title.
 - **Correcting, deleting and restoring**: batches (ingredients, date, note, incidents, not made), packaging sessions, runs (cancel, restore a discarded draft), purchase orders (correct quantities and prices also after sending, cancel, restore), deliveries (own page `/deliveries/<id>`: correct, delete, restore), lots (supplier batch, best-before), sales orders (correct while waiting, cancel, restore), sales and other outflows (correct details, delete, restore), stock counts and write-offs (`/stock/adjustments/<id>`: delete, restore) and paperwork files (remove, put back). Every correction, delete and restore asks for a reason; it goes in the history. Nothing is ever really deleted: it is marked deleted, its stock effect is reversed with new movements, and it can be restored. There is no time limit.
-- **Roles** (Team): **Viewer** sees everything and changes nothing, **Editor** records, corrects, deletes and restores, **Admin** also manages the team. Existing accounts became admins; new accounts start as viewers. The server refuses changes from a viewer; the forms are hidden too.
 - **Settings** (`/settings`): recipes and packaging lists edited as new versions (old batches keep the version they used), ingredients and packaging items, sauces, sizes and products, yields and reject rates, suppliers.
 
 Anything that can't be worked out yet is shown as **unknown**, never as 0. Once batches are closed, the planner uses their litres per batch (from the jars filled) and reject rates instead of estimates.
@@ -59,11 +58,11 @@ Uploaded delivery notes and invoices are saved in an `uploads` folder next to th
 
 ## Developer mode
 
-At the bottom of Settings an admin can turn on **Developer mode** (off by default; it stays on until "Back to normal mode"). It adds:
+At the bottom of Settings you can turn on **Developer mode** (off by default; it stays on until "Back to normal mode"). It adds:
 
 - **Check for updates** (Mac app only, see below).
 - **Mock data**: the app switches to a separate test database with four test suppliers and an example of every stage. The real database is not touched, and the test database is thrown away when it is turned off or the server restarts. In the web version it is a second database on the same PostgreSQL server, named after yours with `_mock` (`versaa_mock`), so the `DATABASE_URL` user must be allowed to create databases. In the Mac app it lives in memory.
-- **Delete database**: delete activity, suppliers, recipes, items and/or sauces & products, with what depends on them. Team logins are kept. The Mac app saves a backup first.
+- **Delete database**: delete activity, suppliers, recipes, items and/or sauces & products, with what depends on them. The Mac app saves a backup first.
 
 Build or run with `VERSAA_DEVTOOLS=0` to leave developer mode out.
 
@@ -71,7 +70,7 @@ Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty d
 
 ## Desktop app (Mac)
 
-The same app also runs as a normal Mac program, opened with a double click, with no Terminal, browser or database to install. Its data stays on that Mac only: the team can't share it, and it is separate from the `pnpm dev` database.
+The same app also runs as a normal Mac program, opened with a double click, with no Terminal, browser or database to install. Its data stays on that Mac only, and it is separate from the `pnpm dev` database.
 
 Build and install it from this folder (needs Node 22 and pnpm, like the web version; the desktop part installs its own tools with npm):
 

@@ -8,7 +8,7 @@ import * as t from "@/db/schema";
 import { db } from "@/db/client";
 import { OperationError } from "@/db/operations";
 import { recordIngredients } from "@/db/production";
-import { asUser, withOk } from "../components/flash";
+import { withOk } from "../components/flash";
 import type { FormResult } from "./[id]/cook/ingredients-form";
 
 const Payload = z.array(
@@ -27,15 +27,13 @@ export async function recordIngredientsAction(_prev: FormResult, form: FormData)
     const parsed = Payload.safeParse(JSON.parse(String(form.get("payload") ?? "[]")));
     if (!parsed.success) throw new OperationError("Something in the form couldn't be read. Reload the page and try again.");
     const data = parsed.data;
-    result = await asUser(() =>
-      recordIngredients(db(), {
-        idempotencyKey: String(form.get("key") ?? ""),
-        batchId,
-        producedOn: String(form.get("producedOn") ?? "").trim() || null,
-        reason: String(form.get("reason") ?? "").trim() || null,
-        lines: data.map((l) => ({ itemId: l.itemId, quantity: l.quantity, lots: l.lots?.map((x) => ({ lotId: x.lotId, quantity: x.qty })) })),
-      }),
-    );
+    result = await recordIngredients(db(), {
+      idempotencyKey: String(form.get("key") ?? ""),
+      batchId,
+      producedOn: String(form.get("producedOn") ?? "").trim() || null,
+      reason: String(form.get("reason") ?? "").trim() || null,
+      lines: data.map((l) => ({ itemId: l.itemId, quantity: l.quantity, lots: l.lots?.map((x) => ({ lotId: x.lotId, quantity: x.qty })) })),
+    });
   } catch (e) {
     if (e instanceof OperationError) return { error: e.message };
     throw e;

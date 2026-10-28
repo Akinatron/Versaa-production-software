@@ -3,8 +3,6 @@ import type { Metadata } from "next";
 import { sql } from "drizzle-orm";
 import { activeMock, db } from "@/db/client";
 import { stopMockAction } from "./settings/developer-actions";
-import { currentUser } from "@/lib/session";
-import { logout } from "./login/actions";
 import { Sidebar, type NavCounts } from "./components/ui/sidebar";
 import { Motion } from "./components/motion";
 import "./globals.css";
@@ -40,32 +38,12 @@ async function navCounts(): Promise<NavCounts> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await currentUser();
-  if (!user) {
-    return (
-      <html lang="en">
-        <body>
-          <div className="auth">
-            <div className="box">{children}</div>
-          </div>
-        </body>
-      </html>
-    );
-  }
   const counts = await navCounts();
   return (
     <html lang="en">
-      <body className={user.role === "viewer" ? "viewer" : undefined}>
+      <body>
         <div className="app">
-          <Sidebar
-            user={{ name: user.name }}
-            counts={counts}
-            signOut={
-              <form action={logout} className="keep">
-                <button type="submit">Sign out</button>
-              </form>
-            }
-          />
+          <Sidebar counts={counts} />
           <div className="content">
             {activeMock() && (
               <div className="mock-banner" role="status">

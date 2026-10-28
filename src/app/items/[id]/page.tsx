@@ -70,7 +70,7 @@ export default async function ItemPage({
               Stock and lots
             </Link>
             {item.active && (
-              <Link href={`/orders/new?${offers[0] ? `supplier=${offers[0].supplierId}&` : ""}items=${id}:`} className="btn secondary edit-only">
+              <Link href={`/orders/new?${offers[0] ? `supplier=${offers[0].supplierId}&` : ""}items=${id}:`} className="btn secondary">
                 Order
               </Link>
             )}

@@ -4,7 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx } from "./base";
 import { lotBalance } from "./ledger";
-import { currentActor, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
  * Stock corrections after the opening count. The number is never edited:
@@ -230,8 +230,8 @@ export async function setAdjustmentDeleted(db: DB, input: { idempotencyKey: stri
       .update(t.stockAdjustments)
       .set(
         input.deleted
-          ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason }
-          : { deletedAt: null, deletedBy: null, deletedReason: null },
+          ? { deletedAt: new Date(), deletedReason: reason }
+          : { deletedAt: null, deletedReason: null },
       )
       .where(eq(t.stockAdjustments.id, adj.id));
     return { alreadyRecorded: false };

@@ -4,7 +4,6 @@ import path from "node:path";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { activeMock, createDb, realDb, setActiveMock } from "./client";
-import * as t from "./schema";
 import { seedCatalog } from "./seed";
 import { loadMockData } from "./mock-data";
 import { desktopRequest, isDesktop } from "@/lib/desktop";
@@ -61,21 +60,18 @@ async function dropDatabase(url: string) {
   await admin.execute(sql.raw(`drop database if exists ${quoteIdent(name)}`));
 }
 
-/** Switch the app to a fresh mock database. `userId` is who turned it on: their login is copied in, so the history can name them. */
-export async function startMock(userId?: string | null) {
+/** Switch the app to a fresh mock database. */
+export async function startMock() {
   if (activeMock()) await stopMock();
   const url = await makeEmptyDatabase();
   const mock = createDb(url);
   try {
     await migrate(mock, { migrationsFolder: process.env.MIGRATIONS_DIR || "./drizzle" });
     await seedCatalog(mock);
-    // The same logins as the real database, so the history can say who did what.
-    const users = await realDb().select().from(t.users);
-    if (users.length) await mock.insert(t.users).values(users);
     await rm(mockUploadsDir(), { recursive: true, force: true });
     await mkdir(mockUploadsDir(), { recursive: true });
     setActiveMock({ db: mock, url, uploadsDir: mockUploadsDir(), startedAt: new Date() });
-    await loadMockData(mock, { userId });
+    await loadMockData(mock);
   } catch (e) {
     setActiveMock(null);
     await mock.$client.end().catch(() => {});

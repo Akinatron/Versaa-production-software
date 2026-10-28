@@ -6,7 +6,6 @@ import { db } from "@/db/client";
 import { recordReceipt } from "@/db/operations";
 import { correctReceipt, setReceiptDeleted } from "@/db/purchasing";
 import { attachDocuments, checkUploads } from "@/db/documents";
-import { currentUser } from "@/lib/session";
 import { filesFrom } from "../documents/files-from";
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
@@ -39,8 +38,7 @@ export async function saveDelivery(form: FormData) {
     }),
   );
   if (files.length > 0 && !r.alreadyRecorded) {
-    const me = await currentUser();
-    await attachDocuments(db(), { kind: "delivery_note", receiptId: r.receipt.id, files, userId: me?.id });
+    await attachDocuments(db(), { kind: "delivery_note", receiptId: r.receipt.id, files });
   }
   revalidatePath("/deliveries");
   revalidatePath("/stock");

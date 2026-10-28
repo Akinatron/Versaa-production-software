@@ -23,10 +23,7 @@ export function ShelfLifeForm({
 }) {
   return (
     <>
-      <span className="view-only">
-        <ShelfLifeBadge value={value} quietUnset={quietUnset} />
-      </span>
-      <form action={setItemShelfLifeAction} className="row edit-only" style={{ flexWrap: "nowrap", gap: 6 }}>
+      <form action={setItemShelfLifeAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
         <input type="hidden" name="itemId" value={itemId} />
         <input type="hidden" name="back" value={back} />
         <input

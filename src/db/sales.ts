@@ -4,7 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, today, type Tx } from "./base";
 import { allocate, itemOnHand, reservedForSales } from "./ledger";
-import { currentActor, diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
  * Sales and other outflows of finished jars.
@@ -492,7 +492,7 @@ export async function setOutflowDeleted(db: DB, input: { idempotencyKey: string;
     }
     await tx
       .update(t.outflows)
-      .set(input.deleted ? { deletedAt: new Date(), deletedBy: currentActor()?.id ?? null, deletedReason: reason } : { deletedAt: null, deletedBy: null, deletedReason: null })
+      .set(input.deleted ? { deletedAt: new Date(), deletedReason: reason } : { deletedAt: null, deletedReason: null })
       .where(eq(t.outflows.id, o.id));
     return { alreadyRecorded: false };
   });

@@ -9,7 +9,7 @@ export { WIPE_INFO, WIPE_PARTS, withDependencies, type WipeCounts, type WipePart
 /*
  * "Delete database" (developer mode). The person ticks what to delete; what
  * the ticked parts depend on is deleted with them, so nothing is left
- * pointing at a deleted row. Team logins are never deleted.
+ * pointing at a deleted row.
  *
  * Whole tables are emptied with one TRUNCATE, which also works on the
  * append-only tables (their triggers stop single-row deletes, not that).

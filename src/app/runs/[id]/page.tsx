@@ -41,12 +41,12 @@ export default async function RunPage({
   const actions = editing ? null : (
     <>
       {run.status === "draft" && (
-        <Link href={`/runs/${run.id}?edit=1`} className="btn secondary edit-only">
+        <Link href={`/runs/${run.id}?edit=1`} className="btn secondary">
           Edit
         </Link>
       )}
       {(run.status === "draft" || run.status === "confirmed") && (
-        <a href="#cancel" className="btn secondary edit-only">
+        <a href="#cancel" className="btn secondary">
           {run.status === "draft" ? "Discard" : "Cancel run"}
         </a>
       )}
@@ -118,7 +118,7 @@ export default async function RunPage({
       )}
 
       {(run.status === "draft" || run.status === "confirmed") && (
-        <details className="card edit-only" id="cancel">
+        <details className="card" id="cancel">
           <summary>{run.status === "draft" ? "Discard this draft" : "Cancel this run"}</summary>
           <form action={cancel} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="runId" value={run.id} />

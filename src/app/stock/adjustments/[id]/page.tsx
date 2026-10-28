@@ -25,9 +25,8 @@ export default async function AdjustmentPage({
   const { id } = await params;
   const flash = await searchParams;
   const [row] = await db()
-    .select({ a: t.stockAdjustments, by: t.users.name })
+    .select({ a: t.stockAdjustments })
     .from(t.stockAdjustments)
-    .leftJoin(t.users, eq(t.stockAdjustments.deletedBy, t.users.id))
     .where(eq(t.stockAdjustments.id, id))
     .catch(() => []);
   if (!row) notFound();
@@ -46,7 +45,7 @@ export default async function AdjustmentPage({
       <PageHeader back={{ href: "/stock", label: "Stock" }} title={`${what}, ${fmtDate(a.occurredOn, { year: true })}`} lead={a.reason} />
       <Flash params={flash} />
       {a.deletedAt && (
-        <DeletedNote what={what.toLowerCase()} at={a.deletedAt} by={row.by} reason={a.deletedReason}>
+        <DeletedNote what={what.toLowerCase()} at={a.deletedAt} reason={a.deletedReason}>
           <form action={toggleAdjustment} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="adjustmentId" value={a.id} />
             <input type="hidden" name="deleted" value="0" />
@@ -91,7 +90,7 @@ export default async function AdjustmentPage({
         </table>
       </div>
       {!a.deletedAt && (
-        <details className="card edit-only">
+        <details className="card">
           <summary>Delete this {what.toLowerCase()}</summary>
           <form action={toggleAdjustment} className="row" style={{ marginTop: 12, alignItems: "flex-end" }}>
             <input type="hidden" name="adjustmentId" value={a.id} />

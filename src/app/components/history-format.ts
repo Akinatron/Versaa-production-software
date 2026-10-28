@@ -50,7 +50,6 @@ export const ENTITY_LABEL: Record<EntityType, string> = {
   recipe: "Recipe",
   packaging_list: "Packaging list",
   yield: "Yield",
-  user: "Account",
   document: "File",
 };
 
@@ -63,7 +62,6 @@ export const refLabel = (r: Ref) => r.code || ENTITY_LABEL[r.type];
 export interface ChangeRow {
   id: string;
   when: string;
-  who: string;
   action: { label: string; cls: string };
   entity: { type: EntityType; id: string; label: string; href: string };
   summary: string;
@@ -75,7 +73,6 @@ export function toRow(c: ChangeView): ChangeRow {
   return {
     id: c.id,
     when: fmtWhen(c.at),
-    who: c.userName ?? "Someone",
     action: ACTION_LABEL[c.action],
     entity: { type: c.entityType, id: c.entityId, label: refLabel({ type: c.entityType, id: c.entityId, code: c.entityCode }), href: openHref({ type: c.entityType, id: c.entityId }) },
     summary: c.summary,
