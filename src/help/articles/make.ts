@@ -275,8 +275,8 @@ export const make: Article[] = [
     keywords: ["labels", "stickers", "barcode", "print", "Apli 1285", "lot code", "pdf"],
     steps: [
       "Open the batch's **Pack** step and press **Print labels · product** under **Jars packed**, or open the lot in [Trace](/trace) and press **Print labels**.",
-      "The sheet fills with one label per jar of that lot in stock. Change **Labels** for another number.",
-      "Using a sheet that is partly used? Set **Start at position** to the first free sticker (counted left to right, top to bottom) and press **Update**.",
+      "The sheet fills with one label per jar of that lot in stock. Change **Labels** for another number: the preview changes as you type.",
+      "Using a sheet that is partly used? Click the first free sticker on the preview, or type its number in **Start at position** (counted left to right, top to bottom). The stickers before it stay blank.",
       "Press **Print or save as PDF**. Print at **100%** (actual size) with **no margins**.",
       "For a single label on its own page, press **Download one label**.",
     ],

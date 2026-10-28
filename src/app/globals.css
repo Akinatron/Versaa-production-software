@@ -580,6 +580,9 @@ button.linkish:hover { background: none; }
 .label-sheet { width: 210mm; height: 297mm; display: grid; grid-template-columns: repeat(var(--jl-cols), var(--jl-w)); grid-auto-rows: var(--jl-h); align-content: start; background: #fff; color: #000; box-shadow: var(--shadow); margin-bottom: 16px; break-after: page; overflow: hidden; }
 .label-sheet:last-child { break-after: auto; }
 .label-cell { width: var(--jl-w); height: var(--jl-h); outline: 1px dashed #d4d4d4; outline-offset: -1px; }
+.label-pick { all: unset; display: block; width: 100%; height: 100%; box-sizing: border-box; cursor: pointer; position: relative; }
+.label-pick:hover, .label-pick:focus-visible { background: #eef4ff; outline: 2px solid #4f7cff; outline-offset: -2px; }
+.label-pos { position: absolute; inset: 0; display: grid; place-items: center; font: 8pt Helvetica, Arial, sans-serif; color: #b0b0b0; }
 .label-single { width: var(--jl-w); height: var(--jl-h); background: #fff; color: #000; box-shadow: var(--shadow); }
 .jar-label { width: 100%; height: 100%; box-sizing: border-box; padding: 2mm 2.5mm 1.6mm; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; line-height: 1.15; }
 .jl-name { font-weight: 700; font-size: 8.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -588,6 +591,8 @@ button.linkish:hover { background: none; }
 @media print {
   .labels-page .label-sheet, .labels-page .label-single { box-shadow: none; margin: 0; }
   .labels-page .label-cell { outline: none; }
+  .labels-page .label-pos { display: none; }
+  .labels-page .label-pick { background: none !important; outline: none !important; }
   body:has(.labels-page) main { max-width: none !important; margin: 0 !important; }
 }
 

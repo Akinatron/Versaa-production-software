@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { lotsByIds } from "@/db/trace";
 import { canEncode128 } from "@/domain/barcode";
-import { Barcode } from "../../../../components/barcode";
+import { clampInt } from "@/domain/label-sheet";
+import { JarLabel, LabelSheets } from "../../../../components/label-sheets";
 import { PrintButton } from "../../../../components/print-button";
 import { fmtDate } from "../../../../components/ui/format";
 
@@ -14,22 +15,6 @@ const SHEETS = {
   a4_40: { name: "A4, 40 labels (52.5 × 29.7 mm)", cols: 4, rows: 10, w: 52.5, h: 29.7 },
 } as const;
 type SheetKey = keyof typeof SHEETS;
-
-const clampInt = (v: string | undefined, min: number, max: number, fallback: number) => {
-  const n = Number.parseInt(v ?? "", 10);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
-};
-
-function Label({ name, code, bestBefore }: { name: string; code: string; bestBefore: string | null }) {
-  return (
-    <div className="jar-label">
-      <div className="jl-name">{name}</div>
-      <div className="jl-line">Lot {code}</div>
-      <div className="jl-line">Best before {bestBefore ? fmtDate(bestBefore, { year: true }) : "—"}</div>
-      <Barcode value={code} className="jl-bars" />
-    </div>
-  );
-}
 
 export default async function JarLabelsPage({
   params,
@@ -57,12 +42,7 @@ export default async function JarLabelsPage({
   const start = clampInt(q.start, 1, perSheet, 1);
   const single = q.single === "1";
   const back = `/trace/lot/${lot.id}`;
-  const label = <Label name={lot.itemName} code={lot.code} bestBefore={lot.bestBefore} />;
-
-  // Empty cells first (a sheet already partly used), then the labels, split into A4 pages.
-  const cells: (boolean | null)[] = [...Array(start - 1).fill(null), ...Array(count).fill(true)];
-  const pages: (boolean | null)[][] = [];
-  for (let i = 0; i < cells.length; i += perSheet) pages.push(cells.slice(i, i + perSheet));
+  const bestBefore = lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : "—";
 
   const pageCss = single ? `@page { size: ${sheet.w}mm ${sheet.h}mm; margin: 0; }` : `@page { size: A4; margin: 0; }`;
   const vars = { "--jl-w": `${sheet.w}mm`, "--jl-h": `${sheet.h}mm`, "--jl-cols": sheet.cols } as React.CSSProperties;
@@ -86,48 +66,22 @@ export default async function JarLabelsPage({
               Back to the full sheet
             </Link>
           </div>
-        ) : (
-          <form className="card row" style={{ alignItems: "flex-end", marginBottom: 16 }}>
-            <div>
-              <label htmlFor="count">Labels</label>
-              <input id="count" name="count" type="number" min={1} max={2000} defaultValue={count} style={{ width: 100 }} />
-            </div>
-            <div>
-              <label htmlFor="start">Start at position</label>
-              <input id="start" name="start" type="number" min={1} max={perSheet} defaultValue={start} style={{ width: 100 }} />
-            </div>
-            <div>
-              <label>Sheet</label>
-              <div className="small" style={{ padding: "8px 0" }}>
-                {sheet.name}
-              </div>
-            </div>
-            <button type="submit" className="secondary">
-              Update
-            </button>
-            <PrintButton label="Print or save as PDF" />
-            <Link href={`${back}/labels?single=1`} className="btn secondary">
-              Download one label
-            </Link>
-            <p className="small muted" style={{ flexBasis: "100%", margin: 0 }}>
-              {pages.length} {pages.length === 1 ? "sheet" : "sheets"}. Print at 100% scale with no margins so the labels line up with the sheet. Use
-              &quot;Start at position&quot; to finish a sheet that is already partly used (positions count left to right, top to bottom).
-            </p>
-          </form>
-        )}
+        ) : null}
       </div>
       {single ? (
-        <div className="label-single">{label}</div>
+        <div className="label-single">
+          <JarLabel name={lot.itemName} code={lot.code} bestBefore={bestBefore} />
+        </div>
       ) : (
-        pages.map((p, i) => (
-          <div className="label-sheet" key={i}>
-            {p.map((c, j) => (
-              <div className="label-cell" key={j}>
-                {c ? label : null}
-              </div>
-            ))}
-          </div>
-        ))
+        <LabelSheets
+          name={lot.itemName}
+          code={lot.code}
+          bestBefore={bestBefore}
+          sheet={sheet}
+          initialCount={count}
+          initialStart={start}
+          singleHref={`${back}/labels?single=1`}
+        />
       )}
     </div>
   );
