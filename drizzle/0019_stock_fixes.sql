@@ -42,3 +42,12 @@ BEGIN
   END LOOP;
 END $$;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "products_item" ON "products" USING btree ("item_id");
+--> statement-breakpoint
+
+-- The desktop app now loads the starting catalog until it is marked as loaded.
+-- A database that already has a catalog (or anything else) is marked now, so
+-- nothing is loaded into it again.
+INSERT INTO "app_settings" ("key", "value")
+SELECT 'catalog_loaded', 'true'::jsonb
+WHERE EXISTS (SELECT 1 FROM "items") OR EXISTS (SELECT 1 FROM "sauces") OR EXISTS (SELECT 1 FROM "change_log")
+ON CONFLICT ("key") DO NOTHING;

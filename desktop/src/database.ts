@@ -4,17 +4,18 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createDb } from "../../src/db/client";
-import { seedCatalog, seedYieldEstimates } from "../../src/db/seed";
+import { loadStartingCatalogOnce } from "../../src/db/seed";
 
 export type Database = {
   pg: PGlite;
   url: string;
   /**
-   * Apply migrations, like `pnpm db:migrate`. A new database also gets the
-   * starting catalog (`pnpm db:seed`); an existing one is left as it is, so
-   * what was deleted in developer mode stays deleted.
+   * Apply migrations, like `pnpm db:migrate`. Until the starting catalog
+   * (`pnpm db:seed`) has been loaded once, it is loaded, and only then marked
+   * as loaded. So a first start that was cut short loads it next time, and
+   * what was deleted later in developer mode stays deleted.
    */
-  prepare(opts: { seedCatalog: boolean }): Promise<void>;
+  prepare(): Promise<void>;
   stop(): Promise<void>;
 };
 
@@ -42,17 +43,14 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
   return {
     pg,
     url,
-    async prepare({ seedCatalog: seed }) {
+    async prepare() {
       const db = createDb(url);
       try {
         await refuseNewerDatabase(db.$client, opts.migrationsDir);
         await migrate(db, { migrationsFolder: opts.migrationsDir });
         opts.log("migrations applied");
-        if (seed) {
-          await seedCatalog(db);
-          const { added } = await seedYieldEstimates(db);
-          opts.log("starting catalog loaded", added > 0 ? `(with ${added} yield estimate(s))` : "");
-        }
+        const { loaded, added } = await loadStartingCatalogOnce(db);
+        if (loaded) opts.log("starting catalog loaded", added > 0 ? `(with ${added} yield estimate(s))` : "");
       } finally {
         await db.$client.end();
       }
