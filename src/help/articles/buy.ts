@@ -24,7 +24,8 @@ export const buy: Article[] = [
       "Orders made from a run are linked to it and show in its steps 1, 3 and 4.",
     ],
     more: [
-      "Only what is missing is proposed: what the run needs, minus stock, minus other runs' reservations, minus orders already sent. Items with unknown stock are listed separately: count them, or add them by hand to a [new order](/orders/new).",
+      "Only what is missing is proposed: what the run still has to use, minus what stock and orders already sent leave after earlier runs. Items with unknown stock are listed separately: count them, or add them by hand to a [new order](/orders/new).",
+      "Suppliers marked not in use are never proposed. When the favourite is one of them, the cheapest supplier in use is chosen instead.",
     ],
     related: ["send-order", "order-by-hand", "suppliers", "plan-math"],
   },
@@ -194,6 +195,7 @@ export const buy: Article[] = [
     ],
     more: [
       "The supplier page also shows **Recent orders**, **Paperwork** and **Details** (name, contact, notes). **Mark as not in use** hides a supplier from new orders without losing its history.",
+      "A supplier not in use is never proposed when ordering and its prices are left out of budgets. If it was an item's favourite, the cheapest supplier in use takes its place (marked **cheapest in use**), and the item's **Suppliers** tab says so. If no supplier in use is left, the item shows **No supplier in use**: add one.",
       "**Remove link** under **Edit price** stops a supplier being offered for that item.",
     ],
     related: ["order-whats-missing", "item-card", "items"],

@@ -74,14 +74,16 @@ export const make: Article[] = [
       { h: "4. Ingredients and packaging" },
       "Ingredients = the active recipe's quantities for one batch × batches. Packaging = each item of the product's packaging list × jars to fill (rejects use a jar, lid and label too). The same item used by several sauces or sizes is added up into one line.",
       { h: "5. What to buy" },
-      "For each item: to buy = needed − (in stock − held by other runs) − on order, never below 0. Items counted in units are rounded up to whole units.",
+      "For each item: to buy = needed − (in stock + on order − held by earlier runs), never below 0. Items counted in units are rounded up to whole units.",
       {
         ul: [
-          "**Held by other runs**: stock reserved by runs confirmed for an earlier date. It isn't offered twice.",
+          "**Held by earlier runs**: what confirmed runs that come first still need. Runs go in order of production date (then the order they were confirmed in); a new plan comes after all of them. Stock and orders go to earlier runs first, so an order placed for one run is never counted again for the next.",
           "**On order**: orders already **sent** and not yet received. Draft orders don't count.",
           "**Unknown**: the item was never counted, so the app can't say whether it is covered.",
         ],
       },
+      "Example: 30 kg of onion in stock, run A needs 100 kg and you ordered 70 kg for it. A new plan needing 50 kg asks you to buy 50 kg: 30 + 70 − 100 leaves nothing free.",
+      "Once a run is confirmed and its batches start, it is checked against **Still to use**: what it needs minus what its batches already used. So cooking a batch never makes the run ask for that again.",
       { h: "With the batches tab" },
       "Jars per size = litres of the batches × the size's share ÷ fill per jar, rounded down; then the expected rejects are taken off, rounded down. Those become the sellable targets.",
       { h: "From sales orders" },
@@ -105,7 +107,7 @@ export const make: Article[] = [
       {
         ol: [
           "**What to make**: batches per sauce, sellable jars and jars to fill, the run's batches, its orders and its budget.",
-          "**Stock vs need**: every ingredient and packaging item with what is in stock, held by other runs, on order and to buy.",
+          "**Stock vs need**: every ingredient and packaging item with what is in stock, held by earlier runs, on order and to buy. Once batches are cooked or packed, **Still to use** shows what the run needs from now on, and only that is checked. A closed run needs nothing more.",
           "**Order**: one draft order per supplier for what is missing. See [Order what's missing](help:order-whats-missing).",
           "**Receive**: the run's orders on the way, with **Record delivery**, plus drafts not sent yet.",
         ],
@@ -254,6 +256,7 @@ export const make: Article[] = [
     more: [
       { h: "Correcting or deleting a session" },
       "Under **Jars packed**, open a session to edit it: change the numbers or dates, give a reason and press **Save changes**. Stock is corrected by the difference. **Delete session** takes its jars out of stock and puts its materials back; it stays on record and can be restored.",
+      "**Best-before** in the edit form has one date per size, each with its own lot's date. Only a date you change is saved, on that size's lot, and it goes in the history.",
       "This works even after the batch is closed. It is refused if the jars of that session have already left stock and too few are left.",
     ],
     mistakes: [

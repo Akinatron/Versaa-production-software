@@ -152,8 +152,8 @@ export const sell: Article[] = [
           "**Plan vs actual**: for each run closed in the period, the forecast frozen at confirmation against what was recorded.",
         ],
       },
-      { h: "Downloads (CSV)" },
-      "Spreadsheet files you can open with Excel or Google Sheets, for **Everything** or **this period**:",
+      { h: "Downloads" },
+      "Each table comes as **Excel** or **CSV**, for **Everything** or **this period**. Use **Excel**: it opens the same in any Excel, Numbers or Google Sheets, whatever the computer's language, with real numbers and dates, a header that stays visible and filters. **CSV** is plain text (commas, decimal point) for other tools; a Spanish Excel puts each of its rows in one column.",
       {
         ul: [
           "**Stock movements**: the full ledger, every quantity in or out with item, lot, reason and document.",

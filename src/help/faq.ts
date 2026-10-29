@@ -5,7 +5,7 @@ export const FAQ: Faq[] = [
     area: "make",
     q: "Why does the plan say I need to buy something I have in stock?",
     a: [
-      "Part of that stock is probably reserved by another confirmed run with an earlier date. Look at the **Held by other runs** column: what is held there isn't offered again. Orders still in draft don't count as **on order** either; mark them as sent.",
+      "Part of that stock is probably still needed by a confirmed run that comes first. Look at the **Held by earlier runs** column: stock and orders go to earlier runs first, so they aren't counted again. Orders still in draft don't count as **on order** either; mark them as sent.",
     ],
     related: ["plan-math", "send-order"],
   },
