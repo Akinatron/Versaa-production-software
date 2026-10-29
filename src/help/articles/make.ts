@@ -261,7 +261,7 @@ export const make: Article[] = [
       { h: "Correcting or deleting a session" },
       "Under **Jars packed**, open a session to edit it: change the numbers or dates, give a reason and press **Save changes**. Stock is corrected by the difference. **Delete session** takes its jars out of stock and puts its materials back; it stays on record and can be restored.",
       "**Best-before** in the edit form has one date per size, each with its own lot's date. Only a date you change is saved, on that size's lot, and it goes in the history.",
-      "This works even after the batch is closed. It is refused if the jars of that session have already left stock and too few are left.",
+      "This works even after the batch is closed. It is refused if the jars of that session have already left stock and too few are left. If the jars taken out were promised to sales orders, it is still saved, and the message says which sizes are now short so you can check those orders.",
     ],
     mistakes: [
       { problem: '"Rejected jars can\'t be more than jars filled".', fix: "Filled counts every jar you filled, good or bad. Rejected is part of it." },

@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, checkWholeUnits, itemsById, today, type Tx, isDate } from "./base";
-import { lotBalance } from "./ledger";
+import { jarsFree, lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
@@ -669,7 +669,7 @@ export async function changePackaging(
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(t.packagingSessions).where(eq(t.packagingSessions.id, input.sessionId));
     if (!session) throw new OperationError("Packaging session not found.");
-    if (session.changeKey === input.idempotencyKey) return { alreadyRecorded: true, deleted: !!session.deletedAt };
+    if (session.changeKey === input.idempotencyKey) return { alreadyRecorded: true, deleted: !!session.deletedAt, short: [] as string[] };
     if (input.restore && !session.deletedAt) throw new OperationError("This packaging session isn't deleted.");
     if (!input.restore && session.deletedAt) throw new OperationError("This packaging session has already been deleted.");
     const { batch, sauce, run } = await getBatch(tx, session.batchId);
@@ -734,6 +734,15 @@ export async function changePackaging(
       jarMoves.push({ lotId: lotId ?? "", productId: l.productId, diff });
     }
     if (errors.length) throw new OperationError(errors.join(" "));
+    // Jars taken back out of stock may be promised to sales orders: allowed, but say which are now short.
+    const short: string[] = [];
+    for (const m of jarMoves) {
+      if (m.diff >= 0) continue;
+      const p = productRows.find((r) => r.product.id === m.productId)!;
+      const { onHand, promised } = await jarsFree(tx, p.product.itemId);
+      const left = Decimal.max(0, onHand.plus(m.diff));
+      if (promised.gt(left)) short.push(`${p.product.name}: sales orders are now ${promised.minus(left)} jars short.`);
+    }
 
     const when = session.packedOn;
     const what = input.delete
@@ -837,7 +846,7 @@ export async function changePackaging(
       )
       .where(eq(t.packagingSessions.id, session.id));
     for (const itemId of new Set([...need.keys(), ...used.keys()])) await syncRunReservation(tx, batch.runId, itemId);
-    return { alreadyRecorded: false, deleted: !!input.delete };
+    return { alreadyRecorded: false, deleted: !!input.delete, short };
   });
 }
 
