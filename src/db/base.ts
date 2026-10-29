@@ -12,6 +12,15 @@ export class OperationError extends Error {
 
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
+/**
+ * Hold the names lock until the transaction ends, so two saves of the same
+ * new name (a double click) run one after the other and the second one sees
+ * the first.
+ */
+export async function lockNames(tx: Tx) {
+  await tx.execute(sql`select pg_advisory_xact_lock(4545)`);
+}
+
 export const today = () => new Date().toISOString().slice(0, 10);
 
 export function positive(value: Decimal.Value, what: string): Decimal {

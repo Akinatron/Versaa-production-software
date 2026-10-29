@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, type Tx } from "./base";
+import { OperationError, lockNames, type Tx } from "./base";
 import { diff, logChange, type FieldChange } from "./changes";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
@@ -235,7 +235,7 @@ function versionChanges(before: Map<string, string>, after: Map<string, string>)
 
 // ---------------------------------------------------------------- items, sauces, sizes, products
 
-async function uniqueCode(db: DB, base: string, table: typeof t.items | typeof t.sauces | typeof t.formats) {
+async function uniqueCode(db: DB | Tx, base: string, table: typeof t.items | typeof t.sauces | typeof t.formats) {
   for (let i = 1; ; i++) {
     const code = i === 1 ? base : `${base}-${i}`;
     const [row] = await db.select({ id: table.id }).from(table).where(eq(table.code, code));
@@ -251,34 +251,46 @@ export async function addItem(db: DB, input: { kind: BoughtKind; name: string; s
   if (!name) throw new OperationError("Name is required.");
   if (!isUnitCode(input.stockUnit)) throw new OperationError("Choose a stock unit.");
   if (input.kind === "packaging" && input.stockUnit !== "unit") throw new OperationError("Packaging is counted in units.");
-  const [dup] = await db
-    .select()
-    .from(t.items)
-    .where(and(sql`lower(${t.items.name}) = lower(${name})`, eq(t.items.kind, input.kind)));
-  if (dup) throw new OperationError(`${dup.name} already exists.`);
-  const code = await uniqueCode(db, `${KIND_CODE_PREFIX[input.kind]}-${slug(name)}`, t.items);
-  const [row] = await db.insert(t.items).values({ code, name, kind: input.kind, stockUnit: input.stockUnit, storage }).returning();
-  await logChange(db, {
-    action: "create",
-    area: "settings",
-    entity: { type: "item", id: row!.id, code: name },
-    summary: `Added ${input.kind === "other" ? "other item" : input.kind} ${name} (${input.stockUnit}${storage ? `, ${storageLabel(storage).toLowerCase()}` : ""})`,
+  const stockUnit = input.stockUnit;
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const [dup] = await tx
+      .select()
+      .from(t.items)
+      .where(and(sql`lower(${t.items.name}) = lower(${name})`, eq(t.items.kind, input.kind)));
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    const code = await uniqueCode(tx, `${KIND_CODE_PREFIX[input.kind]}-${slug(name)}`, t.items);
+    const [row] = await tx.insert(t.items).values({ code, name, kind: input.kind, stockUnit, storage }).returning();
+    await logChange(tx, {
+      action: "create",
+      area: "settings",
+      entity: { type: "item", id: row!.id, code: name },
+      summary: `Added ${input.kind === "other" ? "other item" : input.kind} ${name} (${stockUnit}${storage ? `, ${storageLabel(storage).toLowerCase()}` : ""})`,
+    });
+    return row!;
   });
-  return row!;
 }
 
 export async function renameItem(db: DB, itemId: string, name: string) {
   if (!name.trim()) throw new OperationError("Name is required.");
-  const [item] = await db.select().from(t.items).where(eq(t.items.id, itemId));
-  if (!item) throw new OperationError("Item not found.");
-  if (item.name === name.trim()) return;
-  await db.update(t.items).set({ name: name.trim() }).where(eq(t.items.id, itemId));
-  await logChange(db, {
-    action: "update",
-    area: "settings",
-    entity: { type: "item", id: itemId, code: name.trim() },
-    summary: `Renamed ${item.name} to ${name.trim()}`,
-    changes: diff([["Name", item.name, name.trim()]]),
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const [item] = await tx.select().from(t.items).where(eq(t.items.id, itemId));
+    if (!item) throw new OperationError("Item not found.");
+    if (item.name === name.trim()) return;
+    const [dup] = await tx
+      .select()
+      .from(t.items)
+      .where(and(sql`lower(${t.items.name}) = lower(${name.trim()})`, eq(t.items.kind, item.kind), sql`${t.items.id} <> ${itemId}`));
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    await tx.update(t.items).set({ name: name.trim() }).where(eq(t.items.id, itemId));
+    await logChange(tx, {
+      action: "update",
+      area: "settings",
+      entity: { type: "item", id: itemId, code: name.trim() },
+      summary: `Renamed ${item.name} to ${name.trim()}`,
+      changes: diff([["Name", item.name, name.trim()]]),
+    });
   });
 }
 
@@ -359,20 +371,28 @@ export async function setItemActive(db: DB, itemId: string, active: boolean) {
 export async function addSauce(db: DB, input: { name: string; batchPrefix?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new OperationError("Name is required.");
-  const code = await uniqueCode(db, slug(name), t.sauces);
   const prefix = (input.batchPrefix?.trim() || batchPrefixFor(name)).toUpperCase().slice(0, 5);
-  const used = (await db.select({ color: t.sauces.color }).from(t.sauces)).map((r) => r.color);
-  const [row] = await db
-    .insert(t.sauces)
-    .values({ code, name, batchPrefix: prefix, color: nextSauceColor(used) })
-    .returning();
-  await logChange(db, {
-    action: "create",
-    area: "settings",
-    entity: { type: "sauce", id: row!.id, code: name },
-    summary: `Added sauce ${name} (batch codes ${prefix}-…)`,
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const sauces = await tx.select().from(t.sauces);
+    const dup = sauces.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    // Batch codes start with the prefix: two sauces with the same one couldn't be told apart.
+    const sameCodes = sauces.find((x) => (x.batchPrefix ?? batchPrefixFor(x.name)).toUpperCase() === prefix);
+    if (sameCodes) throw new OperationError(`${sameCodes.name} already uses the batch prefix ${prefix}. Choose another one.`);
+    const code = await uniqueCode(tx, slug(name), t.sauces);
+    const [row] = await tx
+      .insert(t.sauces)
+      .values({ code, name, batchPrefix: prefix, color: nextSauceColor(sauces.map((r) => r.color)) })
+      .returning();
+    await logChange(tx, {
+      action: "create",
+      area: "settings",
+      entity: { type: "sauce", id: row!.id, code: name },
+      summary: `Added sauce ${name} (batch codes ${prefix}-…)`,
+    });
+    return row!;
   });
-  return row!;
 }
 
 export async function setSauceColor(db: DB, sauceId: string, color: string) {

@@ -16,7 +16,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames } from "./base";
 
 // ---------------------------------------------------------------- stock count
 
@@ -87,9 +87,14 @@ export async function recordOpeningCount(db: DB, input: { idempotencyKey: string
 export async function addSupplier(db: DB, input: { name: string; contact?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new OperationError("Supplier name is required.");
-  const [row] = await db.insert(t.suppliers).values({ name, contact: input.contact?.trim() || null }).returning();
-  await logChange(db, { action: "create", area: "purchasing", entity: { type: "supplier", id: row!.id, code: name }, summary: `Added supplier ${name}` });
-  return row!;
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const [dup] = await tx.select().from(t.suppliers).where(sql`lower(${t.suppliers.name}) = lower(${name})`);
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    const [row] = await tx.insert(t.suppliers).values({ name, contact: input.contact?.trim() || null }).returning();
+    await logChange(tx, { action: "create", area: "purchasing", entity: { type: "supplier", id: row!.id, code: name }, summary: `Added supplier ${name}` });
+    return row!;
+  });
 }
 
 // ---------------------------------------------------------------- purchase orders and deliveries

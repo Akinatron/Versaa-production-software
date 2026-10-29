@@ -43,6 +43,10 @@ export async function updateSupplier(db: DB, supplierId: string, input: { name: 
     ["Notes", before.notes, after.notes],
   ]);
   if (!changes.length) return;
+  if (name.toLowerCase() !== before.name.toLowerCase()) {
+    const [dup] = await db.select().from(t.suppliers).where(sql`lower(${t.suppliers.name}) = lower(${name}) and ${t.suppliers.id} <> ${supplierId}`);
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+  }
   await db.update(t.suppliers).set(after).where(eq(t.suppliers.id, supplierId));
   await logChange(db, { action: "update", area: "purchasing", entity: { type: "supplier", id: supplierId, code: name }, summary: `Details of ${name} changed`, changes });
 }

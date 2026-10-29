@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, today, type Tx } from "./base";
+import { OperationError, lockNames, today, type Tx } from "./base";
 import { allocate, jarsFree } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -23,9 +23,14 @@ type OutflowType = (typeof t.outflowType.enumValues)[number];
 export async function addCustomer(db: DB, input: { name: string; contact?: string | null; notes?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new OperationError("Customer name is required.");
-  const [row] = await db.insert(t.customers).values({ name, contact: input.contact?.trim() || null, notes: input.notes?.trim() || null }).returning();
-  await logChange(db, { action: "create", area: "sales", entity: { type: "customer", id: row!.id, code: name }, summary: `Added customer ${name}` });
-  return row!;
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const [dup] = await tx.select().from(t.customers).where(sql`lower(${t.customers.name}) = lower(${name})`);
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    const [row] = await tx.insert(t.customers).values({ name, contact: input.contact?.trim() || null, notes: input.notes?.trim() || null }).returning();
+    await logChange(tx, { action: "create", area: "sales", entity: { type: "customer", id: row!.id, code: name }, summary: `Added customer ${name}` });
+    return row!;
+  });
 }
 
 async function productsById(tx: Tx, ids: string[]) {
