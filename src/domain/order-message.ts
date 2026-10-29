@@ -45,12 +45,36 @@ export function longDate(iso: string): string {
   return `${d} ${MONTHS[m! - 1]} ${y}`;
 }
 
+/** "sacks" → "sack", "boxes" → "box", "batteries" → "battery"; "glass" stays. */
+function singular(word: string): string {
+  if (/(ss|us|is)$/i.test(word)) return word;
+  if (/(x|z|ch|sh|ss)es$/i.test(word)) return word.slice(0, -2);
+  if (/[^aeiou]ies$/i.test(word)) return `${word.slice(0, -3)}y`;
+  if (/s$/i.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+/** "sack" → "sacks", "box" → "boxes", "battery" → "batteries". */
+function pluralOf(word: string): string {
+  const one = singular(word);
+  if (/(s|x|z|ch|sh)$/i.test(one)) return `${one}es`;
+  if (/[^aeiou]y$/i.test(one)) return `${one.slice(0, -1)}ies`;
+  return `${one}s`;
+}
+
+/** The pack name for a count, in singular or plural whichever way it was typed: "1 sack", "3 bags", "2 glass jars". */
+export function packWord(name: string | null | undefined, count: number): string {
+  const words = (name?.trim() || "pack").split(/\s+/);
+  const last = words.pop()!;
+  return [...words, count === 1 ? singular(last) : pluralOf(last)].join(" ");
+}
+
 /** Quantity as the supplier sells it: "4 sacks × 25 kg (100 kg)" or "100 kg". */
 export function lineQuantity(l: OrderMessageLine): string {
   const total = formatQty(new Decimal(l.quantity), l.unit);
   if (l.packQty && l.packs !== null && l.packs !== undefined) {
     const size = formatQty(new Decimal(l.packQty), l.unit);
-    return `${l.packs} ${l.packName?.trim() || "packs"} × ${size} (${total})`;
+    return `${l.packs} ${packWord(l.packName, l.packs)} × ${size} (${total})`;
   }
   return total;
 }
