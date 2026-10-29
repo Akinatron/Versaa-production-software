@@ -87,7 +87,7 @@ export default async function BatchPage({
     <li className={batch.status === "closed" ? "ok" : undefined}>
       {batch.status === "closed" ? "Closed" : "Marked as not made"}
       {batch.closedAt ? ` on ${fmtDate(batch.closedAt.toISOString().slice(0, 10))}` : ""}.
-      {batch.status === "cancelled" && batch.note ? ` Reason: ${batch.note}.` : ""}
+      {batch.status === "cancelled" && batch.notMadeReason ? ` Reason: ${batch.notMadeReason}.` : ""}
       {batch.status === "closed" ? " Its packaging can still be edited or deleted." : ""}
     </li>
   ) : null;

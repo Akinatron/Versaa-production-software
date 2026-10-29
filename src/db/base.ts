@@ -40,6 +40,13 @@ export async function itemsById(tx: Tx, ids: string[]) {
   return new Map(rows.map((r) => [r.id, r]));
 }
 
+/** A real calendar date written as YYYY-MM-DD (not 2026-02-31). */
+export function isDate(s: string | null | undefined): s is string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 export function checkWholeUnits(item: typeof t.items.$inferSelect, qty: Decimal) {
   if (item.stockUnit === "unit" && !qty.isInteger()) {
     throw new OperationError(`${item.name} is counted in whole units.`);

@@ -213,7 +213,30 @@ function createWindow() {
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = undefined;
   });
+  // Windows is shutting down, restarting or signing out. It doesn't quit the
+  // app the normal way, so close the database now, while there is time.
+  win.on("query-session-end", () => {
+    log("Windows is ending the session");
+    void shutdown();
+  });
+  win.on("session-end", () => void shutdown());
   return win;
+}
+
+// Stop the server first, then close the database cleanly so nothing is half
+// written. Used when quitting, when Windows shuts down and after a failed start.
+let stopping: Promise<void> | undefined;
+function shutdown(): Promise<void> {
+  quitting = true;
+  stopping ??= (async () => {
+    try {
+      server?.kill();
+      await database?.stop();
+    } catch (err) {
+      log("shutdown problem", err);
+    }
+  })();
+  return stopping;
 }
 
 async function backupNow() {
@@ -321,15 +344,11 @@ if (!app.requestSingleInstanceLock()) {
     start().catch(async (err) => {
       log("start failed", err);
       if (updater) {
-        const recovered = await updater
-          .recoverFromFailedStart(err, async () => {
-            quitting = true;
-            server?.kill();
-            await database?.stop();
-          })
-          .catch((e) => (log("updater: going back failed", e), false));
+        const recovered = await updater.recoverFromFailedStart(err, shutdown).catch((e) => (log("updater: going back failed", e), false));
         if (recovered) return app.exit(1);
       }
+      // Close whatever did start (the database may be open) before leaving.
+      await shutdown();
       dialog.showErrorBox("Versaa could not start", `${err instanceof Error ? err.message : String(err)}\n\nDetails are in ${paths.log}`);
       app.exit(1);
     }),
@@ -346,22 +365,15 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== "darwin") app.quit();
   });
 
-  // Stop the server first, then close the database cleanly so nothing is half written.
+  // Quitting waits until the server is stopped and the database closed.
   let stopped = false;
   app.on("before-quit", (event) => {
     quitting = true;
     if (stopped) return;
     event.preventDefault();
-    void (async () => {
-      try {
-        server?.kill();
-        await database?.stop();
-      } catch (err) {
-        log("shutdown problem", err);
-      } finally {
-        stopped = true;
-        app.quit();
-      }
-    })();
+    void shutdown().finally(() => {
+      stopped = true;
+      app.quit();
+    });
   });
 }

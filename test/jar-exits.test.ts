@@ -4,7 +4,7 @@ import type { DB } from "@/db/client";
 import * as t from "@/db/schema";
 import { confirmRun, createRun, recordOpeningCount } from "@/db/operations";
 import { loadPlanCatalog } from "@/db/planning";
-import { recordIngredients, recordPackaging } from "@/db/production";
+import { changePackaging, recordIngredients, recordPackaging } from "@/db/production";
 import { createSalesOrder, deliverSalesOrder, finishedAvailability, recordOutflow } from "@/db/sales";
 import { lotBalance } from "@/db/ledger";
 import { freshDb, testDbUrl } from "./helpers";
@@ -13,7 +13,8 @@ import { freshDb, testDbUrl } from "./helpers";
  * Jars leaving stock:
  * - lots picked by hand work when an order has the same size on two lines;
  * - broken jars can be written off even when they are promised to an order,
- *   and the app says which orders are now short.
+ *   and the app says which orders are now short;
+ * - the same when a packaging session is lowered or deleted.
  */
 
 const dbs: DB[] = [];
@@ -105,5 +106,27 @@ describe.skipIf(!testDbUrl)("writing off jars promised to an order", () => {
     await expect(recordOutflow(db, { idempotencyKey: "waste2", type: "waste", note: "x", lines: [{ productId: big, jars: 14 }] })).rejects.toThrow(
       /13 in stock/,
     );
+  });
+});
+
+describe.skipIf(!testDbUrl)("lowering or deleting packaging whose jars are promised", () => {
+  it("is allowed, and says which orders are now short", async () => {
+    const { db, big, lotB } = await jarsInTwoLots();
+    const [lot] = await db.select().from(t.lots).where(eq(t.lots.id, lotB));
+    const [session] = await db.select().from(t.packagingSessions).where(eq(t.packagingSessions.batchId, lot!.batchId!));
+    await createSalesOrder(db, { idempotencyKey: "so", destination: "Shop", lines: [{ productId: big, jars: 12 }] });
+    // 15 in stock, 12 promised: taking 2 out leaves 13, still enough.
+    const lower = await changePackaging(db, {
+      idempotencyKey: "lower",
+      sessionId: session!.id,
+      reason: "miscounted",
+      packedOn: session!.packedOn,
+      lines: [{ productId: big, filled: 3, rejected: 0 }],
+    });
+    expect(lower.short).toEqual([]);
+    // Deleting the rest (3 more) leaves 10 for 12 promised.
+    const del = await changePackaging(db, { idempotencyKey: "del", sessionId: session!.id, delete: true, reason: "wrong batch" });
+    expect(del.short).toEqual(["Liberiaanse Kip 700 ml: sales orders are now 2 jars short."]);
+    expect((await lotBalance(db as never, lotB)).toString()).toBe("0");
   });
 });

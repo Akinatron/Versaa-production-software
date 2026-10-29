@@ -261,7 +261,7 @@ export const make: Article[] = [
       { h: "Correcting or deleting a session" },
       "Under **Jars packed**, open a session to edit it: change the numbers or dates, give a reason and press **Save changes**. Stock is corrected by the difference. **Delete session** takes its jars out of stock and puts its materials back; it stays on record and can be restored.",
       "**Best-before** in the edit form has one date per size, each with its own lot's date. Only a date you change is saved, on that size's lot, and it goes in the history.",
-      "This works even after the batch is closed. It is refused if the jars of that session have already left stock and too few are left.",
+      "This works even after the batch is closed. It is refused if the jars of that session have already left stock and too few are left. If the jars taken out were promised to sales orders, it is still saved, and the message says which sizes are now short so you can check those orders.",
     ],
     mistakes: [
       { problem: '"Rejected jars can\'t be more than jars filled".', fix: "Filled counts every jar you filled, good or bad. Rejected is part of it." },
@@ -325,7 +325,7 @@ export const make: Article[] = [
       { h: "Corrections after closing" },
       "Use **Correct the cooking date or note** for those two. Ingredients can still be corrected from **Cook**, and packaging sessions edited from **Pack**, each with a reason.",
       { h: "A batch that wasn't made" },
-      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again.",
+      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again. The reason shows on the batch and in History; the batch's own note is never changed.",
     ],
     changes: [
       "The closed batch's litres (jars filled × fill) feed the measured litres per batch and reject rates used by the next plans.",

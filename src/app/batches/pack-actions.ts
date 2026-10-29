@@ -33,6 +33,9 @@ function done(batchId: string, msg: string): never {
   redirect(withOk(`/batches/${batchId}/pack`, msg));
 }
 
+/** Jars taken back out that were promised to sales orders. */
+const shortNote = (short: string[]) => (short.length ? ` Check your sales orders: ${short.join(" ")}` : "");
+
 export async function recordPack(form: FormData) {
   const batchId = str(form, "batchId");
   await attempt(`/batches/${batchId}/pack`, async () =>
@@ -54,7 +57,7 @@ export async function recordPack(form: FormData) {
 export async function editPack(form: FormData) {
   const batchId = str(form, "batchId");
   const sessionId = str(form, "sessionId");
-  await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
+  const r = await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
     changePackaging(db(), {
       idempotencyKey: str(form, "key"),
       sessionId,
@@ -65,16 +68,19 @@ export async function editPack(form: FormData) {
       lines: jarLines(form),
     }),
   );
-  done(batchId, "Packaging session updated. Stock was corrected by the difference.");
+  done(batchId, `Packaging session updated. Stock was corrected by the difference.${shortNote(r.short)}`);
 }
 
 export async function deletePack(form: FormData) {
   const batchId = str(form, "batchId");
   const sessionId = str(form, "sessionId");
-  await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
+  const r = await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
     changePackaging(db(), { idempotencyKey: str(form, "key"), sessionId, delete: true, reason: str(form, "reason") || null }),
   );
-  done(batchId, "Packaging session deleted. Its jars were taken out of stock and its materials put back; the record is kept for traceability.");
+  done(
+    batchId,
+    `Packaging session deleted. Its jars were taken out of stock and its materials put back; the record is kept for traceability.${shortNote(r.short)}`,
+  );
 }
 
 export async function restorePack(form: FormData) {

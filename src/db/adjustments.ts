@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx } from "./base";
+import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate } from "./base";
 import { lotBalance, lotBalanceAt } from "./ledger";
 import { logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -12,7 +12,6 @@ import { logChange, needReason, type FieldChange, type Ref } from "./changes";
  * explainable and the history stays complete.
  */
 
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export interface CountLine {
   /** An existing lot to recount… */

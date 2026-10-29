@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx, isDate } from "./base";
 import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
@@ -25,7 +25,6 @@ import { parseStorage, storageLabel } from "@/domain/storage";
  */
 
 const D = (v: Decimal.Value | null | undefined) => (v === null || v === undefined ? null : new Decimal(v));
-const isDate = (s: string | null | undefined) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function nextOrderCode(tx: Tx, on: string) {
   const prefix = `PO-${on.replaceAll("-", "")}`;
