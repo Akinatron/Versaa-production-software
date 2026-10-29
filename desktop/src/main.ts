@@ -45,6 +45,10 @@ let server: UtilityProcess | undefined;
 let appUrl: string | undefined;
 let mainWindow: BrowserWindow | undefined;
 let quitting = false;
+/** Windows is shutting down, restarting or signing out. */
+let sessionEnding = false;
+/** Called when the person chose "Stay" on a page with unsaved changes. */
+const onStay = new WeakMap<Electron.WebContents, () => void>();
 
 function log(...parts: unknown[]) {
   const line = `[${new Date().toISOString()}] ${parts.map((p) => (p instanceof Error ? (p.stack ?? p.message) : String(p))).join(" ")}\n`;
@@ -213,14 +217,65 @@ function createWindow() {
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = undefined;
   });
+  // A page with unsaved changes asks the browser's "Leave this page?" question
+  // before it is closed, reloaded or left. Electron doesn't show that question
+  // and silently keeps the page, so the window seemed stuck: ask it here.
+  win.webContents.on("will-prevent-unload", (event) => {
+    // Windows is shutting down: never hold it up.
+    if (sessionEnding) return event.preventDefault();
+    const choice = dialog.showMessageBoxSync(win, {
+      type: "question",
+      buttons: ["Leave", "Stay"],
+      defaultId: 1,
+      cancelId: 1,
+      message: "You have changes that aren't saved yet.",
+      detail: "Leave this page and lose them?",
+    });
+    if (choice === 0) event.preventDefault();
+    else onStay.get(win.webContents)?.();
+  });
+  // Windows: the mouse's side buttons go back and forward.
+  win.on("app-command", (_event, command) => {
+    if (command === "browser-backward") win.webContents.navigationHistory.goBack();
+    if (command === "browser-forward") win.webContents.navigationHistory.goForward();
+  });
   // Windows is shutting down, restarting or signing out. It doesn't quit the
   // app the normal way, so close the database now, while there is time.
   win.on("query-session-end", () => {
     log("Windows is ending the session");
+    sessionEnding = true;
     void shutdown();
   });
-  win.on("session-end", () => void shutdown());
+  win.on("session-end", () => {
+    sessionEnding = true;
+    void shutdown();
+  });
   return win;
+}
+
+/** Close every window. False when one of them chose to stay (unsaved changes). */
+function closeAllWindows(): Promise<boolean> {
+  if (sessionEnding) return Promise.resolve(true);
+  const windows = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+  return Promise.all(
+    windows.map(
+      (w) =>
+        new Promise<boolean>((resolve) => {
+          const contents = w.webContents;
+          const closed = () => {
+            onStay.delete(contents);
+            resolve(true);
+          };
+          w.once("closed", closed);
+          onStay.set(contents, () => {
+            w.off("closed", closed);
+            onStay.delete(contents);
+            resolve(false);
+          });
+          w.close();
+        }),
+    ),
+  ).then((all) => all.every(Boolean));
 }
 
 // Stop the server first, then close the database cleanly so nothing is half
@@ -274,8 +329,8 @@ function buildMenu() {
     {
       label: "View",
       submenu: [
-        { label: "Back", accelerator: "CmdOrCtrl+[", click: (_i, w) => w && (w as BrowserWindow).webContents.navigationHistory.goBack() },
-        { label: "Forward", accelerator: "CmdOrCtrl+]", click: (_i, w) => w && (w as BrowserWindow).webContents.navigationHistory.goForward() },
+        { label: "Back", accelerator: isMac ? "Cmd+[" : "Alt+Left", click: (_i, w) => w && (w as BrowserWindow).webContents.navigationHistory.goBack() },
+        { label: "Forward", accelerator: isMac ? "Cmd+]" : "Alt+Right", click: (_i, w) => w && (w as BrowserWindow).webContents.navigationHistory.goForward() },
         { label: "Home", accelerator: "CmdOrCtrl+Shift+H", click: (_i, w) => w && appUrl && (w as BrowserWindow).loadURL(appUrl) },
         { type: "separator" },
         { role: "reload" },
@@ -367,13 +422,24 @@ if (!app.requestSingleInstanceLock()) {
 
   // Quitting waits until the server is stopped and the database closed.
   let stopped = false;
+  // Windows are closed first, so a page with unsaved changes can still ask
+  // "Leave or stay?" while the server is running. "Stay" cancels the quit.
+  let closingWindows = false;
   app.on("before-quit", (event) => {
-    quitting = true;
     if (stopped) return;
     event.preventDefault();
-    void shutdown().finally(() => {
-      stopped = true;
-      app.quit();
+    if (closingWindows) return;
+    const finish = () =>
+      void shutdown().finally(() => {
+        stopped = true;
+        app.quit();
+      });
+    // Already shutting down (a failed start, or Windows ending the session).
+    if (quitting) return finish();
+    closingWindows = true;
+    void closeAllWindows().then((closed) => {
+      closingWindows = false;
+      if (closed) finish();
     });
   });
 }
