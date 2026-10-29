@@ -55,7 +55,7 @@ pnpm db:seed        # load the starting catalog (safe to repeat)
 pnpm dev            # http://localhost:3000
 ```
 
-`pnpm dev` and `pnpm start` only answer on this computer (127.0.0.1). Other devices on the same Wi-Fi can't open the app, because it has no sign-in.
+`pnpm dev` and `pnpm start` only answer on this computer (127.0.0.1). Other devices on the same Wi-Fi can't open the app, because it has no sign-in. The app also turns away any request that doesn't come in as `localhost` or `127.0.0.1` (`src/middleware.ts`), so a web page can't reach it by pointing its own name at this computer.
 
 Uploaded delivery notes and invoices are saved in an `uploads` folder next to the app (set `UPLOADS_DIR` to keep them elsewhere). That folder is not in git; back it up together with the database.
 
