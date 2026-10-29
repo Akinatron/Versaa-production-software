@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keepInput } from "@/app/components/flash";
+import { keepInput } from "@/app/components/keep-input";
 import { OperationError } from "@/db/operations";
 
 describe("forms that keep what was typed", () => {

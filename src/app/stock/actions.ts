@@ -8,7 +8,8 @@ import { eq } from "drizzle-orm";
 import * as t from "@/db/schema";
 import { OperationError } from "@/db/base";
 import { recordStockCount, recordWriteOff, setAdjustmentDeleted, type CountLine } from "@/db/adjustments";
-import { attempt, keepInput, withOk } from "../components/flash";
+import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 
 export async function saveOpeningCount(form: FormData) {
   return keepInput(async () => {
@@ -53,28 +54,22 @@ export async function saveStockCount(form: FormData) {
 
 export async function saveWriteOff(form: FormData) {
   return keepInput(async () => {
-    const itemId = s(form, "itemId");
     const type = s(form, "type");
-    const r = await (async () => {
-      if (type !== "waste" && type !== "internal_use" && type !== "sample") throw new OperationError("Choose what happened: waste, internal use or sample.");
-      return recordWriteOff(db(), {
-        idempotencyKey: s(form, "key"),
-        type,
-        reason: s(form, "reason"),
-        occurredOn: s(form, "occurredOn"),
-        lines: [{ lotId: s(form, "lotId"), quantity: s(form, "quantity") }],
-      });
-    })();
+    if (type !== "waste" && type !== "internal_use" && type !== "sample") throw new OperationError("Choose what happened: waste, internal use or sample.");
+    const r = await recordWriteOff(db(), {
+      idempotencyKey: s(form, "key"),
+      type,
+      reason: s(form, "reason"),
+      occurredOn: s(form, "occurredOn"),
+      lines: [{ lotId: s(form, "lotId"), quantity: s(form, "quantity") }],
+    });
     revalidatePath("/stock");
     const [lot] = await db()
       .select({ itemId: t.lots.itemId })
       .from(t.lots)
       .where(eq(t.lots.id, s(form, "lotId")));
     redirect(
-      withOk(
-        lot ? `/items/${lot.itemId}?tab=stock` : "/stock",
-        r.alreadyRecorded ? "That was already recorded." : "Written off. The stock and history are updated.",
-      ),
+      withOk(lot ? `/items/${lot.itemId}?tab=stock` : "/stock", r.alreadyRecorded ? "That was already recorded." : "Written off. The stock and history are updated."),
     );
   });
 }

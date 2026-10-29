@@ -7,7 +7,8 @@ import { recordReceipt } from "@/db/operations";
 import { correctReceipt, setReceiptDeleted } from "@/db/purchasing";
 import { attachDocuments, checkUploads } from "@/db/documents";
 import { filesFrom } from "../documents/files-from";
-import { attempt, keepInput, withOk } from "../components/flash";
+import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 
 export async function saveDelivery(form: FormData) {

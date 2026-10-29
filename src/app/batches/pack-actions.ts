@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { OperationError } from "@/db/operations";
 import { changePackaging, recordPackaging, type PackagingLineInput } from "@/db/production";
-import { attempt, keepInput, withOk } from "../components/flash";
+import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 
 const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
