@@ -3,6 +3,8 @@ import { describePrice, money, unitPrice, type Offer } from "@/domain/pricing";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { linkAction, moveRankAction, setOfferAction, unlinkAction } from "../suppliers/actions";
 import { fmtDate } from "./ui/format";
+import { ReasonField } from "./history";
+import { ConfirmButton } from "./unsaved-guard";
 
 /** Edit one supplier ↔ item link: pack size, pack name and price. Used on both cards. */
 export function OfferForm({
@@ -11,8 +13,10 @@ export function OfferForm({
   back,
   supplierCode,
   open,
+  itemName,
 }: {
   offer: Offer;
+  itemName: string;
   unit: UnitCode;
   back: string;
   supplierCode?: string | null;
@@ -53,9 +57,22 @@ export function OfferForm({
         <button type="submit" className="sm">
           Save
         </button>
-        <button type="submit" formAction={unlinkAction} className="ghost sm">
+      </form>
+      {/* Kept apart from Save, with a reason and a question: removing a favourite changes who plans and orders use. */}
+      <form action={unlinkAction} className="row unlink" style={{ gap: 8, alignItems: "end" }}>
+        <input type="hidden" name="supplierItemId" value={offer.supplierItemId} />
+        <input type="hidden" name="back" value={back} />
+        <ReasonField
+          id={`unlink-${offer.supplierItemId}`}
+          label={`Stop buying ${itemName} from ${offer.supplierName}?`}
+          placeholder="Why? Goes in the history"
+        />
+        <ConfirmButton
+          className="danger sm"
+          message={`Stop buying ${itemName} from ${offer.supplierName}?${offer.rank === 1 ? " It is the favourite: plans and orders will use the next supplier." : ""}`}
+        >
           Remove link
-        </button>
+        </ConfirmButton>
       </form>
     </details>
   );

@@ -308,6 +308,7 @@ export const make: Article[] = [
       "Open the batch's **Close** step, or press **Finished packing: close batch** in Pack.",
       "The top card says what is next. When it says **Ready to close**, read the summary below it.",
       "Press **Close batch**. If there is still sauce, press **Pack more** first.",
+      "If it is the last open batch of its run, the app asks first: closing it also closes the run and frees the stock still reserved for it, and that can't be undone.",
     ],
     more: [
       { h: "What the summary shows" },
@@ -323,7 +324,7 @@ export const make: Article[] = [
       { h: "Incidents" },
       "Under **Incidents**, record anything that happened (Loss, Spill, Quality, Other) with a date and what happened. It is a note on the batch record and doesn't change stock; record lost jars as a write-off or stock exit.",
       { h: "Corrections after closing" },
-      "Use **Correct the cooking date or note** for those two. Ingredients can still be corrected from **Cook**, and packaging sessions edited from **Pack**, each with a reason.",
+      "Closing doesn't lock anything. Use **Correct the cooking date or note** for those two. Ingredients can still be corrected from **Cook**, and packaging sessions edited or deleted from **Pack**, each with a reason. A new packaging session can't be added to a closed batch, and a closed batch can't be reopened.",
       { h: "A batch that wasn't made" },
       "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again. The reason shows on the batch and in History; the batch's own note is never changed.",
     ],

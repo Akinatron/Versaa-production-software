@@ -12,6 +12,7 @@ import { PO_STATUS } from "../../components/labels";
 import { MarkSentForm } from "../../components/order-bits";
 import { cancelOrder, closeOrderAction, restoreOrder, updateDraftAction } from "../actions";
 import { EditedMark, History, ReasonField } from "../../components/history";
+import { GuardedForm, UnsavedGroup, WhenSaved } from "../../components/unsaved-guard";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
 import { documentsFor, removedDocumentsFor } from "@/db/documents";
@@ -55,7 +56,7 @@ export default async function OrderPage({
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
   const editForm = (correcting: boolean) => (
-    <form action={updateDraftAction}>
+    <GuardedForm action={updateDraftAction}>
       <input type="hidden" name="poId" value={po.id} />
       {correcting && <input type="hidden" name="correcting" value="1" />}
       <div className="card scroll">
@@ -147,7 +148,7 @@ export default async function OrderPage({
       <div className="form-actions">
         <button type="submit">{correcting ? "Save correction" : "Save draft"}</button>
       </div>
-    </form>
+    </GuardedForm>
   );
 
   return (
@@ -196,20 +197,22 @@ export default async function OrderPage({
         </form>
       )}
 
-      {po.status === "draft" && (
-        <div className="card">
-          <strong>Not sent yet.</strong>
-          <p className="small muted" style={{ margin: "4px 0 8px" }}>
-            Place the order with {supplier.name}, then mark it as sent. Until then it doesn't count as on order.
-          </p>
-          {sendOrder}
-          <hr style={{ margin: "16px 0" }} />
-          <MarkSentForm poId={po.id} back={back} expectedOn={po.expectedOn} />
-        </div>
-      )}
-
       {po.status === "draft" ? (
-        editForm(false)
+        // Lines first: the message and "Mark as sent" below use what is saved, so they wait while there are unsaved changes.
+        <UnsavedGroup>
+          {editForm(false)}
+          <WhenSaved note="Save the draft first: the message and Mark as sent use the saved quantities.">
+            <div className="card">
+              <strong>Not sent yet.</strong>
+              <p className="small muted" style={{ margin: "4px 0 8px" }}>
+                Place the order with {supplier.name}, then mark it as sent. Until then it doesn't count as on order.
+              </p>
+              {sendOrder}
+              <hr style={{ margin: "16px 0" }} />
+              <MarkSentForm poId={po.id} back={back} />
+            </div>
+          </WhenSaved>
+        </UnsavedGroup>
       ) : (
         <div className="card scroll">
           <table>

@@ -420,7 +420,7 @@ async function SuppliersTab({ item, offers, here, edit }: { item: Item; offers: 
                   )}
                 </div>
                 <PriceText offer={o} unit={unit} />
-                <OfferForm offer={o} unit={unit} back={here} supplierCode={link?.supplierCode} open={edit === o.supplierItemId} />
+                <OfferForm offer={o} itemName={item.name} unit={unit} back={here} supplierCode={link?.supplierCode} open={edit === o.supplierItemId} />
                 <PriceHistory rows={history.filter((h) => h.supplierItemId === o.supplierItemId)} unit={unit} />
               </li>
             );

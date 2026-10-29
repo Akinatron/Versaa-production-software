@@ -37,8 +37,22 @@ describe("order message", () => {
     expect(text).not.toContain("Salt");
     expect(orderTotal([...lines, { name: "Salt", quantity: "1", unit: "kg" }])).toBeNull();
   });
+  it("writes the pack name in singular or plural, however it was typed", () => {
+    const line = (packName: string, packs: number) => lineQuantity({ name: "X", quantity: String(packs), unit: "kg", packQty: "1", packs, packName });
+    expect(line("bag", 3)).toBe("3 bags × 1 kg (3 kg)");
+    expect(line("bags", 1)).toBe("1 bag × 1 kg (1 kg)");
+    expect(line("bags", 2)).toBe("2 bags × 1 kg (2 kg)");
+    expect(line("box", 2)).toBe("2 boxes × 1 kg (2 kg)");
+    expect(line("boxes", 1)).toBe("1 box × 1 kg (1 kg)");
+    expect(line("glass jar", 6)).toBe("6 glass jars × 1 kg (6 kg)");
+    expect(line("glass", 2)).toBe("2 glasses × 1 kg (2 kg)");
+    expect(line("battery", 2)).toBe("2 batteries × 1 kg (2 kg)");
+    expect(line("pouch", 2)).toBe("2 pouches × 1 kg (2 kg)");
+  });
+
   it("names packs generically when the supplier gave no pack name", () => {
     expect(lineQuantity({ name: "Oil", quantity: "20", unit: "L", packQty: "5", packs: 4 })).toBe("4 packs × 5 L (20 L)");
+    expect(lineQuantity({ name: "Oil", quantity: "5", unit: "L", packQty: "5", packs: 1 })).toBe("1 pack × 5 L (5 L)");
   });
 });
 

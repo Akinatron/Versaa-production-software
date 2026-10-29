@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
 import { fefo } from "./ledger";
+import { unitWord } from "@/domain/quantity";
 
 /*
  * How a document (a batch's ingredient line, a packaging session) uses lots,
@@ -125,7 +126,7 @@ export function checkManualSplit(item: { id: string; name: string; stockUnit: st
     if (!lot) throw new OperationError(`${item.name}: one of the chosen lots isn't a lot of ${item.name}.`);
     const more = qty.minus(current.get(lotId) ?? D0);
     if (more.gt(lot.balance)) {
-      throw new OperationError(`${item.name}: lot ${lot.code} only has ${Decimal.max(D0, lot.balance)} ${item.stockUnit} left.`);
+      throw new OperationError(`${item.name}: lot ${lot.code} only has ${Decimal.max(D0, lot.balance)} ${unitWord(item.stockUnit)} left.`);
     }
   }
 }

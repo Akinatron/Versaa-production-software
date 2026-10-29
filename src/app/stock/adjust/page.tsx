@@ -53,7 +53,7 @@ async function lotsOf(itemId: string | null, on?: string) {
       supplier: t.suppliers.name,
       batchCode: t.productionBatches.code,
       balance: until
-        ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until}), 0)`
+        ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until.toISOString()}), 0)`
         : sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`,
     })
     .from(t.lots)

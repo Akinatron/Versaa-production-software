@@ -11,7 +11,7 @@ import { OrderItems } from "./order-items";
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** "Mark as sent": draft → sent, with the date it was sent. */
-export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string; back: string; compact?: boolean; expectedOn?: string | null }) {
+export function MarkSentForm({ poId, back, compact }: { poId: string; back: string; compact?: boolean }) {
   return (
     <form
       action={markSentAction}
@@ -30,12 +30,6 @@ export function MarkSentForm({ poId, back, compact, expectedOn }: { poId: string
         <div>
           <label className="small">Sent on</label>
           <input name="sentOn" type="date" defaultValue={today()} style={{ maxWidth: 160 }} />
-        </div>
-      )}
-      {!compact && (
-        <div>
-          <label className="small">Expected delivery (optional)</label>
-          <input name="expectedOn" type="date" defaultValue={expectedOn ?? ""} style={{ maxWidth: 150 }} />
         </div>
       )}
       <button type="submit" className={compact ? "sm" : undefined} title={compact ? "Marks it as sent today. To use another date, open the order." : undefined}>

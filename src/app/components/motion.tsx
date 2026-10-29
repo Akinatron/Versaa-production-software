@@ -67,7 +67,9 @@ export function Motion() {
       const button = e.submitter as HTMLElement | null;
       // Forms that run a server action carry React's hidden $ACTION_ fields; other prevented submits are handled in the page.
       const serverAction =
-        !!form.querySelector('input[name^="$ACTION_"]') || (button?.getAttribute("formaction") ?? form.getAttribute("action") ?? "").startsWith("javascript:");
+        form.hasAttribute("data-keeps-input") ||
+        !!form.querySelector('input[name^="$ACTION_"]') ||
+        (button?.getAttribute("formaction") ?? form.getAttribute("action") ?? "").startsWith("javascript:");
       if (!button || (e.defaultPrevented && !serverAction) || form.target === "_blank") return;
       // A frame later, so the form data (including the button's own name/value) has been read.
       requestAnimationFrame(() => {

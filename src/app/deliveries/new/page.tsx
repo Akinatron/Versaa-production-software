@@ -151,7 +151,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                         <span className="muted">—</span>
                       </>
                     ) : (
-                      <select name={`st_${i}`} defaultValue="" aria-label={`Where ${l.item.name} is kept`}>
+                      <select name={`st_${i}`} defaultValue="" aria-label={`Where ${l.item.name} is kept`} style={{ minWidth: 150 }}>
                         <option value="">{l.item.storage ? `${storageLabel(l.item.storage)} (as on its card)` : "Not set on its card"}</option>
                         {STORAGE_KEYS.filter((k) => k !== l.item.storage).map((k) => (
                           <option key={k} value={k}>
@@ -187,7 +187,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                       <input name={`bb_${i}`} type="date" aria-label="Best before" />
                     </td>
                     <td>
-                      <select name={`st_${i}`} defaultValue="" aria-label="Where it is kept">
+                      <select name={`st_${i}`} defaultValue="" aria-label="Where it is kept" style={{ minWidth: 150 }}>
                         <option value="">As on its card</option>
                         {STORAGE_KEYS.map((k) => (
                           <option key={k} value={k}>

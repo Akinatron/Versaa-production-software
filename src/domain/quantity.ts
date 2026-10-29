@@ -26,6 +26,9 @@ export function isUnitCode(value: string): value is UnitCode {
   return value in UNITS;
 }
 
+/** The unit as people read it ("units", not "unit"), for messages. */
+export const unitWord = (unit: string) => (isUnitCode(unit) ? UNITS[unit].label : unit);
+
 export function dimensionOf(unit: UnitCode): Dimension {
   return UNITS[unit].dimension;
 }

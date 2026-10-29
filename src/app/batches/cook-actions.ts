@@ -10,6 +10,7 @@ import { OperationError } from "@/db/operations";
 import { recordIngredients } from "@/db/production";
 import { withOk } from "../components/flash";
 import type { FormResult } from "./[id]/cook/ingredients-form";
+import { plural } from "../components/ui/format";
 
 const Payload = z.array(
   z.object({
@@ -51,6 +52,6 @@ export async function recordIngredientsAction(_prev: FormResult, form: FormData)
     ? "Already recorded."
     : result.changed === 0
       ? "Recorded. Nothing had changed, so stock stays as it was."
-      : `Recorded ${result.changed} ingredient line(s). Stock is updated.`;
+      : `Recorded ${plural(result.changed, "ingredient line")}. Stock is updated.`;
   redirect(withOk(`/batches/${batchId}/cook`, msg));
 }

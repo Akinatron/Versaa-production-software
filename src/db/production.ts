@@ -10,6 +10,7 @@ import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import type { PlanResult } from "@/domain/planner";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 /*
  * Recording production and packaging.
@@ -1007,7 +1008,7 @@ export async function restoreBatch(db: DB, input: { batchId: string; reason: str
     const { batch, run } = await getBatch(tx, input.batchId);
     if (batch.status !== "cancelled") throw new OperationError(`${batch.code} isn't marked as not made.`);
     if (run.status === "closed" || run.status === "cancelled")
-      throw new OperationError(`Run ${run.code} is ${run.status}, so its batches can't come back. Plan a new run instead.`);
+      throw new OperationError(`Run ${run.code} is ${inSentence(RUN_STATUS_NAME, run.status)}, so its batches can't come back. Plan a new run instead.`);
     await tx.update(t.productionBatches).set({ status: "planned", closedAt: null, notMadeReason: null }).where(eq(t.productionBatches.id, batch.id));
     const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
     for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);

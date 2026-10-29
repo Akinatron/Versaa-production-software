@@ -37,6 +37,8 @@ export const start: Article[] = [
         },
       },
       "A number next to a menu entry means work is waiting there: batches to cook or pack, draft orders not sent, deliveries on the way, sales orders to deliver.",
+      "To go back a page, use the back link above the title (for example **← Stock**), **Alt+←** on the keyboard, or the back button on the side of the mouse.",
+      "If saving fails, the app says why and keeps everything you typed, so you only fix what it points out. If you try to leave a page with changes not saved yet, it asks first.",
       { h: "Three ideas behind everything" },
       {
         ul: [

@@ -6,7 +6,7 @@ import { OperationError, lockNames, type Tx } from "./base";
 import { diff, logChange, type FieldChange } from "./changes";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
-import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
+import { dimensionOf, isUnitCode, type UnitCode, unitWord } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
 import { parseStorage, storageLabel } from "@/domain/storage";
 import { isBoughtKind, KIND_CODE_PREFIX, type BoughtKind } from "@/domain/item-kinds";
@@ -70,7 +70,7 @@ export async function saveRecipeDraft(db: DB, input: { versionId: string; batchR
       seen.add(item.id);
       if (!isUnitCode(l.unit)) throw new OperationError(`${item.name}: choose a unit.`);
       if (dimensionOf(l.unit) !== dimensionOf(item.stockUnit as UnitCode)) {
-        throw new OperationError(`${item.name} is stocked in ${item.stockUnit}, so the recipe can't use ${l.unit}.`);
+        throw new OperationError(`${item.name} is stocked in ${unitWord(item.stockUnit)}, so the recipe can't use ${unitWord(l.unit)}.`);
       }
       const q = new Decimal(l.quantity || "NaN");
       if (q.isNaN() || q.lte(0)) throw new OperationError(`${item.name}: enter a quantity more than 0, or remove the line.`);

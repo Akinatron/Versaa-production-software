@@ -206,7 +206,7 @@ details.card:has(> table) > :not(table):not(summary) { margin-left: 0; margin-ri
 .card.flush { padding: 0; }
 .card.flush > table th:first-child, .card.flush > table td:first-child { padding-left: 20px; }
 .card.flush > table th:last-child, .card.flush > table td:last-child { padding-right: 20px; }
-.card-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 10px; }
 .card-head h2, .card-head h3, .card-head strong { margin: 0; font-size: 1rem; }
 .card-head .more { margin-left: auto; font-size: 0.85rem; }
 a.card { display: block; color: inherit; transition: border-color 150ms ease; }
@@ -296,6 +296,8 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 .price-edit > summary:hover { background: var(--surface-2); }
 .price-edit > summary::before { display: none; }
 .price-edit[open] > summary { margin-bottom: 10px; }
+.price-edit .unlink { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.price-edit .unlink .field { flex: 0 1 320px !important; margin: 0; }
 .offerlist > li:target { scroll-margin-top: 80px; }
 
 .supplier-prices { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; white-space: nowrap; }
@@ -582,7 +584,7 @@ button.linkish:hover { background: none; }
 .label-cell { width: var(--jl-w); height: var(--jl-h); outline: 1px dashed #d4d4d4; outline-offset: -1px; }
 .label-pick { all: unset; display: block; width: 100%; height: 100%; box-sizing: border-box; cursor: pointer; position: relative; }
 .label-pick:hover, .label-pick:focus-visible { background: #eef4ff; outline: 2px solid #4f7cff; outline-offset: -2px; }
-.label-pos { position: absolute; inset: 0; display: grid; place-items: center; font: 8pt Helvetica, Arial, sans-serif; color: #b0b0b0; }
+.label-pos { position: absolute; inset: 0; display: grid; place-items: center; font: 8pt Helvetica, Arial, sans-serif; color: #6b6b6b; }
 .label-single { width: var(--jl-w); height: var(--jl-h); background: #fff; color: #000; box-shadow: var(--shadow); }
 .jar-label { width: 100%; height: 100%; box-sizing: border-box; padding: 2mm 2.5mm 1.6mm; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; line-height: 1.15; }
 .jl-name { font-weight: 700; font-size: 8.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

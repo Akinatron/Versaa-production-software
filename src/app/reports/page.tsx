@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 import type { PlanResult } from "@/domain/planner";
 import { OUTFLOW } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
-import { fmtDate } from "../components/ui/format";
+import { fmtDate, plural } from "../components/ui/format";
 import { SauceName } from "../components/sauce-name";
 
 export const dynamic = "force-dynamic";
@@ -256,7 +256,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </table>
             <p className="small muted" style={{ marginBottom: 0 }}>
               Only deliveries of type "sale" count. Revenue from recorded prices (not profit): jars sold × the unit price recorded on the order.
-              {totalUnpriced > 0 && ` ${totalUnpriced} jar(s) had no price recorded, so their revenue is unknown and not included.`}
+              {totalUnpriced > 0 && ` ${plural(totalUnpriced, "jar")} had no price recorded, so their revenue is unknown and not included.`}
             </p>
           </>
         )}
