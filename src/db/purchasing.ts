@@ -8,10 +8,11 @@ import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCod
 import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
-import { UNITS, type UnitCode } from "@/domain/quantity";
+import { UNITS, type UnitCode, unitWord } from "@/domain/quantity";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
+import { inSentence, PO_STATUS_NAME } from "@/domain/status";
 
 /*
  * Purchase orders and deliveries.
@@ -253,7 +254,7 @@ export async function updateDraftOrder(
       }
       const got = arrived.get(line.id);
       if (got && quantity.lt(got.accepted)) {
-        throw new OperationError(`${item.name}: ${got.accepted} ${item.stockUnit} has already arrived, so the order can't be lowered below that.`);
+        throw new OperationError(`${item.name}: ${got.accepted} ${unitWord(item.stockUnit)} has already arrived, so the order can't be lowered below that.`);
       }
       if (quantity.isZero()) {
         if (got) throw new OperationError(`${item.name} has deliveries recorded, so its line can't be removed.`);
@@ -491,7 +492,7 @@ export async function recordReceipt(
         const pl = poLines.find((p) => p.line.id === line.purchaseOrderLineId);
         if (!pl || pl.line.itemId !== item.id) throw new OperationError(`${item.name}: order line doesn't match this item.`);
         if (pl.po.status === "draft") throw new OperationError(`${pl.po.code} is still a draft. Mark it as sent first.`);
-        if (pl.po.status === "cancelled" || pl.po.status === "closed") throw new OperationError(`${pl.po.code} is ${pl.po.status}.`);
+        if (pl.po.status === "cancelled" || pl.po.status === "closed") throw new OperationError(`${pl.po.code} is ${inSentence(PO_STATUS_NAME, pl.po.status)}.`);
       }
       let lotId: string | null = null;
       if (line.accepted.gt(0)) {

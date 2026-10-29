@@ -17,6 +17,7 @@ import { diff, logChange, needReason } from "./changes";
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
 import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames, isDate } from "./base";
+import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
 
@@ -218,7 +219,7 @@ export async function confirmRun(db: DB, runId: string) {
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run) throw new OperationError("Run not found.");
     if (run.status === "confirmed") return { run, alreadyConfirmed: true };
-    if (run.status !== "draft") throw new OperationError(`This run is ${run.status} and can't be confirmed.`);
+    if (run.status !== "draft") throw new OperationError(`This run is ${inSentence(RUN_STATUS_NAME, run.status)} and can't be confirmed.`);
 
     const plan = await planForRun(tx as unknown as DB, runId);
     const blockers = plan.issues.filter((i) => i.level === "blocker");
@@ -259,7 +260,7 @@ export async function cancelRun(db: DB, runId: string, reason?: string | null) {
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run) throw new OperationError("Run not found.");
     if (run.status === "cancelled") return;
-    if (!["draft", "confirmed"].includes(run.status)) throw new OperationError(`A run that is ${run.status} can't be cancelled.`);
+    if (!["draft", "confirmed"].includes(run.status)) throw new OperationError(`A run that is ${inSentence(RUN_STATUS_NAME, run.status)} can't be cancelled.`);
     const why = run.status === "draft" ? reason?.trim() || null : needReason(reason, "Say why the run is cancelled");
     const batches = await tx.select({ id: t.productionBatches.id, code: t.productionBatches.code }).from(t.productionBatches).where(eq(t.productionBatches.runId, runId));
     await tx.update(t.productionBatches).set({ status: "cancelled", closedAt: new Date() }).where(eq(t.productionBatches.runId, runId));

@@ -5,6 +5,7 @@ import * as t from "./schema";
 import { OperationError, lockNames, today, type Tx, isDate } from "./base";
 import { allocate, jarsFree } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { inSentence, SALES_STATUS_NAME } from "@/domain/status";
 
 /*
  * Sales and other outflows of finished jars.
@@ -129,7 +130,7 @@ export async function cancelSalesOrder(db: DB, salesOrderId: string, reason?: st
   return db.transaction(async (tx) => {
     const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, salesOrderId));
     if (!o) throw new OperationError("Order not found.");
-    if (o.status !== "pending") throw new OperationError(`This order is already ${o.status}.`);
+    if (o.status !== "pending") throw new OperationError(`This order is already ${inSentence(SALES_STATUS_NAME, o.status)}.`);
     const why = needReason(reason, "Say why the order is cancelled");
     await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, o.id), isNull(t.reservations.releasedAt)));
     await tx.update(t.salesOrders).set({ status: "cancelled" }).where(eq(t.salesOrders.id, o.id));
@@ -199,7 +200,7 @@ export async function updateSalesOrder(
   return db.transaction(async (tx) => {
     const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, input.salesOrderId));
     if (!o) throw new OperationError("Order not found.");
-    if (o.status !== "pending") throw new OperationError(`This order is ${o.status}, so it can't be changed.${o.status === "delivered" ? " Correct its delivery instead." : ""}`);
+    if (o.status !== "pending") throw new OperationError(`This order is ${inSentence(SALES_STATUS_NAME, o.status)}, so it can't be changed.${o.status === "delivered" ? " Correct its delivery instead." : ""}`);
     const old = await tx.select().from(t.salesOrderLines).where(eq(t.salesOrderLines.salesOrderId, o.id));
     const products = await productsById(tx, [...new Set([...old.map((l) => l.productId), ...lines.map((l) => l.productId)])]);
     for (const l of lines) if (!products.get(l.productId)) throw new OperationError("Unknown product.");
@@ -251,7 +252,7 @@ export async function deliverSalesOrder(
     await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
     const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, input.salesOrderId));
     if (!o) throw new OperationError("Order not found.");
-    if (o.status !== "pending") throw new OperationError(`This order is already ${o.status}.`);
+    if (o.status !== "pending") throw new OperationError(`This order is already ${inSentence(SALES_STATUS_NAME, o.status)}.`);
     const lines = await tx.select().from(t.salesOrderLines).where(eq(t.salesOrderLines.salesOrderId, o.id));
     const lotsByLine = await splitChosenLots(tx, lines, input.lots);
     const { outflow } = await writeOutflow(tx, {
@@ -504,9 +505,9 @@ export async function setOutflowDeleted(db: DB, input: { idempotencyKey: string;
         if (new Decimal(row?.q ?? 0).lt(l.line.jars)) problems.push(`${l.product.name}: lot ${l.lot.code} only has ${row?.q ?? 0} jars left.`);
       }
       if (problems.length) throw new OperationError(`Those jars aren't in stock any more, so this can't be restored. ${problems.join(" ")}`);
-      if (so && so.status !== "pending") throw new OperationError(`Sales order ${so.code} is ${so.status} now, so this delivery can't come back.`);
+      if (so && so.status !== "pending") throw new OperationError(`Sales order ${so.code} is ${inSentence(SALES_STATUS_NAME, so.status)} now, so this delivery can't come back.`);
     } else if (so && so.status !== "delivered") {
-      throw new OperationError(`Sales order ${so.code} is ${so.status}; it can't go back to "to deliver".`);
+      throw new OperationError(`Sales order ${so.code} is ${inSentence(SALES_STATUS_NAME, so.status)}; it can't go back to "to deliver".`);
     }
     const changeId = await logOutflow(
       tx,

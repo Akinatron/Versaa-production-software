@@ -1,18 +1,20 @@
+import { PO_STATUS_NAME, RUN_STATUS_NAME, SALES_STATUS_NAME } from "@/domain/status";
+
 export const RUN_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "neutral" },
-  confirmed: { label: "Confirmed", cls: "info" },
-  in_progress: { label: "In production", cls: "info" },
-  closed: { label: "Done", cls: "ok" },
-  cancelled: { label: "Cancelled", cls: "" },
+  draft: { label: RUN_STATUS_NAME.draft, cls: "neutral" },
+  confirmed: { label: RUN_STATUS_NAME.confirmed, cls: "info" },
+  in_progress: { label: RUN_STATUS_NAME.in_progress, cls: "info" },
+  closed: { label: RUN_STATUS_NAME.closed, cls: "ok" },
+  cancelled: { label: RUN_STATUS_NAME.cancelled, cls: "" },
 };
 
 export const PO_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft, not sent", cls: "warn" },
-  sent: { label: "Sent", cls: "info" },
-  partly_received: { label: "Partly received", cls: "info" },
-  received: { label: "Received", cls: "ok" },
-  closed: { label: "Closed (not all arrived)", cls: "" },
-  cancelled: { label: "Cancelled", cls: "" },
+  draft: { label: PO_STATUS_NAME.draft, cls: "warn" },
+  sent: { label: PO_STATUS_NAME.sent, cls: "info" },
+  partly_received: { label: PO_STATUS_NAME.partly_received, cls: "info" },
+  received: { label: PO_STATUS_NAME.received, cls: "ok" },
+  closed: { label: PO_STATUS_NAME.closed, cls: "" },
+  cancelled: { label: PO_STATUS_NAME.cancelled, cls: "" },
 };
 
 export const MOVEMENT: Record<string, string> = {
@@ -40,9 +42,9 @@ export const BATCH_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 export const SALES_STATUS: Record<string, { label: string; cls: string }> = {
-  pending: { label: "To deliver", cls: "info" },
-  delivered: { label: "Delivered", cls: "ok" },
-  cancelled: { label: "Cancelled", cls: "" },
+  pending: { label: SALES_STATUS_NAME.pending, cls: "info" },
+  delivered: { label: SALES_STATUS_NAME.delivered, cls: "ok" },
+  cancelled: { label: SALES_STATUS_NAME.cancelled, cls: "" },
 };
 
 /** Reasons a jar leaves stock, in the order they're offered. Only "sale" counts as sales. */

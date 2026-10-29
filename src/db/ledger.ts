@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
+import { unitWord } from "@/domain/quantity";
 
 /** Current balance of each lot of the given items (only lots with stock left). */
 export async function lotBalances(tx: Tx, itemIds: string[]) {
@@ -87,7 +88,7 @@ export async function allocate(
         if (other && other.itemId !== item.id) throw new OperationError(`${item.name}: lot ${other.code} is a different item.`);
         throw new OperationError(`${item.name}: ${other ? `lot ${other.code}` : "that lot"} has no stock left.`);
       }
-      if (lot.balance.lt(q)) throw new OperationError(`${item.name}: lot ${lot.code} only has ${lot.balance} ${item.stockUnit} left.`);
+      if (lot.balance.lt(q)) throw new OperationError(`${item.name}: lot ${lot.code} only has ${lot.balance} ${unitWord(item.stockUnit)} left.`);
       out.push({ lotId: lot.id, quantity: q });
     }
     return out;
