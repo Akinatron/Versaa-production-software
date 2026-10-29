@@ -195,4 +195,13 @@ export const FAQ: Faq[] = [
     a: ["Yes: turn on **Developer mode** at the bottom of Settings and press **Show mock data**. Nothing you do there is kept."],
     related: ["developer-mode"],
   },
+  {
+    area: "basics",
+    q: "What do \"Page not found\" and \"Something went wrong\" mean?",
+    a: [
+      "**Page not found**: the address leads nowhere, for example an old link or something mistyped. Go **Back to Today**, or find the record in [History](/history).",
+      "**Something went wrong**: the page failed in a way the app didn't expect. What was saved before is safe. Press **Try again**; if you had just pressed a button, check the page it was for before doing it again, because it may already be saved.",
+    ],
+    related: ["corrections"],
+  },
 ];

@@ -41,7 +41,7 @@ export const keep: Article[] = [
           "Top line: **in stock now**, lots with stock, where it is **kept**, and its favourite supplier with the price.",
           "**Order** opens a new purchase order for this item with its favourite supplier.",
           "**Item details**: storage place and shelf life (ingredients), **Rename**, and **Retire** / **Bring back**.",
-          "**Stock** tab: **Lots with stock** (where each came from, date, best-before, kept in, left), empty lots, and **Stock movements**: every in and out with date, what happened, lot and change.",
+          "**Stock** tab: **Lots with stock** (where each came from, date, best-before, kept in, left), empty lots, and **Stock movements**: every in and out with date, what happened, lot and change. It shows the latest 50; **Show all movements** lists every one.",
           "**Suppliers** tab: every supplier that sells it in favourite order, with price, price history and **Add supplier**.",
           "**History** at the bottom: every change made to the item.",
         ],

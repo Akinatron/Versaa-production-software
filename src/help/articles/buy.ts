@@ -83,7 +83,7 @@ export const buy: Article[] = [
     go: { href: "/orders", label: "Open Orders" },
     keywords: ["purchase order", "order status", "cancel order", "close order", "partly received", "invoice"],
     more: [
-      "[Orders](/orders) has three groups: **Drafts: not sent yet**, **On the way** and **Done**. A late expected date shows in red.",
+      "[Orders](/orders) has three groups: **Drafts: not sent yet**, **On the way** and **Done**. A late expected date shows in red. **Done** lists the orders created in the last 90 days; **Show all finished orders** at the bottom lists the older ones too.",
       {
         table: {
           head: ["Status", "Means"],
@@ -130,6 +130,7 @@ export const buy: Article[] = [
       "Only the **accepted** quantity goes into stock. Each accepted line becomes a lot with a code like `RCV-20261105-001`, linked to the supplier, the supplier batch and the delivery note.",
       "An empty best-before is worked out from the ingredient's shelf life when it has one.",
       "Refused goods count as not received: the order keeps waiting for them until you close it.",
+      "If the delivery is saved but its file can't be stored, the delivery's page opens with a message: add the file again under **Files**.",
     ],
     mistakes: [
       { problem: '"PO-… is still a draft. Mark it as sent first."', fix: "Open the order and press **Mark as sent**, then record the delivery." },
@@ -146,7 +147,7 @@ export const buy: Article[] = [
     go: { href: "/deliveries", label: "Open Deliveries" },
     keywords: ["edit delivery", "delete delivery", "wrong quantity", "recorded twice", "restore delivery"],
     steps: [
-      "Open [Deliveries](/deliveries) and press the supplier name of the delivery.",
+      "Open [Deliveries](/deliveries) and press the supplier name of the delivery. The list shows the last 90 days; **Show older ones too** lists the rest.",
       "Open **Correct this delivery**, change what is wrong, write **Why the correction?** and press **Save correction**.",
       "To take it back out completely, open **Delete this delivery**, give a reason and press **Delete delivery**.",
     ],
