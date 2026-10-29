@@ -473,10 +473,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         })
       )}
 
-      <h2 id="downloads">Downloads (CSV)</h2>
+      <h2 id="downloads">Downloads</h2>
       <div className="card">
         <p className="small muted" style={{ marginTop: 0 }}>
-          Spreadsheet files (open with Excel, Numbers or Google Sheets). "Everything" includes all history; "this period" only {fmtDate(from)} to {fmtDate(to)}.
+          <strong>Excel</strong> files open the same in any Excel, Numbers or Google Sheets, with real numbers and dates. <strong>CSV</strong> is plain text for
+          other tools (comma separated, decimal point). &quot;Everything&quot; includes all history; &quot;this period&quot; only {fmtDate(from)} to{" "}
+          {fmtDate(to)}.
         </p>
         <table>
           <tbody>
@@ -492,17 +494,34 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <div className="small muted">{text}</div>
                 </td>
                 <td style={{ whiteSpace: "nowrap" }}>
-                  <a href={`/export/${name}`} download>
-                    Everything
-                  </a>
-                  {name !== "lots" && (
-                    <>
-                      {" · "}
-                      <a href={`/export/${name}?${period}`} download>
-                        This period
-                      </a>
-                    </>
-                  )}
+                  <div>
+                    Excel:{" "}
+                    <a href={`/export/${name}?format=xlsx`} download>
+                      Everything
+                    </a>
+                    {name !== "lots" && (
+                      <>
+                        {" · "}
+                        <a href={`/export/${name}?format=xlsx&${period}`} download>
+                          This period
+                        </a>
+                      </>
+                    )}
+                  </div>
+                  <div className="small">
+                    CSV:{" "}
+                    <a href={`/export/${name}`} download>
+                      Everything
+                    </a>
+                    {name !== "lots" && (
+                      <>
+                        {" · "}
+                        <a href={`/export/${name}?${period}`} download>
+                          This period
+                        </a>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
