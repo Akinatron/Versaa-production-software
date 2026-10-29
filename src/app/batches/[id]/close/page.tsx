@@ -15,6 +15,7 @@ import { PackagingTable } from "../../../components/packaging-table";
 import { BatchBudgetTable } from "../../../components/batch-budget-table";
 import { addIncident, bringBack, close, editBatch, editIncident, markNotMade, toggleIncident } from "../../actions";
 import { History, ReasonField } from "../../../components/history";
+import { ConfirmButton } from "../../../components/unsaved-guard";
 import { fmtWhen } from "../../../components/history-format";
 import { fmtDate } from "../../../components/ui/format";
 
@@ -150,7 +151,8 @@ export default async function BatchPage({
               <div style={{ flex: "1 1 360px" }}>
                 <strong>Ready to close</strong>
                 <div className="small muted">
-                  Closing locks the ingredients; packaging can still be corrected. Pack more first if there&apos;s sauce left.{" "}
+                  Ingredients and packaging can still be corrected after closing; the change goes in the history. Pack more first if there&apos;s sauce
+                  left.{" "}
                   {others === 0
                     ? `This is the last open batch of ${run.code}: closing it also closes the run and frees any stock still reserved for it.`
                     : `${others} other batch${others === 1 ? "" : "es"} of ${run.code} still open.`}
@@ -159,7 +161,13 @@ export default async function BatchPage({
               <Link href={`/batches/${batch.id}/pack`} className="btn secondary">
                 Pack more
               </Link>
-              <button type="submit">Close batch</button>
+              {others === 0 ? (
+                <ConfirmButton message={`This also closes ${run.code} and frees the stock still reserved for it. It can't be undone. Close the batch?`}>
+                  Close batch
+                </ConfirmButton>
+              ) : (
+                <button type="submit">Close batch</button>
+              )}
             </form>
           )}
           {nothingRecorded && (
