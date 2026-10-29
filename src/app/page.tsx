@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { sqlList } from "@/db/base";
+import { PO_ON_THE_WAY } from "@/domain/status";
 import { sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
@@ -57,7 +59,7 @@ export default async function Home() {
       select o.id, o.code, s.name as supplier, o.status::text, o.expected_on::text, o.ordered_on::text,
         (select count(*)::int from purchase_order_lines l where l.purchase_order_id = o.id) as lines
       from purchase_orders o join suppliers s on s.id = o.supplier_id
-      where o.status in ('sent', 'partly_received') order by o.expected_on nulls last`),
+      where o.status::text in (${sqlList(PO_ON_THE_WAY)}) order by o.expected_on nulls last`),
     d.execute<{
       id: string;
       code: string;

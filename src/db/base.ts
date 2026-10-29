@@ -14,13 +14,23 @@ export class OperationError extends Error {
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
 /**
- * Hold the names lock until the transaction ends, so two saves of the same
- * new name (a double click) run one after the other and the second one sees
- * the first.
+ * Saves that must run one after the other. Each holds its lock until its
+ * transaction ends, so the second one sees what the first did.
  */
-export async function lockNames(tx: Tx) {
-  await tx.execute(sql`select pg_advisory_xact_lock(4545)`);
+const LOCK = {
+  /** Confirming runs: two can't reserve the same stock at once. */
+  runConfirm: 4242,
+  /** Jars leaving or coming back (deliveries, write-offs, restores): two can't take the same jars. */
+  jarsOut: 4343,
+  /** A new name saved twice (a double click). */
+  names: 4545,
+} as const;
+
+export async function lock(tx: Tx, what: keyof typeof LOCK) {
+  await tx.execute(sql`select pg_advisory_xact_lock(${sql.raw(String(LOCK[what]))})`);
 }
+
+export const lockNames = (tx: Tx) => lock(tx, "names");
 
 /** Today in the business's time zone (see src/domain/dates.ts). */
 export { today } from "@/domain/dates";
@@ -69,6 +79,12 @@ export function isDate(s: string | null | undefined): s is string {
   const d = new Date(`${s}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
+
+/** Litres in the jars of the rows summed: sum(jars × fill ml) ÷ 1000, like litresFromJars(). Column names only, never input. */
+export const sumLitres = (jarsColumn: string, fillMlColumn: string) => sql.raw(`(sum(${jarsColumn} * ${fillMlColumn}) / 1000.0)`);
+
+/** A list of texts for `in (…)` in SQL: sql`status::text in (${sqlList(PO_ON_THE_WAY)})`. */
+export const sqlList = (values: readonly string[]) => sql.join(values.map((v) => sql`${v}`), sql`, `);
 
 export function checkWholeUnits(item: typeof t.items.$inferSelect, qty: Decimal) {
   if (item.stockUnit === "unit" && !qty.isInteger()) {

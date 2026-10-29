@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isOnTheWay } from "@/domain/status";
 import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -55,7 +56,7 @@ export default async function OrderPage({
   const invoices = docs.filter((d) => d.kind === "invoice");
   const message = po.status === "cancelled" ? null : await orderMessageData(db(), order);
   const sendOrder = message && <SendOrder poId={po.id} contact={supplier.contact} order={message} />;
-  const open = po.status === "sent" || po.status === "partly_received";
+  const open = isOnTheWay(po.status);
   const back = `/orders/${id}`;
   const u = (unit: string) => UNITS[unit as UnitCode].label;
   const editForm = (correcting: boolean) => (

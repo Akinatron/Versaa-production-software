@@ -1,4 +1,4 @@
-import { PO_STATUS_NAME, RUN_STATUS_NAME, SALES_STATUS_NAME } from "@/domain/status";
+import { INCIDENT_NAME, OUTFLOW_NAME, PO_STATUS_NAME, RUN_STATUS_NAME, SALES_STATUS_NAME } from "@/domain/status";
 
 export const RUN_STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: RUN_STATUS_NAME.draft, cls: "neutral" },
@@ -23,11 +23,7 @@ export const MOVEMENT: Record<string, string> = {
   consumption: "Used in production",
   production_output: "Produced",
   packaging_output: "Packed",
-  sale: "Sale",
-  sample: "Sample / gift",
-  waste: "Waste / loss",
-  internal_use: "Own use",
-  test: "Test",
+  ...OUTFLOW_NAME,
   count_correction: "Count correction",
   reversal: "Reversal",
 };
@@ -51,13 +47,7 @@ export const SALES_STATUS: Record<string, { label: string; cls: string }> = {
 export const OUTFLOW_REASONS = ["sale", "internal_use", "test", "sample", "waste"] as const;
 export type OutflowReason = (typeof OUTFLOW_REASONS)[number];
 
-export const OUTFLOW: Record<string, string> = {
-  sale: "Sale",
-  internal_use: "Own use",
-  test: "Test",
-  sample: "Sample / gift",
-  waste: "Waste / loss",
-};
+export const OUTFLOW: Record<string, string> = OUTFLOW_NAME;
 
 export const OUTFLOW_EXPLAIN: Record<OutflowReason, string> = {
   sale: "Jars sold to a customer. The only reason that counts as sales.",
@@ -70,9 +60,4 @@ export const OUTFLOW_EXPLAIN: Record<OutflowReason, string> = {
 /** Badge colour for an outbound reason. */
 export const outflowBadge = (type: string) => (type === "sale" ? "ok" : type === "waste" ? "bad" : "neutral");
 
-export const INCIDENT: Record<string, string> = {
-  loss: "Loss",
-  spill: "Spill",
-  quality: "Quality",
-  other: "Other",
-};
+export const INCIDENT: Record<string, string> = INCIDENT_NAME;

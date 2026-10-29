@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { sqlList } from "@/db/base";
+import { PO_OPEN } from "@/domain/status";
 import { asc, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -21,7 +23,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
       select s.id as supplier_id,
         (select count(*)::int from supplier_items si where si.supplier_id = s.id and si.active) as items,
         (select count(*)::int from supplier_items si where si.supplier_id = s.id and si.active and si.rank = 1) as favourite,
-        (select count(*)::int from purchase_orders o where o.supplier_id = s.id and o.status in ('draft', 'sent', 'partly_received')) as open_orders
+        (select count(*)::int from purchase_orders o where o.supplier_id = s.id and o.status::text in (${sqlList(PO_OPEN)})) as open_orders
       from suppliers s`),
   ]);
   const by = new Map([...counts].map((c) => [c.supplier_id, c]));

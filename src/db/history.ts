@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { sumLitres } from "./base";
 import { sql } from "drizzle-orm";
 import { cache } from "react";
 import type { DB } from "./client";
@@ -41,8 +42,8 @@ async function readObservedYields(db: DB): Promise<Map<string, YieldStats>> {
   }>(sql`
     with per_batch as (
       select b.id, b.sauce_id,
-        sum(l.filled * l.fill_ml) / 1000.0 as filled_l,
-        sum(l.accepted * l.fill_ml) / 1000.0 as sellable_l
+        ${sumLitres("l.filled", "l.fill_ml")} as filled_l,
+        ${sumLitres("l.accepted", "l.fill_ml")} as sellable_l
       from production_batches b
       join packaging_sessions s on s.batch_id = b.id and s.deleted_at is null
       join packaging_session_lines l on l.session_id = s.id

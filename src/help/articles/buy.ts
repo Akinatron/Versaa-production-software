@@ -1,4 +1,5 @@
 import type { Article } from "../types";
+import { MAX_FILE_MB, MAX_FILES, MAX_TOTAL_MB } from "@/domain/uploads";
 
 export const buy: Article[] = [
   {
@@ -170,7 +171,7 @@ export const buy: Article[] = [
       "Invoice: on the order page, under **Paperwork**, press **Add invoice**. One invoice can cover several deliveries, so it goes with the order.",
     ],
     more: [
-      "Accepted files: JPG, PNG, WEBP, HEIC and PDF, up to 20 MB each, at most 10 files at once.",
+      `Accepted files: JPG, PNG, WEBP, HEIC and PDF, up to ${MAX_FILE_MB} MB each and ${MAX_TOTAL_MB} MB together, at most ${MAX_FILES} files at once.`,
       "Files show on the lot, the order, the supplier card and in the backward trace of a batch, so you can always find the paper behind a lot.",
       "**Remove** only hides a file (a reason is asked) and it can be put back. The record and the file are kept.",
     ],

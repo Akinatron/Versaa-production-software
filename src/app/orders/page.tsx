@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isOnTheWay, isPoDone } from "@/domain/status";
 import { db } from "@/db/client";
 import { loadOrders, type OrderView } from "@/db/purchasing";
 import { money } from "@/domain/pricing";
@@ -28,12 +29,12 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     {
       title: "On the way",
       hint: "Sent to the supplier, waiting for delivery.",
-      list: orders.filter((o) => o.po.status === "sent" || o.po.status === "partly_received"),
+      list: orders.filter((o) => isOnTheWay(o.po.status)),
     },
     {
       title: "Done",
       hint: showAll ? "All finished orders." : `Received, closed or cancelled, created in the last ${DONE_DAYS} days.`,
-      list: orders.filter((o) => ["received", "closed", "cancelled"].includes(o.po.status)),
+      list: orders.filter((o) => isPoDone(o.po.status)),
     },
   ];
 
@@ -103,7 +104,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                         <td className="num">{money(o.cost)}</td>
                         <td>
                           {o.po.status === "draft" && <MarkSentForm poId={o.po.id} back="/orders" compact />}
-                          {(o.po.status === "sent" || o.po.status === "partly_received") && (
+                          {isOnTheWay(o.po.status) && (
                             <Link href={`/deliveries/new?po=${o.po.id}`} className="btn secondary sm">
                               Record delivery
                             </Link>

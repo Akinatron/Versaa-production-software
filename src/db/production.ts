@@ -10,7 +10,7 @@ import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { frozenPlan } from "./frozen-plan";
-import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
+import { INCIDENT_NAME, inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 /*
  * Recording production and packaging.
@@ -883,7 +883,7 @@ export async function recordIncident(
   });
 }
 
-const INCIDENT: Record<(typeof t.incidentType.enumValues)[number], string> = { loss: "Loss", spill: "Spill", quality: "Quality", other: "Other" };
+const INCIDENT: Record<(typeof t.incidentType.enumValues)[number], string> = INCIDENT_NAME;
 
 async function incidentRefs(tx: Tx, row: typeof t.incidents.$inferSelect): Promise<Ref[]> {
   const refs: Ref[] = [];

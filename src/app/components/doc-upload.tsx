@@ -3,21 +3,15 @@
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { uploadDocumentsAction } from "../documents/actions";
+import { uploadProblem } from "@/domain/uploads";
 
 /** Photos (also straight from the phone camera) and PDFs. */
 export const DOC_ACCEPT = "image/*,application/pdf,.heic,.heif";
-const MAX_FILE = 20 * 1024 * 1024;
-const MAX_TOTAL = 50 * 1024 * 1024;
 
 /** Say before sending when a file is too big, instead of a server error after a long upload. */
 export function sizeProblem(files: FileList | null) {
   if (!files) return "";
-  const list = Array.from(files);
-  const big = list.find((f) => f.size > MAX_FILE);
-  if (big) return `"${big.name}" is over 20 MB.`;
-  if (list.reduce((s, f) => s + f.size, 0) > MAX_TOTAL) return "Those files add up to more than 50 MB. Upload them in two goes.";
-  if (list.length > 10) return "Attach at most 10 files at once.";
-  return "";
+  return uploadProblem(Array.from(files));
 }
 
 /** A file input for a bigger form (e.g. Record a delivery): checks sizes and lists what was chosen. */

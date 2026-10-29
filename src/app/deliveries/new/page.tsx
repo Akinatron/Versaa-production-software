@@ -1,4 +1,5 @@
 import { shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
+import { PO_ON_THE_WAY } from "@/domain/status";
 import { STORAGE, STORAGE_KEYS, storageLabel } from "@/domain/storage";
 import { eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -25,7 +26,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
       .select({ po: t.purchaseOrders, supplier: t.suppliers.name })
       .from(t.purchaseOrders)
       .innerJoin(t.suppliers, eq(t.purchaseOrders.supplierId, t.suppliers.id))
-      .where(inArray(t.purchaseOrders.status, ["sent", "partly_received"])),
+      .where(inArray(t.purchaseOrders.status, [...PO_ON_THE_WAY])),
   ]);
   const po = openOrders.find((o) => o.po.id === params.po)?.po;
   const poLines = po

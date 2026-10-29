@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { KIND } from "@/db/adjustments";
+import { ADJUSTMENT_NAME as KIND } from "@/domain/status";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../../components/flash";
 import { PageHeader } from "../../../components/ui/header";

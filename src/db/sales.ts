@@ -2,10 +2,10 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lockNames, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, lock, lockNames, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
 import { allocate, jarsFree, lotBalance } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
-import { inSentence, SALES_STATUS_NAME } from "@/domain/status";
+import { inSentence, OUTFLOW_NAME, SALES_STATUS_NAME } from "@/domain/status";
 
 /*
  * Sales and other outflows of finished jars.
@@ -248,7 +248,7 @@ export async function deliverSalesOrder(
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.outflows).where(eq(t.outflows.idempotencyKey, input.idempotencyKey));
     if (existing) return { outflow: existing, alreadyRecorded: true };
-    await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
+    await lock(tx, "jarsOut");
     const [o] = await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, input.salesOrderId));
     if (!o) throw new OperationError("Order not found.");
     if (o.status !== "pending") throw new OperationError(`This order is already ${inSentence(SALES_STATUS_NAME, o.status)}.`);
@@ -299,7 +299,7 @@ export async function recordOutflow(
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.outflows).where(eq(t.outflows.idempotencyKey, input.idempotencyKey));
     if (existing) return { outflow: existing, alreadyRecorded: true, short: [] as string[] };
-    await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
+    await lock(tx, "jarsOut");
     const { outflow, short } = await writeOutflow(tx, { ...input, occurredOn: input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today() });
     await logOutflow(tx, outflow, "create", `${OUTFLOW[outflow.type]} recorded: ${outflow.code}`);
     return { outflow, alreadyRecorded: false, short };
@@ -449,7 +449,7 @@ async function writeOutflow(
 
 // ---------------------------------------------------------------- correcting outflows
 
-export const OUTFLOW: Record<OutflowType, string> = { sale: "Sale", sample: "Sample / gift", waste: "Waste / loss", internal_use: "Own use", test: "Test" };
+const OUTFLOW: Record<OutflowType, string> = OUTFLOW_NAME;
 
 async function outflowLinesText(tx: Tx, outflowId: string) {
   return tx
@@ -501,7 +501,7 @@ async function logOutflow(tx: Tx, o: typeof t.outflows.$inferSelect, action: "cr
 export async function setOutflowDeleted(db: DB, input: { idempotencyKey: string; outflowId: string; deleted: boolean; reason: string }) {
   const reason = needReason(input.reason, input.deleted ? "Say why this is deleted" : "Say why this is restored");
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
+    await lock(tx, "jarsOut");
     const [o] = await tx.select().from(t.outflows).where(eq(t.outflows.id, input.outflowId));
     if (!o) throw new OperationError("Not found.");
     if (!!o.deletedAt === input.deleted) return { alreadyRecorded: true };

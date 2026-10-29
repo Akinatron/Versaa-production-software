@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { convert, formatQty, type UnitCode } from "./quantity";
+import { convert, formatQty, litresFromJars, type UnitCode } from "./quantity";
 
 /*
  * Production planner: from target sellable jars to batches, ingredients,
@@ -200,7 +200,7 @@ export function planProduction(input: PlanInput): PlanResult {
       issues.push({ level: "blocker", message: `${product.name}: no packaging list is set up.` });
     }
 
-    const litres = new Decimal(jarsToFill).mul(product.fillMl).div(1000);
+    const litres = litresFromJars(jarsToFill, product.fillMl);
     litresBySauce.set(product.sauceId, (litresBySauce.get(product.sauceId) ?? ZERO).plus(litres));
 
     productLines.push({

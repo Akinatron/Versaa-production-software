@@ -17,7 +17,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lockNames, isDate, zeroOrMore, type Tx } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lock, lockNames, isDate, zeroOrMore, type Tx } from "./base";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
@@ -218,7 +218,7 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
 export async function confirmRun(db: DB, runId: string) {
   return db.transaction(async (tx) => {
     // Serialize confirmations so two runs can't reserve the same stock at once.
-    await tx.execute(sql`select pg_advisory_xact_lock(4242)`);
+    await lock(tx, "runConfirm");
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run) throw new OperationError("Run not found.");
     if (run.status === "confirmed") return { run, alreadyConfirmed: true };

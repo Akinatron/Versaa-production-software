@@ -1,4 +1,5 @@
 import { asc, eq } from "drizzle-orm";
+import { isOnTheWay } from "@/domain/status";
 import Link from "next/link";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -84,7 +85,7 @@ export default async function RunOrderPage({
       )}
       <h2>Orders for this run</h2>
       <RunOrdersTable orders={orders} back={`/runs/${id}/order`} />
-      {orders.some((o) => o.po.status === "sent" || o.po.status === "partly_received") && <NextStep href={`/runs/${id}/receive`}>Receive deliveries</NextStep>}
+      {orders.some((o) => isOnTheWay(o.po.status)) && <NextStep href={`/runs/${id}/receive`}>Receive deliveries</NextStep>}
     </>
   );
 }

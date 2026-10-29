@@ -12,7 +12,7 @@ import { UNITS, type UnitCode, unitWord } from "@/domain/quantity";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
-import { inSentence, PO_STATUS_NAME } from "@/domain/status";
+import { inSentence, isOnTheWay, isPoDone, PO_ON_THE_WAY, PO_STATUS_NAME } from "@/domain/status";
 import { BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
 
 /*
@@ -367,7 +367,7 @@ export async function closePurchaseOrder(db: DB, purchaseOrderId: string, note?:
   return db.transaction(async (tx) => {
     const [po] = await tx.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.id, purchaseOrderId));
     if (!po) throw new OperationError("Order not found.");
-    if (po.status !== "sent" && po.status !== "partly_received") throw new OperationError("Only an order that is on its way can be closed.");
+    if (!isOnTheWay(po.status)) throw new OperationError("Only an order that is on its way can be closed.");
     const text = note?.trim();
     await tx
       .update(t.purchaseOrders)
@@ -542,7 +542,7 @@ async function refreshOrderStatus(tx: Tx, poId: string) {
   await tx
     .update(t.purchaseOrders)
     .set({ status: complete ? "received" : any ? "partly_received" : "sent" })
-    .where(and(eq(t.purchaseOrders.id, poId), inArray(t.purchaseOrders.status, ["sent", "partly_received", "received"])));
+    .where(and(eq(t.purchaseOrders.id, poId), inArray(t.purchaseOrders.status, [...PO_ON_THE_WAY, "received"])));
 }
 
 // ---------------------------------------------------------------- correcting deliveries
@@ -976,7 +976,7 @@ export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: strin
     for (const r of rows) received.set(r.line_id, { accepted: r.accepted, rejected: r.rejected });
   }
   return orders.map(({ po, supplier, runCode }) => {
-    const open = po.status === "sent" || po.status === "partly_received" || po.status === "draft";
+    const open = !isPoDone(po.status);
     const own = lines
       .filter((l) => l.line.purchaseOrderId === po.id)
       .sort((a, b) => a.item.name.localeCompare(b.item.name))
