@@ -72,9 +72,18 @@ export function favourite<T extends Pick<Offer, "rank">>(offers: T[]): T | null 
 /** Human text for a price, e.g. "12 € / 25 kg sack" or "0.40 € / unit". */
 export function describePrice(offer: Pick<Offer, "packQty" | "packName" | "price">, unitLabel: string): string {
   if (offer.price === null) return "no price";
-  const price = `${money(offer.price)}`;
+  const price = offer.packQty === null ? unitMoney(offer.price) : money(offer.price);
   if (offer.packQty === null) return `${price} / ${unitLabel === "units" ? "unit" : unitLabel}`;
   return `${price} / ${offer.packQty.toString()} ${unitLabel}${offer.packName ? ` ${offer.packName}` : ""}`;
+}
+
+/**
+ * A price per unit: cents as usual, but cheap items keep the digits that
+ * matter (0.035 €, 0.004 €), up to 4 decimals.
+ */
+export function unitMoney(v: Decimal | null): string {
+  if (v === null) return "unknown";
+  return v.decimalPlaces() <= 2 ? money(v) : `${v.toDecimalPlaces(4).toString()} €`;
 }
 
 export function money(v: Decimal | null): string {

@@ -225,6 +225,14 @@ export async function updateDraftOrder(
         group by r.purchase_order_line_id`)),
       ].map((r) => [r.line_id, { accepted: new Decimal(r.accepted), n: r.n }]),
     );
+    // Lines whose only deliveries were deleted: those stay on record, so the line can't go.
+    const deletedOnly = new Set(
+      [
+        ...(await tx.execute<{ line_id: string }>(sql`
+        select distinct r.purchase_order_line_id as line_id from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is not null
+        where r.purchase_order_line_id in (select id from purchase_order_lines where purchase_order_id = ${po.id})`)),
+      ].map((r) => r.line_id),
+    );
     let left = current.length;
     for (const change of input.lines) {
       const line = current.find((l) => l.id === change.lineId);
@@ -238,7 +246,9 @@ export async function updateDraftOrder(
         quantity = new Decimal(line.packQty).mul(packs);
       } else {
         const raw = String(change.quantity ?? "").trim();
-        quantity = raw === "" ? new Decimal(0) : new Decimal(raw.replace(",", "."));
+        // An empty box is a slip, not a removal: only 0 removes a line.
+        if (raw === "") throw new OperationError(`${item.name}: enter a quantity (0 removes the line).`);
+        quantity = new Decimal(raw.replace(",", "."));
         if (quantity.isNaN() || quantity.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
         if (line.packQty && quantity.mod(line.packQty).isZero()) packs = quantity.div(line.packQty).toNumber();
       }
@@ -248,6 +258,10 @@ export async function updateDraftOrder(
       }
       if (quantity.isZero()) {
         if (got) throw new OperationError(`${item.name} has deliveries recorded, so its line can't be removed.`);
+        if (deletedOnly.has(line.id))
+          throw new OperationError(
+            `${item.name}: a deleted delivery is still on record for this line, so it can't be removed. Leave it as it is, or cancel the order if nothing on it is needed.`,
+          );
         await tx.delete(t.purchaseOrderLines).where(eq(t.purchaseOrderLines.id, line.id));
         changes.push({ label: item.name, before: qtyText(line.quantity, item.stockUnit), after: "removed" });
         left--;
@@ -839,7 +853,25 @@ export async function setReceiptDeleted(db: DB, input: { idempotencyKey: string;
           : { deletedAt: null, deletedReason: null },
       )
       .where(eq(t.receipts.id, r.id));
-    for (const poId of await receiptOrders(tx, r.id)) await refreshOrderStatus(tx, poId);
+    for (const poId of await receiptOrders(tx, r.id)) {
+      // Goods that did arrive belong to an open order: a cancelled one is reopened.
+      if (!input.deleted) {
+        const [po] = await tx.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.id, poId));
+        if (po?.status === "cancelled") {
+          await tx.update(t.purchaseOrders).set({ status: "sent" }).where(eq(t.purchaseOrders.id, poId));
+          await logChange(tx, {
+            action: "restore",
+            area: "purchasing",
+            entity: { type: "purchase_order", id: po.id, code: po.code },
+            summary: `Order ${po.code} reopened: one of its deliveries was restored`,
+            changes: diff([["Status", "Cancelled", "Open"]]),
+            reason,
+            links: await orderRefs(tx, po),
+          });
+        }
+      }
+      await refreshOrderStatus(tx, poId);
+    }
     return { alreadyRecorded: false };
   });
 }

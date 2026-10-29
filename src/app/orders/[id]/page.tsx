@@ -90,7 +90,7 @@ export default async function OrderPage({
                         flexWrap: "nowrap",
                       }}
                     >
-                      <input name={`packs_${i}`} type="number" min={0} step={1} defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
+                      <input name={`packs_${i}`} type="number" min={0} step={1} required defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
                       <span className="small">
                         × {l.line.packQty} {u(l.item.stockUnit)}
                       </span>
@@ -105,7 +105,7 @@ export default async function OrderPage({
                         flexWrap: "nowrap",
                       }}
                     >
-                      <input name={`qty_${i}`} type="number" min={0} step="any" defaultValue={l.line.quantity} aria-label="Quantity" />
+                      <input name={`qty_${i}`} type="number" min={0} step="any" required defaultValue={l.line.quantity} aria-label="Quantity" />
                       <span className="small">{u(l.item.stockUnit)}</span>
                       <input type="hidden" name={`packs_${i}`} value="" />
                     </div>
