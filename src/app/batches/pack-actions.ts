@@ -19,6 +19,15 @@ function jarLines(form: FormData): PackagingLineInput[] {
   });
 }
 
+/** Best-before per size from the edit form, only for the sizes whose date was changed. */
+function changedDates(form: FormData): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const l of rows(form, ["bbProduct", "bb", "bbWas"])) {
+    if (l.bbProduct && l.bb !== l.bbWas) out[l.bbProduct] = l.bb || null;
+  }
+  return out;
+}
+
 function done(batchId: string, msg: string): never {
   for (const p of [`/batches/${batchId}/pack`, `/batches/${batchId}/close`, "/batches", "/runs", "/stock", "/"]) revalidatePath(p);
   redirect(withOk(`/batches/${batchId}/pack`, msg));
@@ -50,7 +59,7 @@ export async function editPack(form: FormData) {
       idempotencyKey: str(form, "key"),
       sessionId,
       packedOn: str(form, "packedOn"),
-      bestBefore: str(form, "bestBefore") || null,
+      bestBeforeBy: changedDates(form),
       note: str(form, "note") || null,
       reason: str(form, "reason"),
       lines: jarLines(form),

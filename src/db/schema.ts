@@ -82,7 +82,8 @@ export const products = pgTable(
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("products_sauce_format").on(t.sauceId, t.formatId)],
+  // One stock item per product: two sizes never share stock.
+  (t) => [uniqueIndex("products_sauce_format").on(t.sauceId, t.formatId), uniqueIndex("products_item").on(t.itemId)],
 );
 
 export const recipeVersions = pgTable(

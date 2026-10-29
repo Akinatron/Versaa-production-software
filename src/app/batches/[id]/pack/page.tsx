@@ -9,7 +9,7 @@ import { Flash } from "../../../components/flash";
 import { BatchSteps } from "../../../components/batch-steps";
 import { PackRows } from "../../../components/batch-pack-row";
 import { PackDates } from "../../../components/pack-dates";
-import { shelfLifeOf } from "@/domain/shelf-life";
+import { shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
 import { SauceName } from "../../../components/sauce-name";
 import { packFormMaterials, plannedJarsForBatch, type PackMaterial, type PackStock } from "@/db/production";
 import { PackagingTable } from "../../../components/packaging-table";
@@ -88,7 +88,9 @@ export default async function PackagingBatchPage({
     .from(t.packagingSessions)
     .where(and(eq(t.packagingSessions.batchId, batch.id), sql`${t.packagingSessions.deletedAt} is not null`))
     .orderBy(desc(t.packagingSessions.deletedAt));
-  const editLot = editing ? tr.jarLots.find((l) => editing.lines.some((x) => x.line.finishedLotId === l.id && l.bestBefore)) : undefined;
+  // Each size's own best-before in the edit form: from its lot, or empty for a size not packed yet.
+  const lotOfSize = new Map(editing?.lines.map((l) => [l.product.id, tr.jarLots.find((j) => j.id === l.line.finishedLotId)]) ?? []);
+  const shelfOf = new Map(products.map((p) => [p.product.id, shelfLifeOf(p)]));
 
   return (
     <>
@@ -194,11 +196,31 @@ export default async function PackagingBatchPage({
                 <label htmlFor="e-packedOn">Packed on</label>
                 <input id="e-packedOn" name="packedOn" type="date" required defaultValue={editing.packedOn} />
               </div>
-              <div>
-                <label htmlFor="e-bestBefore">Best-before (optional)</label>
-                <input id="e-bestBefore" name="bestBefore" type="date" defaultValue={editLot?.bestBefore ?? ""} />
-              </div>
             </div>
+            <fieldset>
+              <legend>Best-before</legend>
+              <div className="row">
+                {editSizes.map((sz, i) => {
+                  const lot = lotOfSize.get(sz.id);
+                  const was = lot?.bestBefore ?? "";
+                  const shelf = shelfOf.get(sz.id) ?? null;
+                  return (
+                    <div key={sz.id}>
+                      <label htmlFor={`e-bb-${i}`}>{sz.name}</label>
+                      <input type="hidden" name={`bbProduct_${i}`} value={sz.id} />
+                      <input type="hidden" name={`bbWas_${i}`} value={was} />
+                      <input id={`e-bb-${i}`} name={`bb_${i}`} type="date" defaultValue={was} />
+                      {!lot && (
+                        <div className="small muted">{shelf ? `Empty: ${shelfLifeLabel(shelf)} from packing.` : "Not packed in this session yet."}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="small muted" style={{ marginBottom: 0 }}>
+                Each size keeps its own date. Only a date you change here is saved, on that size&apos;s lot.
+              </p>
+            </fieldset>
             <PackRows
               stock={pack.stock}
               sizes={editSizes.map((s) => ({
