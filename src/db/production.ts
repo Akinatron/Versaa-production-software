@@ -8,8 +8,8 @@ import { jarsFree, lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
-import type { PlanResult } from "@/domain/planner";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
+import { frozenPlan } from "./frozen-plan";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 /*
@@ -80,9 +80,8 @@ export async function createBatchesForRun(tx: Tx, runId: string) {
   if (existing.length > 0) return { created: 0 };
   const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
   if (!run || !["confirmed", "in_progress"].includes(run.status)) throw new OperationError("Only confirmed runs have batches.");
-  const [snap] = await tx.select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, runId));
-  if (!snap) throw new OperationError("This run has no saved forecast.");
-  const plan = snap.data as unknown as PlanResult;
+  const plan = await frozenPlan(tx, runId);
+  if (!plan) throw new OperationError("This run has no saved forecast.");
 
   let created = 0;
   for (const s of plan.sauces) {
@@ -163,10 +162,8 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string, notMade
  */
 async function packagingOfBatchesNotMade(tx: Tx, runId: string): Promise<{ freed: Map<string, Decimal>; items: string[] }> {
   const freed = new Map<string, Decimal>();
-  const [snap] = await tx.select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, runId));
-  if (!snap) return { freed, items: [] };
-  // Saved as JSON: quantities come back as strings.
-  const plan = snap.data as unknown as PlanResult;
+  const plan = await frozenPlan(tx, runId);
+  if (!plan) return { freed, items: [] };
   const packaging = plan.requirements.filter((r) => r.kind === "packaging");
   const items = packaging.map((r) => r.itemId);
   const notMade = await tx
@@ -1149,9 +1146,8 @@ export async function packFormMaterials(db: DB, sizes: { productId: string; pack
  * with what the run's batches of this sauce have packed so far.
  */
 export async function plannedJarsForBatch(db: DB, batch: { id: string; runId: string; sauceId: string }) {
-  const [snap] = await db.select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, batch.runId));
-  if (!snap) return null;
-  const plan = snap.data as PlanResult;
+  const plan = await frozenPlan(db, batch.runId);
+  if (!plan) return null;
   const products = await db.select({ id: t.products.id, sauceId: t.products.sauceId }).from(t.products);
   const ofSauce = new Set(products.filter((p) => p.sauceId === batch.sauceId).map((p) => p.id));
   const lines = plan.products.filter((p) => ofSauce.has(p.productId) && p.jarsToFill > 0);

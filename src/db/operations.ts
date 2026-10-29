@@ -5,6 +5,7 @@ import * as t from "./schema";
 import { loadPlanCatalog, loadStockPositions } from "./planning";
 import { planProduction, type PlanResult } from "@/domain/planner";
 import { createBatchesForRun } from "./production";
+import { freezePlan } from "./frozen-plan";
 import { diff, logChange, needReason } from "./changes";
 
 /*
@@ -229,7 +230,7 @@ export async function confirmRun(db: DB, runId: string) {
       throw new OperationError(`Can't confirm yet: ${blockers.map((b) => b.message).join(" ")}`);
     }
 
-    await tx.insert(t.forecastSnapshots).values({ runId, data: JSON.parse(JSON.stringify(plan)) });
+    await tx.insert(t.forecastSnapshots).values({ runId, data: freezePlan(plan) });
     const toReserve = plan.requirements.filter((r) => r.required !== null && r.required.gt(0));
     if (toReserve.length) {
       await tx.insert(t.reservations).values(toReserve.map((r) => ({ runId, itemId: r.itemId, quantity: r.required!.toString() })));

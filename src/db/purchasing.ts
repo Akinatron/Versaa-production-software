@@ -1017,7 +1017,7 @@ export interface OrderPlanLine {
  * is already in draft orders for this run (sent orders already count as on order).
  */
 export async function orderPlan(db: DB, plan: PlanResult, runId?: string | null): Promise<OrderPlanLine[]> {
-  const short = plan.requirements.filter((r) => r.toBuy !== null && new Decimal(r.toBuy).gt(0));
+  const short = plan.requirements.filter((r) => r.toBuy !== null && r.toBuy.gt(0));
   const drafts = new Map<string, Decimal>();
   if (runId) {
     const rows = await db
@@ -1040,7 +1040,7 @@ export async function orderPlan(db: DB, plan: PlanResult, runId?: string | null)
         name: r.name,
         kind: r.kind,
         unit: r.unit,
-        missing: Decimal.max(0, new Decimal(r.toBuy!).minus(inDrafts)),
+        missing: Decimal.max(0, r.toBuy!.minus(inDrafts)),
         inDrafts,
         offers: offers.get(r.itemId) ?? [],
       };

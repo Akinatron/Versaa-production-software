@@ -16,9 +16,7 @@ const SOURCE: Record<Source, string> = {
   missing: "missing",
 };
 
-/** Works with a live plan or one read back from a frozen snapshot (strings). */
-const D = (v: unknown): Decimal | null => (v === null || v === undefined ? null : new Decimal(v as Decimal.Value));
-const q = (v: unknown, unit: UnitCode) => formatQty(D(v), unit);
+const q = (v: Decimal | null | undefined, unit: UnitCode) => formatQty(v ?? null, unit);
 
 type Part = "issues" | "production" | "requirements";
 
@@ -81,7 +79,7 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
                       <SauceName name={p.name} color={colors.byProduct.get(p.productId)} />
                     </td>
                     <td className="num">{p.targetJars}</td>
-                    <td className="num">{p.rejectRate ? `${D(p.rejectRate)!.mul(100).toDecimalPlaces(2).toString()}%` : "unknown"}</td>
+                    <td className="num">{p.rejectRate ? `${p.rejectRate.mul(100).toDecimalPlaces(2).toString()}%` : "unknown"}</td>
                     <td className="num">{p.jarsToFill}</td>
                     <td>
                       {p.packable === null ? (
@@ -143,7 +141,7 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
           const attention = rows.filter((r) => r.status !== "covered");
           const covered = rows.filter((r) => r.status === "covered");
           // A confirmed run shows what it still has to use once it has used some.
-          const showLeft = rows.some((r) => r.stillToUse != null && (r.required == null || !new Decimal(r.stillToUse).eq(r.required)));
+          const showLeft = rows.some((r) => r.stillToUse != null && (r.required == null || !r.stillToUse.eq(r.required)));
           const table = (list: typeof rows) => (
             <table>
               <thead>
@@ -207,7 +205,7 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
 
 /** Link to plan orders (one per supplier) for everything still to buy. */
 export function orderLinkFor(result: PlanResult): string | null {
-  const lines = result.requirements.filter((r) => r.toBuy !== null && D(r.toBuy)!.gt(0));
+  const lines = result.requirements.filter((r) => r.toBuy !== null && r.toBuy.gt(0));
   if (lines.length === 0) return null;
-  return `/orders/plan?items=${encodeURIComponent(lines.map((r) => `${r.itemId}:${D(r.toBuy)!.toString()}`).join(","))}`;
+  return `/orders/plan?items=${encodeURIComponent(lines.map((r) => `${r.itemId}:${r.toBuy!.toString()}`).join(","))}`;
 }
