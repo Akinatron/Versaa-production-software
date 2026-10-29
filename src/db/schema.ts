@@ -397,6 +397,8 @@ export const runStatus = pgEnum("run_status", ["draft", "confirmed", "in_progres
 export const productionRuns = pgTable("production_runs", {
   id: id(),
   code: text("code").notNull().unique(),
+  /** From the form that created it, so pressing Save twice makes one run. Null for runs made before it was kept. */
+  idempotencyKey: text("idempotency_key").unique(),
   plannedFor: date("planned_for").notNull(),
   status: runStatus("status").notNull().default("draft"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
@@ -742,6 +744,14 @@ export const changeLogLinks = pgTable(
     index("change_log_links_change").on(t.changeId),
   ],
 );
+
+// ---------- Codes ----------
+
+/** The last number given out per code prefix (RUN-20261029, SO-20261029, RCV-20261029…), so a code is never given twice. */
+export const codeCounters = pgTable("code_counters", {
+  prefix: text("prefix").primaryKey(),
+  last: integer("last").notNull(),
+});
 
 // ---------- App settings ----------
 

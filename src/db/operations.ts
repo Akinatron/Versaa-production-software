@@ -16,7 +16,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames, isDate, zeroOrMore } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lockNames, isDate, zeroOrMore, type Tx } from "./base";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
@@ -115,16 +115,19 @@ export {
 
 // ---------------------------------------------------------------- production runs
 
+const runCode = (tx: Tx, plannedFor: string) => nextCode(tx, t.productionRuns.code, `RUN-${plannedFor.replaceAll("-", "")}`);
+
 export async function createRun(db: DB, input: { idempotencyKey: string; plannedFor: string; targets: Record<string, number> }) {
   if (!isDate(input.plannedFor)) throw new OperationError("Choose a production date.");
   const targets = Object.entries(input.targets).filter(([, n]) => n > 0);
   if (targets.length === 0) throw new OperationError("Enter at least one jar target.");
   for (const [, n] of targets) if (!Number.isInteger(n)) throw new OperationError("Jar targets must be whole numbers.");
   return db.transaction(async (tx) => {
-    const code = `RUN-${input.plannedFor.replaceAll("-", "")}-${input.idempotencyKey.slice(0, 4).toUpperCase()}`;
-    const [existing] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.code, code));
+    // Pressing Save twice (or a page reload) gives back the run the first press made.
+    const [existing] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.idempotencyKey, input.idempotencyKey));
     if (existing) return existing;
-    const [run] = await tx.insert(t.productionRuns).values({ code, plannedFor: input.plannedFor }).returning();
+    const code = await runCode(tx, input.plannedFor);
+    const [run] = await tx.insert(t.productionRuns).values({ code, idempotencyKey: input.idempotencyKey, plannedFor: input.plannedFor }).returning();
     await tx.insert(t.runTargets).values(targets.map(([productId, n]) => ({ runId: run!.id, productId, targetJars: n })));
     const total = targets.reduce((s, [, n]) => s + n, 0);
     await logChange(tx, {
@@ -306,12 +309,7 @@ export async function updateDraftRun(db: DB, runId: string, plannedFor: string, 
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run || run.status !== "draft") throw new OperationError("Only draft runs can be changed.");
     // The code carries the production date; keep it in step while the run is a draft.
-    let code = run.code;
-    if (plannedFor !== run.plannedFor) {
-      const next = run.code.replace(/^RUN-\d{8}-/, `RUN-${plannedFor.replaceAll("-", "")}-`);
-      const [taken] = next !== run.code ? await tx.select({ id: t.productionRuns.id }).from(t.productionRuns).where(eq(t.productionRuns.code, next)) : [];
-      if (!taken) code = next;
-    }
+    const code = plannedFor !== run.plannedFor ? await runCode(tx, plannedFor) : run.code;
     const old = await tx
       .select({ productId: t.runTargets.productId, jars: t.runTargets.targetJars, name: t.products.name })
       .from(t.runTargets)

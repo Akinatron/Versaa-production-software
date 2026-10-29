@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, today, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, checkWholeUnits, itemsById, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
 import { jarsFree, lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
@@ -100,15 +100,11 @@ export async function createBatchesForRun(tx: Tx, runId: string) {
     );
 
     const prefix = `${sauce.batchPrefix ?? batchPrefixFor(sauce.name)}-${run.plannedFor.replaceAll("-", "")}`;
-    const [{ n } = { n: 0 }] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(t.productionBatches)
-      .where(sql`${t.productionBatches.code} like ${prefix + "-%"}`);
 
     for (let i = 1; i <= s.batches; i++) {
       const [batch] = await tx
         .insert(t.productionBatches)
-        .values({ code: `${prefix}-${String(n + i).padStart(2, "0")}`, runId, sauceId: sauce.id, recipeVersionId: version.id, seq: i })
+        .values({ code: await nextCode(tx, t.productionBatches.code, prefix), runId, sauceId: sauce.id, recipeVersionId: version.id, seq: i })
         .returning();
       if (lines.length) {
         await tx.insert(t.batchConsumption).values(

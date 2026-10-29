@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, type Tx, isDate, zeroOrMore } from "./base";
 import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
@@ -28,14 +28,7 @@ import { BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
 
 const D = (v: Decimal.Value | null | undefined) => (v === null || v === undefined ? null : new Decimal(v));
 
-async function nextOrderCode(tx: Tx, on: string) {
-  const prefix = `PO-${on.replaceAll("-", "")}`;
-  const [row] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(t.purchaseOrders)
-    .where(sql`${t.purchaseOrders.code} like ${prefix + "-%"}`);
-  return `${prefix}-${String((row?.n ?? 0) + 1).padStart(2, "0")}`;
-}
+const nextOrderCode = (tx: Tx, on: string) => nextCode(tx, t.purchaseOrders.code, `PO-${on.replaceAll("-", "")}`);
 
 export interface OrderLine {
   itemId: string;

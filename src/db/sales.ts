@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lockNames, today, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, lockNames, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
 import { allocate, jarsFree, lotBalance } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { inSentence, SALES_STATUS_NAME } from "@/domain/status";
@@ -88,7 +88,7 @@ export async function createSalesOrder(
     const [order] = await tx
       .insert(t.salesOrders)
       .values({
-        code: `SO-${orderedOn.replaceAll("-", "")}-${input.idempotencyKey.slice(0, 4).toUpperCase()}`,
+        code: await nextCode(tx, t.salesOrders.code, `SO-${orderedOn.replaceAll("-", "")}`),
         customerId: input.customerId || null,
         destination: input.destination?.trim() || null,
         reference: input.reference?.trim() || null,
@@ -404,14 +404,10 @@ async function writeOutflow(
   const { problems, short } = await jarsCanLeave(tx, input.type, lines, products, input.exceptOrderId);
   if (problems.length) throw new OperationError(`Not enough stock. ${problems.join(" ")}`);
 
-  const [{ n } = { n: 0 }] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(t.outflows)
-    .where(sql`${t.outflows.code} like ${`${PREFIX[input.type]}-${input.occurredOn.replaceAll("-", "")}-%`}`);
   const [outflow] = await tx
     .insert(t.outflows)
     .values({
-      code: `${PREFIX[input.type]}-${input.occurredOn.replaceAll("-", "")}-${String(n + 1).padStart(3, "0")}`,
+      code: await nextCode(tx, t.outflows.code, `${PREFIX[input.type]}-${input.occurredOn.replaceAll("-", "")}`, 3),
       type: input.type,
       salesOrderId: input.salesOrderId || null,
       customerId: input.customerId || null,

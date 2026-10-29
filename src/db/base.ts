@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { inArray, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { DB } from "./client";
 import * as t from "./schema";
 
@@ -75,11 +76,27 @@ export function checkWholeUnits(item: typeof t.items.$inferSelect, qty: Decimal)
   }
 }
 
-export async function nextLotCode(tx: Tx, prefix: string) {
-  const [row] = await tx
-    .select({ n: sql<number>`count(*)::int` })
-    .from(t.lots)
-    .where(sql`${t.lots.code} like ${prefix + "-%"}`);
-  return `${prefix}-${String((row?.n ?? 0) + 1).padStart(3, "0")}`;
+/**
+ * The next code that starts with `prefix`, such as RUN-20261029-01. A counter
+ * per prefix in the database hands out the numbers, with no chance involved.
+ * The first time a prefix is used it starts after the codes already there,
+ * and a number already taken (an older code) is skipped, so the same code is
+ * never given twice. Codes already given never change.
+ */
+export async function nextCode(tx: Tx, column: AnyPgColumn, prefix: string, digits = 2): Promise<string> {
+  const table = column.table;
+  for (let tries = 0; tries < 1000; tries++) {
+    const [row] = await tx.execute<{ last: number }>(sql`
+      insert into code_counters (prefix, last)
+      values (${prefix}, (select count(*)::int from ${table} where ${column} like ${prefix + "-%"}) + 1)
+      on conflict (prefix) do update set last = code_counters.last + 1
+      returning last`);
+    const code = `${prefix}-${String(row!.last).padStart(digits, "0")}`;
+    const [taken] = await tx.execute(sql`select 1 from ${table} where ${column} = ${code} limit 1`);
+    if (!taken) return code;
+  }
+  throw new Error(`No free code left for ${prefix}.`);
 }
+
+export const nextLotCode = (tx: Tx, prefix: string) => nextCode(tx, t.lots.code, prefix, 3);
 

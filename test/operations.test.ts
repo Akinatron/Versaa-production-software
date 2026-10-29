@@ -155,7 +155,7 @@ suite("recording operations", () => {
     expect(onions.available!.toString()).toBe("25.5");
 
     // The first run, looking at itself, still sees its own stock as available.
-    const [first] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.code, "RUN-20261024-RUN-"));
+    const [first] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.code, "RUN-20261024-01"));
     const own = await planForRun(db, first!.id);
     expect(own.requirements.find((r) => r.name === "Onions")!.reservedEarlier.toString()).toBe("0");
   });

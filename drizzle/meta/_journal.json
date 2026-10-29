@@ -134,6 +134,13 @@
       "when": 1792830000000,
       "tag": "0021_lookup_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793296567731,
+      "tag": "0022_code_counters",
+      "breakpoints": true
     }
   ]
 }

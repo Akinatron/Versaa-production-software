@@ -26,7 +26,7 @@ suite("draft run edits, favourite suppliers and the packaging form", () => {
   it("a draft run's date and targets can be changed, the code follows the date, and the change is in the history", async () => {
     const big = ids["Liberiaanse Kip 700 ml"]!;
     const run = await createRun(db, { idempotencyKey: "abcd-draft", plannedFor: "2026-10-20", targets: { [big]: 30 } });
-    expect(run.code).toBe("RUN-20261020-ABCD");
+    expect(run.code).toBe("RUN-20261020-01");
 
     await expect(updateDraftRun(db, run.id, "2026-10-22", { [big]: 0 })).rejects.toThrow(/at least one/);
     await expect(updateDraftRun(db, run.id, "2026-10-22", { [big]: 2.5 })).rejects.toThrow(/whole numbers/);
@@ -35,7 +35,7 @@ suite("draft run edits, favourite suppliers and the packaging form", () => {
     await updateDraftRun(db, run.id, "2026-10-22", { [big]: 60 }, "bigger order");
     const [after] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.id, run.id));
     expect(after!.plannedFor).toBe("2026-10-22");
-    expect(after!.code).toBe("RUN-20261022-ABCD");
+    expect(after!.code).toBe("RUN-20261022-01");
     expect(await runTargets(db, run.id)).toEqual({ [big]: 60 });
     const log = await db.select().from(t.changeLog).where(eq(t.changeLog.entityId, run.id));
     const edit = log.find((l) => l.action === "update")!;
