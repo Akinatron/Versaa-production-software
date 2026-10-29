@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, lockNames, today, type Tx, isDate } from "./base";
-import { allocate, jarsFree } from "./ledger";
+import { allocate, jarsFree, lotBalance } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { inSentence, SALES_STATUS_NAME } from "@/domain/status";
 
@@ -345,6 +345,41 @@ async function splitChosenLots(
   });
 }
 
+/**
+ * Can these jars leave stock? Used when recording an outflow and when
+ * restoring a deleted one, so both follow the same rule. A sale leaves jars
+ * promised to other orders alone; waste, samples, tests and own use only need
+ * the jars to be there (broken is broken), and say which orders are now short.
+ */
+async function jarsCanLeave(
+  tx: Tx,
+  type: OutflowType,
+  lines: { productId: string; jars: number }[],
+  products: Map<string, typeof t.products.$inferSelect>,
+  exceptOrderId?: string | null,
+) {
+  const isSale = type === "sale";
+  const problems: string[] = [];
+  const short: string[] = [];
+  const totals = new Map<string, number>();
+  for (const l of lines) totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.jars);
+  for (const [productId, jars] of totals) {
+    const p = products.get(productId);
+    if (!p) throw new OperationError("Unknown product.");
+    const { onHand, promised, free } = await jarsFree(tx, p.itemId, exceptOrderId ?? undefined);
+    if (isSale && free.lt(jars)) {
+      problems.push(
+        `${p.name}: ${jars} jars needed, ${free} available${promised.gt(0) ? ` (${onHand} in stock, ${promised} promised to other orders)` : ""}.`,
+      );
+    } else if (!isSale && onHand.lt(jars)) {
+      problems.push(`${p.name}: ${jars} jars needed, ${onHand} in stock.`);
+    } else if (!isSale && promised.gt(onHand.minus(jars))) {
+      short.push(`${p.name}: sales orders are now ${promised.minus(Decimal.max(0, onHand.minus(jars)))} jars short.`);
+    }
+  }
+  return { problems, short };
+}
+
 const PREFIX: Record<OutflowType, string> = { sale: "OUT", sample: "SMP", waste: "WST", internal_use: "INT", test: "TST" };
 
 async function writeOutflow(
@@ -367,28 +402,7 @@ async function writeOutflow(
   for (const l of lines) if (!Number.isInteger(l.jars) || l.jars < 0) throw new OperationError("Jars must be whole numbers.");
   const products = await productsById(tx, lines.map((l) => l.productId));
 
-  // Nothing leaves that isn't there. A sale also leaves jars promised to other
-  // orders alone; waste, samples, tests and own use only need the jars to be
-  // there (broken is broken), and say which orders are now short.
-  const isSale = input.type === "sale";
-  const problems: string[] = [];
-  const short: string[] = [];
-  const totals = new Map<string, number>();
-  for (const l of lines) totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.jars);
-  for (const [productId, jars] of totals) {
-    const p = products.get(productId);
-    if (!p) throw new OperationError("Unknown product.");
-    const { onHand, promised, free } = await jarsFree(tx, p.itemId, input.exceptOrderId);
-    if (isSale && free.lt(jars)) {
-      problems.push(
-        `${p.name}: ${jars} jars needed, ${free} available${promised.gt(0) ? ` (${onHand} in stock, ${promised} promised to other orders)` : ""}.`,
-      );
-    } else if (!isSale && onHand.lt(jars)) {
-      problems.push(`${p.name}: ${jars} jars needed, ${onHand} in stock.`);
-    } else if (!isSale && promised.gt(onHand.minus(jars))) {
-      short.push(`${p.name}: sales orders are now ${promised.minus(Decimal.max(0, onHand.minus(jars)))} jars short.`);
-    }
-  }
+  const { problems, short } = await jarsCanLeave(tx, input.type, lines, products, input.exceptOrderId);
   if (problems.length) throw new OperationError(`Not enough stock. ${problems.join(" ")}`);
 
   const [{ n } = { n: 0 }] = await tx
@@ -499,12 +513,30 @@ export async function setOutflowDeleted(db: DB, input: { idempotencyKey: string;
     const lines = await outflowLinesText(tx, o.id);
     const [so] = o.salesOrderId ? await tx.select().from(t.salesOrders).where(eq(t.salesOrders.id, o.salesOrderId)) : [];
     if (!input.deleted) {
+      // The same jars leave the same lots again: each lot must still hold all
+      // the jars its lines take, and the jars must pass the same check as a
+      // new outflow (a sale can't take jars promised to another order).
       const problems: string[] = [];
+      const perLot = new Map<string, { code: string; name: string; jars: number }>();
       for (const l of lines) {
-        const [row] = await tx.execute<{ q: string | null }>(sql`select sum(quantity) as q from movements where lot_id = ${l.lot.id}`);
-        if (new Decimal(row?.q ?? 0).lt(l.line.jars)) problems.push(`${l.product.name}: lot ${l.lot.code} only has ${row?.q ?? 0} jars left.`);
+        const cur = perLot.get(l.lot.id) ?? { code: l.lot.code, name: l.product.name, jars: 0 };
+        cur.jars += l.line.jars;
+        perLot.set(l.lot.id, cur);
       }
-      if (problems.length) throw new OperationError(`Those jars aren't in stock any more, so this can't be restored. ${problems.join(" ")}`);
+      for (const [lotId, need] of perLot) {
+        const left = await lotBalance(tx, lotId);
+        if (left.lt(need.jars)) problems.push(`${need.name}: lot ${need.code} only has ${left} jars left, ${need.jars} needed.`);
+      }
+      const products = new Map(lines.map((l) => [l.product.id, l.product]));
+      const check = await jarsCanLeave(
+        tx,
+        o.type,
+        lines.map((l) => ({ productId: l.product.id, jars: l.line.jars })),
+        products,
+        o.salesOrderId,
+      );
+      problems.push(...check.problems);
+      if (problems.length) throw new OperationError(`Those jars aren't free any more, so this can't be restored. ${problems.join(" ")}`);
       if (so && so.status !== "pending") throw new OperationError(`Sales order ${so.code} is ${inSentence(SALES_STATUS_NAME, so.status)} now, so this delivery can't come back.`);
     } else if (so && so.status !== "delivered") {
       throw new OperationError(`Sales order ${so.code} is ${inSentence(SALES_STATUS_NAME, so.status)}; it can't go back to "to deliver".`);

@@ -508,8 +508,7 @@ export async function recordReceipt(
             deliveryRef: input.deliveryRef?.trim() || null,
             supplierBatch: line.supplierBatch?.trim() || null,
             receivedOn: input.receivedOn,
-            // Empty: worked out from the item's shelf life, when it has one.
-            bestBefore: line.bestBefore || bestBeforeFrom(input.receivedOn, shelfLifeOf(item)),
+            bestBefore: newLotBestBefore(line.bestBefore, input.receivedOn, item),
             // Null lets the database fill in the item's default.
             storage,
           })
@@ -610,6 +609,15 @@ async function usedIn(tx: Tx, lotId: string) {
     .filter(Boolean)
     .slice(0, 6)
     .join(", ");
+}
+
+/**
+ * Best-before of a lot that comes in with a delivery, when it's recorded and
+ * when a correction creates it: the date given, or else worked out from the
+ * item's shelf life (when it has one).
+ */
+function newLotBestBefore(given: string | null | undefined, receivedOn: string, item: Parameters<typeof shelfLifeOf>[0]) {
+  return given || bestBeforeFrom(receivedOn, shelfLifeOf(item));
 }
 
 export interface ReceiptLineChange {
@@ -741,7 +749,9 @@ export async function correctReceipt(
             deliveryRef: header.deliveryRef,
             supplierBatch: p.supplierBatch?.trim() || null,
             receivedOn: header.receivedOn,
-            bestBefore: p.bestBefore || null,
+            // Same as a new delivery: storage comes from the item (database
+            // default), best-before from its shelf life when left empty.
+            bestBefore: newLotBestBefore(p.bestBefore, header.receivedOn, item),
           })
           .returning();
         lotId = lot!.id;

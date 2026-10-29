@@ -114,6 +114,8 @@ export async function recordWriteOff(
       const [lot] = await tx.select().from(t.lots).where(eq(t.lots.id, line.lotId));
       if (!lot) throw new OperationError("Lot not found.");
       const item = (await itemsById(tx, [lot.itemId])).get(lot.itemId)!;
+      // Finished jars leave through an outflow, which knows about jars promised to sales orders.
+      if (item.kind === "finished") throw new OperationError(`${item.name}: finished jars leave stock with "Record a stock exit", not here.`);
       const qty = new Decimal(line.quantity);
       if (qty.isNaN() || qty.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
       checkWholeUnits(item, qty);
