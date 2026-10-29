@@ -10,6 +10,8 @@ import { saveStockCount, saveWriteOff } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
 import { GuardedForm } from "../../components/unsaved-guard";
+import { SubmitOnChange } from "../../components/submit-on-change";
+import { endOfDay } from "@/db/ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +43,18 @@ function AnyItemSelect({ items, value, kinds }: { items: Item[]; value?: string;
   );
 }
 
-async function lotsOf(itemId: string | null) {
+/** Lots with stock now, or (with `on`) at the end of that day; `balance` is then what they held that day. */
+async function lotsOf(itemId: string | null, on?: string) {
+  const until = on ? endOfDay(on) : null;
   const rows = await db()
     .select({
       lot: t.lots,
       item: t.items,
       supplier: t.suppliers.name,
       batchCode: t.productionBatches.code,
-      balance: sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`,
+      balance: until
+        ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until}), 0)`
+        : sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`,
     })
     .from(t.lots)
     .innerJoin(t.items, eq(t.lots.itemId, t.items.id))
@@ -83,7 +89,11 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
         {tab("count", "Count correction")}
         {tab("writeoff", "Write-off")}
       </nav>
-      {mode === "count" ? <CountForm items={items} item={item} today={today} /> : <WriteOffForm items={items} item={item} today={today} />}
+      {mode === "count" ? (
+        <CountForm items={items} item={item} today={today} on={params.on && /^\d{4}-\d{2}-\d{2}$/.test(params.on) ? params.on : today} />
+      ) : (
+        <WriteOffForm items={items} item={item} today={today} />
+      )}
       <p className="small muted">
         For items that have never been counted, use the <Link href="/stock/count">opening count</Link> instead.
       </p>
@@ -91,8 +101,9 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
   );
 }
 
-async function CountForm({ items, item, today }: { items: Item[]; item: Item | null; today: string }) {
-  const lots = item ? await lotsOf(item.id) : [];
+async function CountForm({ items, item, today, on }: { items: Item[]; item: Item | null; today: string; on: string }) {
+  const lots = item ? await lotsOf(item.id, on) : [];
+  const past = on !== today;
   const unit = (item?.stockUnit ?? "unit") as UnitCode;
   const unitWord = item?.kind === "finished" ? "jars" : UNITS[unit].label;
   return (
@@ -102,6 +113,10 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
         <div style={{ flex: 1, minWidth: 220 }}>
           <label htmlFor="item">Item you counted</label>
           <AnyItemSelect items={items} value={item?.id} kinds={["ingredient", "packaging", "other", "finished"]} />
+        </div>
+        <div>
+          <label htmlFor="on">Counted on</label>
+          <SubmitOnChange id="on" name="on" type="date" required defaultValue={on} style={{ maxWidth: 180 }} />
         </div>
         <button type="submit" className="secondary">
           Show its lots
@@ -117,6 +132,12 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
               Enter what you actually counted for each lot, in {unitWord}. Leave a lot blank if you didn&apos;t count it (it stays as it is); enter 0 if
               it&apos;s gone. The difference with what the system expects is recorded as a correction.
             </p>
+            {past && (
+              <p className="small">
+                Counted on <strong>{fmtDate(on, { year: true })}</strong>: &quot;System says&quot; is what each lot held at the end of that day, so what was
+                recorded after it (cooking, packing, deliveries, write-offs) is kept.
+              </p>
+            )}
             {lots.length === 0 ? (
               <p className="muted">No lots of this item have stock. If you found some, enter it under “found stock without a lot”.</p>
             ) : (
@@ -126,7 +147,7 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
                     <th>Lot</th>
                     <th>Where it came from</th>
                     <th>Best before</th>
-                    <th className="num">System says</th>
+                    <th className="num">System says{past ? ` on ${fmtDate(on)}` : ""}</th>
                     <th>Counted</th>
                   </tr>
                 </thead>
@@ -171,8 +192,11 @@ async function CountForm({ items, item, today }: { items: Item[]; item: Item | n
           </div>
           <div className="card grid">
             <div>
-              <label htmlFor="countedOn">Counted on (required)</label>
-              <input id="countedOn" name="countedOn" type="date" required defaultValue={today} />
+              <input type="hidden" name="countedOn" value={on} />
+              <span className="small muted">Counted on</span>
+              <div>
+                <strong>{fmtDate(on, { year: true })}</strong> <span className="small muted">(change it at the top)</span>
+              </div>
             </div>
             <div>
               <label htmlFor="reason">Reason (required)</label>

@@ -377,6 +377,12 @@ async function SuppliersTab({ item, offers, here, edit }: { item: Item; offers: 
         In order of preference. The first one is the favourite: it is preselected when ordering for a run and its price is used in budgets. The same links show
         on each supplier&apos;s page.
       </p>
+      {offers[0]?.supplierActive === false && (
+        <p className="small text-warn">
+          The first supplier is marked &quot;Not in use&quot;, so orders and budgets use the cheapest supplier in use instead
+          {offers.some((o) => o.supplierActive !== false) ? "." : ". There is none: add one below."}
+        </p>
+      )}
       {offers.length === 0 && <p className="card muted">No supplier yet. Add one below.</p>}
       {offers.length > 0 && (
         <ul className="offerlist card">
@@ -389,7 +395,8 @@ async function SuppliersTab({ item, offers, here, edit }: { item: Item; offers: 
                   <Link href={`/suppliers/${o.supplierId}`}>
                     <strong>{o.supplierName}</strong>
                   </Link>
-                  {i === 0 && <span className="badge ok">Favourite</span>}
+                  {i === 0 && o.supplierActive !== false && <span className="badge ok">Favourite</span>}
+                  {o.supplierActive === false && <span className="badge warn">Not in use</span>}
                   {offers.length > 1 && (
                     <form action={moveRankAction} className="row" style={{ gap: 6, marginLeft: "auto" }}>
                       <input type="hidden" name="supplierItemId" value={o.supplierItemId} />

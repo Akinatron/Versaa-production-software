@@ -4,7 +4,7 @@ import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
 import { diff, logChange, type FieldChange } from "./changes";
-import { batchPrefixFor } from "@/domain/codes";
+import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
 import { dimensionOf, isUnitCode, type UnitCode } from "@/domain/quantity";
 import { slug } from "@/domain/seed-catalog";
@@ -450,9 +450,16 @@ export async function addProduct(db: DB, input: { sauceId: string; formatId: str
       return dup;
     }
     const name = `${s.name} ${f.name}`;
-    const code = `fin-${s.code}-${f.capacityMl}`;
-    await tx.insert(t.items).values({ code, name, kind: "finished", stockUnit: "unit" }).onConflictDoNothing({ target: t.items.code });
-    const [item] = await tx.select().from(t.items).where(eq(t.items.code, code));
+    // Each product has its own stock item, named after the size's code (not its
+    // ml), so two sizes with the same capacity never share stock.
+    const code = `fin-${s.code}-${sizeTag(f)}`;
+    let [item] = await tx.select().from(t.items).where(eq(t.items.code, code));
+    if (item) {
+      const [user] = await tx.select({ name: t.products.name }).from(t.products).where(eq(t.products.itemId, item.id));
+      if (user) throw new OperationError(`${user.name} already keeps its jars under ${code}. Give this size its own code.`);
+    } else {
+      [item] = await tx.insert(t.items).values({ code, name, kind: "finished", stockUnit: "unit" }).returning();
+    }
     const [p] = await tx.insert(t.products).values({ sauceId: s.id, formatId: f.id, itemId: item!.id, name }).returning();
     await logChange(tx, { action: "create", area: "settings", entity: { type: "product", id: p!.id, code: name }, summary: `Added product ${name}` });
     return p!;

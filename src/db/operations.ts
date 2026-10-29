@@ -135,20 +135,55 @@ export async function runTargets(db: DB, runId: string) {
   return Object.fromEntries(rows.map((r) => [r.productId, r.targetJars]));
 }
 
-/** Plan for a run, treating stock reserved by other runs as unavailable. */
+/**
+ * Plan for a run. Stock and orders go to runs in the order they are made
+ * (production date, then confirmation time), so an order placed for an
+ * earlier run is never counted again for a later one. A draft comes after
+ * every confirmed run. Once confirmed, the run is checked against what it
+ * still has to use (its open reservation), not the whole recipe, so what it
+ * already used isn't asked for again.
+ */
 export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
-  const [catalog, stock, targets, own] = await Promise.all([
+  const [catalog, stock, targets, [run], held] = await Promise.all([
     loadPlanCatalog(db),
     loadStockPositions(db),
     runTargets(db, runId),
-    db.select().from(t.reservations).where(and(eq(t.reservations.runId, runId), isNull(t.reservations.releasedAt))),
+    db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId)),
+    db
+      .select({
+        runId: t.reservations.runId,
+        itemId: t.reservations.itemId,
+        quantity: t.reservations.quantity,
+        plannedFor: t.productionRuns.plannedFor,
+        confirmedAt: t.productionRuns.confirmedAt,
+      })
+      .from(t.reservations)
+      .innerJoin(t.productionRuns, eq(t.productionRuns.id, t.reservations.runId))
+      .where(isNull(t.reservations.releasedAt)),
   ]);
-  // Stock positions count every reservation; give this run's own back.
-  for (const r of own) {
-    const pos = stock[r.itemId];
-    if (pos) pos.reservedEarlier = pos.reservedEarlier.minus(r.quantity);
+  if (!run) throw new OperationError("Run not found.");
+  const confirmed = run.status !== "draft";
+  const comesAfter = (r: { runId: string | null; plannedFor: string; confirmedAt: Date | null }) => {
+    if (!confirmed || !run.confirmedAt) return false;
+    if (r.plannedFor !== run.plannedFor) return r.plannedFor > run.plannedFor;
+    const a = r.confirmedAt?.getTime() ?? Infinity;
+    const b = run.confirmedAt.getTime();
+    return a !== b ? a > b : (r.runId ?? "") > run.id;
+  };
+  // Stock positions count every reservation: give back this run's own and
+  // those of runs that come after it.
+  const stillToUse: Record<string, Decimal> = {};
+  const notEarlier: Record<string, Decimal> = {};
+  for (const r of held) {
+    const mine = r.runId === runId;
+    if (mine) stillToUse[r.itemId] = (stillToUse[r.itemId] ?? new Decimal(0)).plus(r.quantity);
+    if (mine || comesAfter(r)) notEarlier[r.itemId] = (notEarlier[r.itemId] ?? new Decimal(0)).plus(r.quantity);
   }
-  return planProduction({ ...catalog, stock, targets });
+  for (const [itemId, q] of Object.entries(notEarlier)) {
+    const pos = stock[itemId];
+    if (pos) pos.reservedEarlier = Decimal.max(0, pos.reservedEarlier.minus(q));
+  }
+  return planProduction({ ...catalog, stock, targets, ...(confirmed ? { stillToUse } : {}) });
 }
 
 /**

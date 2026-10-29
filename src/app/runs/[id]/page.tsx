@@ -37,6 +37,7 @@ export default async function RunPage({
   const shortCount = live.requirements.filter((r) => r.status === "short").length;
   const editing = run.status === "draft" && flash.edit === "1";
   const shown = frozen ?? live;
+  const finished = run.status === "closed" || run.status === "cancelled";
 
   const actions = editing ? null : (
     <>
@@ -101,13 +102,20 @@ export default async function RunPage({
       <RunOrdersTable orders={orders} back={`/runs/${id}`} />
 
       <h2>Budget</h2>
-      <BudgetTable
-        data={budgetForTable(budget, [
-          { key: "toBuy", label: "To buy" },
-          { key: "total", label: "Total cost" },
-        ])}
-        note={`At the favourite supplier's current price. "To buy" is only what's missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock.`}
-      />
+      {finished ? (
+        <BudgetTable
+          data={budgetForTable(budget, [{ key: "total", label: "Total cost" }])}
+          note={`At the favourite supplier's current price, for everything the run needed. The batches' real cost is on each batch's Close step.`}
+        />
+      ) : (
+        <BudgetTable
+          data={budgetForTable(budget, [
+            { key: "toBuy", label: "To buy" },
+            { key: "total", label: "Total cost" },
+          ])}
+          note={`At the favourite supplier's current price. "To buy" is only what's missing, rounded up to whole packs; once batches are cooked it only counts what the run still has to use. "Total cost" is everything the run needs, including what is already in stock.`}
+        />
+      )}
 
       {frozen && (
         <details className="card">

@@ -12,6 +12,8 @@ export interface PlannerOffer {
   packQty: string | null;
   packName: string | null;
   price: string | null;
+  /** The favourite is not in use; this is the cheapest supplier in use. */
+  standIn?: boolean;
 }
 
 export interface PlannerLine {
@@ -153,7 +155,7 @@ export function OrderPlanner({
                         .map((o) => (
                           <option key={o.supplierId} value={o.supplierId}>
                             {o.supplierName}
-                            {o.rank === 1 ? " (favourite)" : ""}
+                            {o.standIn ? " (cheapest in use)" : o.rank === 1 ? " (favourite)" : ""}
                           </option>
                         ))}
                       {others.length > 0 && (
@@ -166,7 +168,8 @@ export function OrderPlanner({
                         </optgroup>
                       )}
                     </select>
-                    {l.offers.length === 0 && <div className="small muted">No supplier saved for this item.</div>}
+                    {l.offers.length === 0 && <div className="small muted">No supplier in use is saved for this item.</div>}
+                    {l.offers.some((o) => o.standIn) && <div className="small muted">The favourite supplier is not in use.</div>}
                   </td>
                   <td>
                     {c.supplierId && (

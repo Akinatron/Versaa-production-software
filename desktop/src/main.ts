@@ -77,9 +77,9 @@ const controlToken = randomBytes(24).toString("hex");
 
 /** A copy of the database and the uploaded files in the backups folder. */
 async function backupAll(): Promise<string> {
-  const file = await backupDatabase(database!.pg, paths.backups);
+  const file = await backupDatabase(database!.pg, paths.backups, { kind: "before-delete" });
   if (existsSync(paths.uploads)) {
-    const stamp = path.basename(file).replace(/^versaa-|\.tar\.gz$/g, "");
+    const stamp = path.basename(file, ".tar.gz").replace(/^versaa-/, "");
     await cp(paths.uploads, path.join(paths.backups, `uploads-${stamp}`), { recursive: true });
     // Keep the uploads of the last 3 such copies.
     const old = (await readdir(paths.backups)).filter((f) => f.startsWith("uploads-")).sort();
@@ -219,11 +219,11 @@ function createWindow() {
 async function backupNow() {
   if (!database) return;
   try {
-    const file = await backupDatabase(database.pg, paths.backups);
+    const file = await backupDatabase(database.pg, paths.backups, { kind: "manual" });
     const { response } = await dialog.showMessageBox({
       message: "Backup saved",
-      detail: `The database was copied to:\n${file}\n\nUploaded delivery notes and invoices are in the "uploads" folder next to it.`,
-      buttons: ["OK", "Show in Finder"],
+      detail: `The database was copied to:\n${file}\n\nThis copy is kept until you delete it. Uploaded delivery notes and invoices are in the "uploads" folder of the data folder.`,
+      buttons: ["OK", process.platform === "darwin" ? "Show in Finder" : "Show in folder"],
     });
     if (response === 1) shell.showItemInFolder(file);
   } catch (err) {
@@ -283,7 +283,7 @@ async function start() {
     uploadsDir: paths.uploads,
     backupsDir: paths.backups,
     log,
-    backupDatabase: (dir) => backupDatabase(database!.pg, dir, { keep: 1 }),
+    backupDatabase: (dir) => backupDatabase(database!.pg, dir, { kind: "before-update" }),
     isAppUrl,
   });
 
@@ -292,12 +292,12 @@ async function start() {
   // A copy before migrations touch an existing database, so an update can always be undone.
   if (!firstRun) {
     try {
-      await backupDatabase(database.pg, paths.backups);
+      await backupDatabase(database.pg, paths.backups, { kind: "auto" });
     } catch (err) {
       log("startup backup failed", err);
     }
   }
-  await database.prepare({ seedCatalog: firstRun });
+  await database.prepare();
   appUrl = await startServer(database.url);
   log("ready at", appUrl);
   await updater?.markStarted().catch((err) => log("updater: could not record the update", err));

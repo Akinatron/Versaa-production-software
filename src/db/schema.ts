@@ -82,7 +82,8 @@ export const products = pgTable(
     active: boolean("active").notNull().default(true),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("products_sauce_format").on(t.sauceId, t.formatId)],
+  // One stock item per product: two sizes never share stock.
+  (t) => [uniqueIndex("products_sauce_format").on(t.sauceId, t.formatId), uniqueIndex("products_item").on(t.itemId)],
 );
 
 export const recipeVersions = pgTable(
@@ -423,6 +424,12 @@ export const reservations = pgTable("reservations", {
     .notNull()
     .references(() => items.id),
   quantity: numeric("quantity").notNull(),
+  /**
+   * "hold": what was set aside when the run was confirmed (or the sales order
+   * made). "adjust": later changes as batches use it, give it back or are
+   * not made. Only holds count as the original amount.
+   */
+  kind: text("kind", { enum: ["hold", "adjust"] }).notNull().default("hold"),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   createdAt: createdAt(),
 });

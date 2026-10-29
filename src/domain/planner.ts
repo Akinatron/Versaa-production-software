@@ -57,9 +57,9 @@ export interface PlanProduct {
 export interface StockPosition {
   /** Counted or recorded stock; null when this item has never been counted. */
   onHand: Decimal | null;
-  /** Committed to production runs dated before this one. */
+  /** Committed to production runs that come before this one. */
   reservedEarlier: Decimal;
-  /** Ordered, not yet received, expected by the run date. */
+  /** Ordered and sent, not yet received. */
   onOrder: Decimal;
 }
 
@@ -70,6 +70,12 @@ export interface PlanInput {
   stock: Record<string, StockPosition | undefined>;
   /** Target sellable jars per product id. */
   targets: Record<string, number>;
+  /**
+   * Only for a confirmed run: what it still has to use per item (its open
+   * reservation). Its coverage is checked against this instead of the full
+   * requirement, so what it already used isn't asked for again.
+   */
+  stillToUse?: Record<string, Decimal | undefined>;
 }
 
 export type IssueLevel = "blocker" | "warning";
@@ -113,12 +119,18 @@ export interface RequirementLine {
   required: Decimal | null;
   /** Where the requirement comes from (sauce or product name → quantity). */
   contributions: { from: string; quantity: Decimal | null }[];
+  /** Confirmed runs only: what the run still has to use (required minus what it already used). */
+  stillToUse?: Decimal;
   onHand: Decimal | null;
   reservedEarlier: Decimal;
   /** onHand − reservedEarlier, never below 0. */
   available: Decimal | null;
   onOrder: Decimal;
-  /** What still has to be bought, or null when it can't be worked out. */
+  /**
+   * What still has to be bought, or null when it can't be worked out:
+   * need − (onHand + onOrder − reservedEarlier), never below 0. Orders count
+   * for earlier runs first, so one order is never counted twice.
+   */
   toBuy: Decimal | null;
   status: CoverageStatus;
 }
@@ -259,10 +271,14 @@ export function planProduction(input: PlanInput): PlanResult {
     const pos = input.stock[itemId] ?? { onHand: null, reservedEarlier: ZERO, onOrder: ZERO };
     const available = pos.onHand === null ? null : Decimal.max(ZERO, pos.onHand.minus(pos.reservedEarlier));
 
+    const stillToUse = input.stillToUse ? (input.stillToUse[itemId] ?? ZERO) : undefined;
+    const need = stillToUse ?? required;
     let toBuy: Decimal | null = null;
     let status: CoverageStatus = "unknown";
-    if (required !== null && available !== null) {
-      toBuy = Decimal.max(ZERO, required.minus(available).minus(pos.onOrder));
+    if (need !== null && pos.onHand !== null) {
+      // Stock and orders left after earlier runs take what they hold.
+      const free = Decimal.max(ZERO, pos.onHand.plus(pos.onOrder).minus(pos.reservedEarlier));
+      toBuy = Decimal.max(ZERO, need.minus(free));
       if (item.stockUnit === "unit") toBuy = toBuy.ceil();
       status = toBuy.isZero() ? "covered" : "short";
     }
@@ -274,6 +290,7 @@ export function planProduction(input: PlanInput): PlanResult {
       unit: item.stockUnit,
       required,
       contributions: merged,
+      ...(stillToUse ? { stillToUse } : {}),
       onHand: pos.onHand,
       reservedEarlier: pos.reservedEarlier,
       available,

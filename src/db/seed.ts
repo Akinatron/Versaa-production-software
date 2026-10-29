@@ -4,6 +4,7 @@ import * as t from "./schema";
 import { loadSeedCatalog } from "@/domain/seed-catalog";
 import { batchPrefixFor } from "@/domain/codes";
 import { SAUCE_COLORS } from "@/domain/sauce-colors";
+import { getSetting, setSetting } from "./app-settings";
 
 /**
  * Load the starting catalog. Safe to run more than once: anything that
@@ -104,4 +105,22 @@ export async function seedYieldEstimates(db: DB) {
     }
   });
   return { added };
+}
+
+/** App setting marking that the starting catalog has been loaded into this database. */
+export const CATALOG_LOADED = "catalog_loaded";
+
+/**
+ * Load the starting catalog and yield estimates once per database (the
+ * desktop app's first start). The mark is saved only after both are in, so a
+ * first start that was cut short loads them on the next one; both steps are
+ * safe to repeat. Once marked, it never loads again, so what was deleted
+ * later stays deleted.
+ */
+export async function loadStartingCatalogOnce(db: DB): Promise<{ loaded: boolean; added: number }> {
+  if (await getSetting(db, CATALOG_LOADED, false)) return { loaded: false, added: 0 };
+  await seedCatalog(db);
+  const { added } = await seedYieldEstimates(db);
+  await setSetting(db, CATALOG_LOADED, true);
+  return { loaded: true, added };
 }

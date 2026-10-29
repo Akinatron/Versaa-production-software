@@ -44,6 +44,7 @@ export default async function RunOrderPage({
         supplierId: o.supplierId,
         supplierName: o.supplierName,
         rank: o.rank,
+        ...(o.standIn ? { standIn: true } : {}),
         packQty: o.packQty?.toString() ?? null,
         packName: o.packName,
         price: o.price?.toString() ?? null,

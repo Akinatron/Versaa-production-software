@@ -1,12 +1,19 @@
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { toCsv, type Cell } from "../csv";
+import { toXlsx, type XlsxType } from "@/lib/xlsx";
 
 export const dynamic = "force-dynamic";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-type Export = (range: { from: string; to: string } | null) => Promise<{ header: string[]; rows: Cell[][] }>;
+/** Each export: column names, rows, and (for Excel) how to write each column. */
+type Export = (range: { from: string; to: string } | null) => Promise<{ header: string[]; rows: Cell[][]; types: XlsxType[] }>;
+
+const T = "text" as const;
+const N = "number" as const;
+const D = "date" as const;
+const DT = "datetime" as const;
 
 const exports: Record<string, Export> = {
   async movements(range) {
@@ -33,6 +40,7 @@ const exports: Record<string, Export> = {
     return {
       header: ["date", "type", "item", "item kind", "lot", "quantity (+ in, - out)", "unit", "reason", "document type", "document", "reverses an earlier movement", "recorded at"],
       rows: [...rows].map((r) => [r.date, r.type, r.item, r.kind, r.lot, r.quantity, r.unit, r.reason, r.doc_type, r.document, r.reverses_earlier, r.recorded_at]),
+      types: [D, T, T, T, T, N, T, T, T, T, T, DT],
     };
   },
 
@@ -53,6 +61,7 @@ const exports: Record<string, Export> = {
     return {
       header: ["lot", "item", "item kind", "unit", "origin", "supplier or batch", "delivery note", "supplier batch", "received/made on", "best before", "balance now"],
       rows: [...rows].map((r) => [r.code, r.item, r.kind, r.unit, r.origin, r.origin_detail, r.delivery_ref, r.supplier_batch, r.received_on, r.best_before, r.balance]),
+      types: [T, T, T, T, T, T, T, T, D, D, N],
     };
   },
 
@@ -74,6 +83,7 @@ const exports: Record<string, Export> = {
     return {
       header: ["outflow", "type", "date", "customer", "destination", "reference", "sales order", "product", "lot", "batch", "jars", "unit price (recorded)", "line value (jars x price)", "note"],
       rows: [...rows].map((r) => [r.code, r.type, r.date, r.customer, r.destination, r.reference, r.sales_order, r.product, r.lot, r.batch, r.jars, r.unit_price, r.line_value, r.note]),
+      types: [T, T, D, T, T, T, T, T, T, T, N, N, N, T],
     };
   },
 
@@ -96,6 +106,7 @@ const exports: Record<string, Export> = {
     return {
       header: ["batch", "sauce", "run", "recipe version", "status", "planned for", "produced on", "closed on", "litres (jars filled x ml, rejects included)", "jars filled", "jars rejected", "jars accepted", "note"],
       rows: [...rows].map((r) => [r.code, r.sauce, r.run, r.version_no, r.status, r.planned_for, r.produced_on, r.closed_on, r.litres, r.filled, r.rejected, r.accepted, r.note]),
+      types: [T, T, T, N, T, D, D, D, N, N, N, N, T],
     };
   },
 };
@@ -108,14 +119,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const range = isDate(from) && isDate(to) ? { from, to } : null;
-  const { header, rows } = await fn(range);
+  const { header, rows, types } = await fn(range);
   const stamp = new Date().toISOString().slice(0, 10);
-  const file = range ? `versaa-${name}-${range.from}-to-${range.to}.csv` : `versaa-${name}-${stamp}.csv`;
-  return new Response(toCsv(header, rows), {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${file}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  const excel = url.searchParams.get("format") === "xlsx";
+  const file = `versaa-${name}-${range ? `${range.from}-to-${range.to}` : stamp}.${excel ? "xlsx" : "csv"}`;
+  const headers = { "Content-Disposition": `attachment; filename="${file}"`, "Cache-Control": "no-store" };
+  if (excel) {
+    const body = new Uint8Array(toXlsx(name, header, rows, types));
+    return new Response(body, { headers: { ...headers, "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } });
+  }
+  return new Response(toCsv(header, rows), { headers: { ...headers, "Content-Type": "text/csv; charset=utf-8" } });
 }

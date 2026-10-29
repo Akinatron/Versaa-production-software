@@ -7,7 +7,7 @@ import { OperationError, checkWholeUnits, itemsById, today, type Tx } from "./ba
 import { lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
-import { batchPrefixFor } from "@/domain/codes";
+import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import type { PlanResult } from "@/domain/planner";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -133,11 +133,13 @@ export async function ensureBatches(db: DB, runId: string) {
 /**
  * Bring a run's reservation of an item in line with what its batches have
  * used so far: reserved = originally reserved − used (never below 0).
+ * "Originally reserved" is only what was held at confirmation, minus batches
+ * not made; the adjustments this function adds never count towards it.
  */
 async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
   const [row] = await tx.execute<{ original: string | null; current: string | null; used: string | null }>(sql`
     select
-      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and quantity > 0)
+      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and kind = 'hold')
         - (select coalesce(sum(c.planned_qty), 0) from batch_consumption c join production_batches b on b.id = c.batch_id
            where b.run_id = ${runId} and b.status = 'cancelled' and c.item_id = ${itemId}) as original,
       (select sum(quantity) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null) as current,
@@ -152,7 +154,7 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
   if (original.isZero() && new Decimal(row?.current ?? 0).isZero()) return;
   const target = Decimal.max(D0, original.minus(row?.used ?? 0));
   const diff = target.minus(row?.current ?? 0);
-  if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString() });
+  if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString(), kind: "adjust" });
 }
 
 // ---------------------------------------------------------------- ingredients used
@@ -469,7 +471,7 @@ async function finishedLot(
   if (!lot) {
     [lot] = await tx
       .insert(t.lots)
-      .values({ itemId: p.product.itemId, code: `${batch.code}-${p.format.capacityMl}`, batchId: batch.id, receivedOn: on, bestBefore })
+      .values({ itemId: p.product.itemId, code: `${batch.code}-${sizeTag(p.format)}`, batchId: batch.id, receivedOn: on, bestBefore })
       .returning();
   } else if (!lot.bestBefore && bestBefore) {
     await tx.update(t.lots).set({ bestBefore }).where(eq(t.lots.id, lot.id));
@@ -604,14 +606,20 @@ export async function changePackaging(
     restore?: boolean;
     reason?: string | null;
     packedOn?: string;
-    bestBefore?: string | null;
+    /**
+     * New best-before per product id, only for the sizes whose date was
+     * changed (null clears it). Other sizes keep their own date. A size packed
+     * for the first time in this edit gets this date or its shelf life.
+     */
+    bestBeforeBy?: Record<string, string | null>;
     note?: string | null;
     lines?: PackagingLineInput[];
   },
 ) {
+  const newDates = input.delete || input.restore ? {} : (input.bestBeforeBy ?? {});
   if (!input.delete && !input.restore) {
     if (!input.packedOn || !isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
-    if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
+    if (Object.values(newDates).some((d) => d && !isDate(d))) throw new OperationError("Best-before isn't a valid date.");
     checkJarNumbers(input.lines ?? []);
   }
   return db.transaction(async (tx) => {
@@ -662,7 +670,7 @@ export async function changePackaging(
     const { plans, errors } = await planMaterials(tx, need, used);
 
     // Jars: the finished lot can only give back what is still in it.
-    const jarMoves: { lotId: string; itemId: string; diff: number }[] = [];
+    const jarMoves: { lotId: string; productId: string; diff: number }[] = [];
     for (const l of lines) {
       const p = productRows.find((r) => r.product.id === l.productId)!;
       const diff = l.filled - l.rejected - (l.old?.accepted ?? 0);
@@ -679,7 +687,7 @@ export async function changePackaging(
           continue;
         }
       }
-      jarMoves.push({ lotId: lotId ?? "", itemId: p.product.itemId, diff });
+      jarMoves.push({ lotId: lotId ?? "", productId: l.productId, diff });
     }
     if (errors.length) throw new OperationError(errors.join(" "));
 
@@ -691,10 +699,20 @@ export async function changePackaging(
         : `Packaging of ${when} for ${batch.code} corrected`;
     const at = new Date();
     const names = new Map(productRows.map((r) => [r.product.id, r.product.name]));
+    // Best-before: only the sizes whose date was changed, on the lot they already have.
+    const dateMoves: { lotId: string; productId: string; before: string | null; after: string | null }[] = [];
+    for (const l of lines) {
+      const lotId = l.old?.finishedLotId;
+      if (!lotId || !(l.productId in newDates)) continue;
+      const [lot] = await tx.select({ bestBefore: t.lots.bestBefore }).from(t.lots).where(eq(t.lots.id, lotId));
+      const after = newDates[l.productId] || null;
+      if (lot && (lot.bestBefore ?? null) !== after) dateMoves.push({ lotId, productId: l.productId, before: lot.bestBefore ?? null, after });
+    }
     const changes: FieldChange[] = [
       ...lines
         .map((l) => ({ label: names.get(l.productId) ?? "Jars", before: l.old ? jarsText(l.old) : null, after: jarsText(l) }))
         .filter((c) => c.before !== c.after),
+      ...dateMoves.map((m) => ({ label: `Best-before ${names.get(m.productId) ?? ""}`.trim(), before: m.before, after: m.after })),
       ...(input.delete || input.restore
         ? []
         : diff([
@@ -730,8 +748,8 @@ export async function changePackaging(
       const p = productRows.find((r) => r.product.id === l.productId)!;
       const accepted = l.filled - l.rejected;
       let lotId = l.old?.finishedLotId ?? null;
-      if (!lotId && (l.filled > 0 || l.rejected > 0)) lotId = (await finishedLot(tx, batch, p, packedOn ?? when, input.bestBefore || null)).id;
-      const move = jarMoves.find((m) => m.itemId === p.product.itemId);
+      if (!lotId && (l.filled > 0 || l.rejected > 0)) lotId = (await finishedLot(tx, batch, p, packedOn ?? when, newDates[l.productId] || null)).id;
+      const move = jarMoves.find((m) => m.productId === l.productId);
       if (move && lotId) {
         await tx.insert(t.movements).values({
           lotId,
@@ -761,9 +779,8 @@ export async function changePackaging(
           changeKey: input.idempotencyKey,
         });
       }
-      if (!input.delete && !input.restore && input.bestBefore && lotId && l.filled > 0)
-        await tx.update(t.lots).set({ bestBefore: input.bestBefore }).where(eq(t.lots.id, lotId));
     }
+    for (const m of dateMoves) await tx.update(t.lots).set({ bestBefore: m.after }).where(eq(t.lots.id, m.lotId));
 
     await tx
       .update(t.packagingSessions)
@@ -982,7 +999,7 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         const [row] = await tx.execute<{ q: string | null }>(sql`
           select sum(quantity) as q from reservations where run_id = ${batch.runId} and item_id = ${l.itemId} and released_at is null`);
         const release = Decimal.min(new Decimal(l.plannedQty), new Decimal(row?.q ?? 0));
-        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString() });
+        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString(), kind: "adjust" });
       }
     } else {
       const pending = await tx

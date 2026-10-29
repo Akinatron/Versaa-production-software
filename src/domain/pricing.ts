@@ -26,6 +26,10 @@ export interface Offer {
   price: Decimal | null;
   /** When the current price was set. */
   since: Date | null;
+  /** False when the supplier is marked "Not in use". */
+  supplierActive?: boolean;
+  /** Set when the favourite is not in use and this cheapest supplier in use stands in for it. */
+  standIn?: boolean;
 }
 
 /** Price per stock unit, or null when unknown. */

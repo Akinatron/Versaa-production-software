@@ -88,12 +88,13 @@ export const keep: Article[] = [
       {
         ol: [
           "Open [Stock](/stock) → **Correct or write off** → **Count correction**.",
-          "Choose the **Item you counted**. Its lots with stock are listed with what the system says.",
+          "Choose the **Item you counted** and the day it was **Counted on**. Its lots are listed with what the system says they held at the end of that day.",
           "Enter what you **Counted** in each lot. Found some without a lot? Use **Found stock without a lot** (with a best-before if known).",
-          'Fill **Counted on** and **Reason** (for example "monthly count") and press **Save count**.',
+          'Fill the **Reason** (for example "monthly count") and press **Save count**.',
         ],
       },
       "Only the differences are recorded. The original numbers and the correction both stay in the history. Found stock becomes a lot with a code like `COUNT-20261105-001`.",
+      "Counted on Friday and entering it on Monday? Choose Friday. The count is compared with the stock at the end of Friday, so what was recorded after it (cooking, packing, deliveries, write-offs) is kept. Example: 12 kg on record, you count 10 kg on Friday and cook with 3 kg on Monday; entering Friday's count leaves 7 kg.",
       { h: "Write-off" },
       {
         ol: [
