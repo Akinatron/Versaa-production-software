@@ -12,6 +12,7 @@ import { recordIngredientsAction } from "../../cook-actions";
 import { IngredientsForm, type IngredientLine } from "./ingredients-form";
 import { fmtDate } from "../../../components/ui/format";
 import { History } from "../../../components/history";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,9 @@ export default async function ProductionBatchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id).catch(() => null);
+  const tr = await traceBatch(db(), id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "cancelled";

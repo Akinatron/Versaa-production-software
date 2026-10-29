@@ -20,6 +20,7 @@ import { fmtWhen } from "../../../components/history-format";
 import { fmtDate } from "../../../components/ui/format";
 import { dayOf } from "@/domain/dates";
 import { today as todayIso } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,9 @@ export default async function BatchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id).catch(() => null);
+  const tr = await traceBatch(db(), id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "closed" && batch.status !== "cancelled";

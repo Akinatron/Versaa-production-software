@@ -14,6 +14,7 @@ import { DocUpload } from "../../components/doc-upload";
 import { DeletedNote, EditedMark, History, ReasonField } from "../../components/history";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { correctDelivery, toggleDelivery } from "../actions";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +27,13 @@ export default async function DeliveryPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const [row] = await db()
     .select({ r: t.receipts, supplier: t.suppliers })
     .from(t.receipts)
     .leftJoin(t.suppliers, eq(t.receipts.supplierId, t.suppliers.id))
-    .where(eq(t.receipts.id, id))
-    .catch(() => []);
+    .where(eq(t.receipts.id, id));
   if (!row) notFound();
   const { r, supplier } = row;
   const lines = await db()

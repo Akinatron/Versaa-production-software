@@ -10,6 +10,7 @@ import { OrderPlanner, type PlannerLine } from "../../../components/order-planne
 import { RunOrdersTable } from "../../../components/order-bits";
 import { NextStep, RunHeader, loadRun } from "../../../components/run-steps";
 import { createPlannedOrders } from "../../../orders/actions";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function RunOrderPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const run = await loadRun(id);
   const live = await planForRun(db(), id);

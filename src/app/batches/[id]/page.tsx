@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { batchHref, batchStepFor } from "../../components/batch-paths";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function BatchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const sp = await searchParams;
   const [b] = await db()
     .select({
@@ -23,8 +25,7 @@ export default async function BatchPage({
       sessions: sql<number>`(select count(*)::int from packaging_sessions s where s.batch_id = ${t.productionBatches.id} and s.deleted_at is null)`,
     })
     .from(t.productionBatches)
-    .where(eq(t.productionBatches.id, id))
-    .catch(() => []);
+    .where(eq(t.productionBatches.id, id));
   if (!b) notFound();
   const qs = new URLSearchParams(Object.entries(sp).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
   redirect(batchHref(id, batchStepFor(b)) + (qs ? `?${qs}` : ""));

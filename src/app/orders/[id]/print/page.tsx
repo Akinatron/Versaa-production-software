@@ -7,6 +7,7 @@ import { money } from "@/domain/pricing";
 import { linePrice, lineQuantity, longDate, orderTotal } from "@/domain/order-message";
 import { orderMessageData } from "../../message-data";
 import { PrintButton } from "../../../components/print-button";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function PrintOrderPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const q = await searchParams;
   const withPrices = q.prices === "1";
   const [order] = await loadOrders(db(), { ids: [id] });

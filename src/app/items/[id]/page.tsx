@@ -23,6 +23,7 @@ import { ItemStorageForm, StorageBadge } from "../../components/storage";
 import { ShelfLifeForm } from "../../components/shelf-life";
 import { SupplierPicker } from "../../components/pickers";
 import { dayOf } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export default async function ItemPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const [item] = await db().select().from(t.items).where(eq(t.items.id, id));
   if (!item) notFound();
@@ -365,8 +367,7 @@ async function StockTab({
       </div>
       {more && (
         <p className="small">
-          The latest {LATEST_MOVES}.{" "}
-          <Link href={`/items/${item.id}?tab=stock&moves=all`}>Show all movements</Link>
+          The latest {LATEST_MOVES}. <Link href={`/items/${item.id}?tab=stock&moves=all`}>Show all movements</Link>
         </p>
       )}
     </>

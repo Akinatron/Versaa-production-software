@@ -21,6 +21,7 @@ import { DocUpload } from "../../components/doc-upload";
 import { SendOrder } from "../../components/send-order";
 import { orderMessageData } from "../message-data";
 import { dayOf } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function OrderPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const [order] = await loadOrders(db(), { ids: [id] });
   if (!order) notFound();

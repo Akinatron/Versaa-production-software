@@ -530,6 +530,11 @@ button.secondary.is-pending::after, button.ghost.is-pending::after, button.dange
 /* Mobile menu: the shade fades in under the sliding menu. */
 .scrim.open { animation: fade-in 200ms ease both; }
 
+/* Error, not-found and loading screens. Loading only shows after a moment. */
+.error-page { max-width: 640px; }
+.error-page h1 { margin-top: 0; }
+.page-loading { animation: fade-in 200ms ease 400ms both; }
+
 @media (prefers-reduced-motion: reduce) {
   :root { --rise: 0px; }
   .flow-links path { animation: fade-in 200ms ease both; animation-delay: 0ms; }

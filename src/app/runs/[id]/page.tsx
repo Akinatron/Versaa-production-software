@@ -17,6 +17,7 @@ import { RunOrdersTable } from "../../components/order-bits";
 import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
 import { fmtDate } from "../../components/ui/format";
 import { dayOf } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function RunPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const run = await loadRun(id);
   const [snapshot] = await db().select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, id));
