@@ -6,8 +6,8 @@ import { db } from "@/db/client";
 import { addSupplier } from "@/db/operations";
 import { linkSupplierItem, moveSupplierRank, setOffer, setSupplierActive, unlinkSupplierItem, updateSupplier } from "@/db/suppliers";
 import { attempt, withOk } from "../components/flash";
+import { str } from "../components/form-values";
 
-const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 /** Go back to the card the form was on (supplier or item card). */
 const back = (form: FormData, fallback: string) => {
   const b = str(form, "back");

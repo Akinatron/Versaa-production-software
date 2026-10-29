@@ -1,13 +1,14 @@
 import { db } from "@/db/client";
 import { setupMarkdown } from "@/db/help";
 import { buildManual } from "@/help/manual";
+import { today as todayIso } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
 /** The AI manual as a Markdown download. ?setup=1 adds this business's recipes, products, items and prices. */
 export async function GET(req: Request) {
   const withSetup = new URL(req.url).searchParams.get("setup") === "1";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const body = buildManual({ generatedOn: today, setup: withSetup ? await setupMarkdown(db()) : null });
   return new Response(body, {
     headers: {

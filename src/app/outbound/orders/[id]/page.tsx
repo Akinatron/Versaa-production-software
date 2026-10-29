@@ -14,6 +14,7 @@ import { EditedMark, History, ReasonField } from "../../../components/history";
 import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
 import { ConfirmButton, GuardedForm } from "../../../components/unsaved-guard";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function SalesOrderPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const [row] = await db()
     .select({ o: t.salesOrders, customer: t.customers.name })

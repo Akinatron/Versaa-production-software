@@ -3,6 +3,7 @@ import { planForRun } from "@/db/operations";
 import { Flash } from "../../../components/flash";
 import { PlanView } from "../../../components/plan-view";
 import { NextStep, RunHeader, loadRun } from "../../../components/run-steps";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function RunStockPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const run = await loadRun(id);
   const live = await planForRun(db(), id);

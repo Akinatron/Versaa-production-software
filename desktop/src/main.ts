@@ -27,7 +27,7 @@ declare const __VERSAA_UPDATER__: boolean;
 declare const __VERSAA_DEVTOOLS__: boolean;
 const updater = __VERSAA_UPDATER__ ? (require("./updater") as typeof import("./updater")) : undefined;
 
-// Everything Versaa keeps: on a Mac, ~/Library/Application Support/Versaa/data.
+// Everything Versaa keeps: on Windows %APPDATA%\Versaa\data, on a Mac ~/Library/Application Support/Versaa/data.
 const dataDir = path.join(app.getPath("userData"), "data");
 const paths = {
   database: path.join(dataDir, "database"),
@@ -123,8 +123,8 @@ function startControl(): Promise<string> {
 async function startServer(databaseUrl: string): Promise<string> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
-  // The window uses "localhost": Next.js writes its redirects with that name, and the
-  // sign-in cookie belongs to one host name, so the whole app must stay on one.
+  // The window uses "localhost": Next.js writes its redirects with that name, so the
+  // whole app stays on one host name.
   const windowUrl = `http://localhost:${port}`;
   server = utilityProcess.fork(path.join(serverDir, "server.js"), [], {
     serviceName: "Versaa server",
@@ -142,8 +142,6 @@ async function startServer(databaseUrl: string): Promise<string> {
       VERSAA_DEVTOOLS: __VERSAA_DEVTOOLS__ ? "1" : "0",
       VERSAA_DESKTOP_CONTROL: await startControl(),
       VERSAA_DESKTOP_TOKEN: controlToken,
-      // Plain http on this computer only, so the sign-in cookie can't be "secure only".
-      INSECURE_COOKIES: "1",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   });

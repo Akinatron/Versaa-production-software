@@ -11,6 +11,7 @@ import { recordStockCount, recordWriteOff, setAdjustmentDeleted } from "./adjust
 import { addItem, saveRecipeDraft, setItemStorage, startRecipeDraft } from "./catalog";
 import { attachDocuments } from "./documents";
 import { seedYieldEstimates } from "./seed";
+import { addDays, today } from "@/domain/dates";
 
 /*
  * The test data shown by developer mode's "Mock data". It is made with the
@@ -21,11 +22,7 @@ import { seedYieldEstimates } from "./seed";
  * Every price here is invented, for testing only.
  */
 
-const day = (offset: number) => {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + offset);
-  return d.toISOString().slice(0, 10);
-};
+const day = (offset: number) => addDays(today(), offset);
 
 /** A stable made-up number between min and max for a name, so the same item always gets the same price. */
 function pseudo(name: string, min: number, max: number) {

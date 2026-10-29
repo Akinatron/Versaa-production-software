@@ -1,13 +1,16 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { BUSINESS_TIME_ZONE } from "@/domain/dates";
 
 export type DB = ReturnType<typeof createDb>;
 
 export function createDb(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("DATABASE_URL is not set");
   // The desktop app's built-in database takes one connection at a time (DATABASE_POOL_MAX=1).
-  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 5 });
+  // Days in SQL (`::date`, `now()`) follow the business's time zone, like the app.
+  // The desktop database ignores this and sets it itself (desktop/src/database.ts).
+  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 5, connection: { TimeZone: BUSINESS_TIME_ZONE } });
   return drizzle(sql, { schema });
 }
 
@@ -23,7 +26,7 @@ export interface MockDatabase {
 // Kept on globalThis so dev-mode reloads and separate route bundles share one pool.
 const g = globalThis as unknown as { __versaaDb?: DB; __versaaMock?: MockDatabase | null };
 
-/** The real database, whatever the app is showing. Sign-in and app settings always use it. */
+/** The real database, whatever the app is showing. App settings always use it. */
 export function realDb(): DB {
   g.__versaaDb ??= createDb();
   return g.__versaaDb;

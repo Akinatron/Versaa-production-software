@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError } from "./base";
+import { OperationError, zeroOrMore } from "./base";
 import { diff, logChange, needReason } from "./changes";
 import { favourite, unitPrice, type Offer } from "@/domain/pricing";
 
@@ -17,17 +17,7 @@ import { favourite, unitPrice, type Offer } from "@/domain/pricing";
 
 type Exec = Pick<DB, "select" | "insert" | "update" | "execute">;
 
-const optDecimal = (v: Decimal.Value | null | undefined, what: string): Decimal | null => {
-  if (v === null || v === undefined || String(v).trim() === "") return null;
-  let d: Decimal;
-  try {
-    d = new Decimal(String(v).replace(",", "."));
-  } catch {
-    throw new OperationError(`${what}: "${v}" is not a number.`);
-  }
-  if (d.isNaN() || d.lt(0)) throw new OperationError(`${what} can't be negative.`);
-  return d;
-};
+const optDecimal = (v: Decimal.Value | null | undefined, what: string): Decimal | null => zeroOrMore(v, what);
 
 // ---------------------------------------------------------------- suppliers
 

@@ -6,12 +6,10 @@ import { db } from "@/db/client";
 import { attachDocuments, removeDocument, restoreDocument, type DocumentKind } from "@/db/documents";
 import { filesFrom } from "./files-from";
 import { attempt, withOk } from "../components/flash";
+import { localPath } from "../components/form-values";
 
 /** Only go back to a page of this app. */
-function safeBack(v: FormDataEntryValue | null) {
-  const s = String(v ?? "");
-  return s.startsWith("/") && !s.startsWith("//") ? s : "/deliveries";
-}
+const safeBack = (v: FormDataEntryValue | null) => localPath(v, "/deliveries");
 
 function revalidatePaperwork() {
   revalidatePath("/deliveries");

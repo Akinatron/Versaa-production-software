@@ -18,6 +18,7 @@ import { fmtDate } from "../../components/ui/format";
 import { supplierDocuments } from "@/db/documents";
 import { DocList } from "../../components/documents";
 import { BOUGHT_KINDS, KIND_PLURAL, type BoughtKind } from "@/domain/item-kinds";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function SupplierPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const [supplier] = await db().select().from(t.suppliers).where(eq(t.suppliers.id, id));
   if (!supplier) notFound();

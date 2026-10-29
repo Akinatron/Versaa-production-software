@@ -1,6 +1,6 @@
 # Check for updates (development only)
 
-While Versaa is being built, the Mac app can update itself from GitHub: **Settings → Developer mode → Check for updates**. It is meant for development and is easy to leave out or remove before the app goes to other people.
+While Versaa is being built, the Mac app can update itself from GitHub (on Windows the button only says to install the new version by hand): **Settings → Developer mode → Check for updates**. It is meant for development and is easy to leave out or remove before the app goes to other people.
 
 ## How it works
 
@@ -28,7 +28,7 @@ The copy installed now has no updater. Build and install it once by hand on the 
 VERSAA_UPDATER=0 pnpm desktop:mac
 ```
 
-That build contains no updater code and no bridge to the page; developer mode says "Only in the Mac app" where the button was.
+That build contains no updater code and no bridge to the page; developer mode says "This copy can't update itself" where the button was.
 
 To leave out developer mode as a whole (Check for updates, Mock data and Delete database), build with `VERSAA_DEVTOOLS=0` too:
 

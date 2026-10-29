@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import type { EntityType } from "@/db/changes";
+import { isId } from "@/lib/ids";
 
 /** Where each kind of record lives, so a history line can link to any of them. */
 async function pathFor(type: EntityType, id: string): Promise<string> {
@@ -65,6 +66,6 @@ async function pathFor(type: EntityType, id: string): Promise<string> {
 
 export async function GET(req: Request, { params }: { params: Promise<{ type: string; id: string }> }) {
   const { type, id } = await params;
-  const path = /^[0-9a-f-]{36}$/i.test(id) ? await pathFor(type as EntityType, id) : "/history";
+  const path = isId(id) ? await pathFor(type as EntityType, id) : "/history";
   return NextResponse.redirect(new URL(path, req.url));
 }

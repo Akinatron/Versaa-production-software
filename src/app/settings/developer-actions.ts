@@ -86,7 +86,7 @@ export async function deleteDatabaseAction(form: FormData) {
       await needDeveloperMode();
       if (parts.length === 0) throw new OperationError("Tick what to delete.");
       if (confirm !== "DELETE") throw new OperationError("Type DELETE (in capitals) to confirm.");
-      // The Mac app keeps a copy of the real database and files first.
+      // The desktop app keeps a copy of the real database and files first.
       if (!mock && isDesktop()) backup = (await desktopRequest<{ file: string }>("/backup")).file;
       const done = await wipeDatabase(db(), parts);
       if (done.has("activity")) await emptyFolder(mock ? mock.uploadsDir : uploadsRoot());

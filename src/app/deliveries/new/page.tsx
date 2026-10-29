@@ -12,6 +12,7 @@ import { saveDelivery } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { DocFileInput } from "../../components/doc-upload";
+import { today } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
           </div>
           <div>
             <label htmlFor="receivedOn">Delivered on (required)</label>
-            <input id="receivedOn" name="receivedOn" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+            <input id="receivedOn" name="receivedOn" type="date" required defaultValue={today()} />
           </div>
           <div>
             <label htmlFor="receivedTime">Time (optional)</label>

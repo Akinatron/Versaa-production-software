@@ -9,6 +9,7 @@ import { Flash } from "../../../components/flash";
 import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
 import { activateRecipe, discardRecipe, saveRecipe, startRecipe } from "../../actions";
 import { PageHeader } from "../../../components/ui/header";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function RecipePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { sauceId } = await params;
+  idOrNotFound(sauceId);
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(sauceId)) notFound();
   const [sauce] = await db().select().from(t.sauces).where(eq(t.sauces.id, sauceId));

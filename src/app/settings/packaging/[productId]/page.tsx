@@ -7,6 +7,7 @@ import { Flash } from "../../../components/flash";
 import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../../components/settings-versions";
 import { activatePackaging, discardPackaging, savePackaging, startPackaging } from "../../actions";
 import { PageHeader } from "../../../components/ui/header";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function PackagingPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { productId } = await params;
+  idOrNotFound(productId);
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(productId)) notFound();
   const [row] = await db()

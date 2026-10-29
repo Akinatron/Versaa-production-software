@@ -1,13 +1,14 @@
 import { db } from "@/db/client";
 import { documentById } from "@/db/documents";
 import { getFile } from "@/lib/files";
+import { isId } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
 /** Open a delivery note or invoice. */
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return new Response("Not found", { status: 404 });
+  if (!isId(id)) return new Response("Not found", { status: 404 });
   const doc = await documentById(db(), id);
   if (!doc) return new Response("Not found", { status: 404 });
   let data: Buffer;

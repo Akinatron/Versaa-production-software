@@ -1,14 +1,15 @@
 import type { ChangeView, EntityType, Ref } from "@/db/changes";
+import { BUSINESS_TIME_ZONE, today } from "@/domain/dates";
 
 /** Times in the history read in the business's own time zone. */
-const TZ = process.env.APP_TIME_ZONE || "Europe/Amsterdam";
+const TZ = BUSINESS_TIME_ZONE;
 const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
 const TIME = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
 /** "18 Oct 10:42" (with the year when it isn't this year). */
 export function fmtWhen(at: Date) {
   const day = DAY.format(at);
-  const thisYear = String(new Date().getFullYear());
+  const thisYear = today().slice(0, 4);
   return `${day.endsWith(thisYear) ? day.slice(0, -5) : day} ${TIME.format(at)}`;
 }
 

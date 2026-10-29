@@ -8,8 +8,8 @@ import { changePackaging, recordPackaging, type PackagingLineInput } from "@/db/
 import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
+import { str } from "../components/form-values";
 
-const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
 
 function jarLines(form: FormData): PackagingLineInput[] {
   return rows(form, ["product", "filled", "rejected"]).map((l) => {

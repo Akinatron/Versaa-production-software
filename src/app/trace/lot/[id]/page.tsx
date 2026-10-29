@@ -18,6 +18,7 @@ import { Flash } from "../../../components/flash";
 import { EditedMark, History, ReasonField } from "../../../components/history";
 import { editLot } from "../../actions";
 import { StorageBadge, StorageOptions } from "../../../components/storage";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function LotTracePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const tr = await traceForward(db(), id);
   if (!tr) notFound();

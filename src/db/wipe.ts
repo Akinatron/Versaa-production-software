@@ -43,6 +43,8 @@ const TABLES: Record<WipePart, string[]> = {
     "purchase_orders",
     "movements",
     "lots",
+    // Numbering starts again at 01 once nothing uses the old codes.
+    "code_counters",
   ],
   suppliers: ["supplier_item_prices", "supplier_items", "suppliers"],
   recipes: ["recipe_lines", "recipe_versions", "packaging_lines", "packaging_versions"],

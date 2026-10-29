@@ -1,11 +1,5 @@
-import { SHELF_UNITS, SHELF_UNIT_KEYS, shelfLifeLabel, type ShelfLife } from "@/domain/shelf-life";
+import { SHELF_UNITS, SHELF_UNIT_KEYS, type ShelfLife } from "@/domain/shelf-life";
 import { setItemShelfLifeAction } from "../settings/actions";
-
-/** An item's shelf life as a small label; "Not set" shows as a warning so it gets filled in. */
-export function ShelfLifeBadge({ value, quietUnset = false }: { value: ShelfLife | null; quietUnset?: boolean }) {
-  if (!value) return quietUnset ? <span className="muted">Not set</span> : <span className="badge warn">Shelf life not set</span>;
-  return <span className="badge neutral">{shelfLifeLabel(value)}</span>;
-}
 
 /** A one-line form to change an item's shelf life (number + unit). Empty clears it. */
 export function ShelfLifeForm({

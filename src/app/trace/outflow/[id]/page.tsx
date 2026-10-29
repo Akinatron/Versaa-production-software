@@ -14,6 +14,7 @@ import { Flash } from "../../../components/flash";
 import { DeletedNote, EditedMark, History, ReasonField } from "../../../components/history";
 import { editOutflow, toggleOutflow } from "../../../outbound/actions";
 import { customerList } from "../../../outbound/data";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function OutflowTracePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const tr = await traceOutflow(db(), id);
   if (!tr) notFound();

@@ -8,6 +8,7 @@ import { PO_STATUS } from "../../../components/labels";
 import { MarkSentForm } from "../../../components/order-bits";
 import { RunHeader, loadRun } from "../../../components/run-steps";
 import { fmtDate } from "../../../components/ui/format";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function RunReceivePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
   const run = await loadRun(id);
   const orders = await loadOrders(db(), { runId: id });

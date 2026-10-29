@@ -11,6 +11,8 @@ import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
 import { DeletedNote, History, ReasonField } from "../../../components/history";
 import { toggleAdjustment } from "../../actions";
+import { dayOf } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +25,9 @@ export default async function AdjustmentPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
-  const [row] = await db()
-    .select({ a: t.stockAdjustments })
-    .from(t.stockAdjustments)
-    .where(eq(t.stockAdjustments.id, id))
-    .catch(() => []);
+  const [row] = await db().select({ a: t.stockAdjustments }).from(t.stockAdjustments).where(eq(t.stockAdjustments.id, id));
   if (!row) notFound();
   const { a } = row;
   const moves = await db()
@@ -71,7 +70,7 @@ export default async function AdjustmentPage({
             {moves.map(({ m, lot, item }) => (
               <tr key={m.id} className={m.changeId ? "muted" : undefined}>
                 <td>
-                  {fmtDate(m.occurredAt.toISOString().slice(0, 10), { year: true })}
+                  {fmtDate(dayOf(m.occurredAt), { year: true })}
                   {m.changeId && <div className="small">{m.reason}</div>}
                 </td>
                 <td>

@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * "Check for updates" card for the Mac app (development only, see
+ * "Check for updates" card for the desktop app (development only, see
  * desktop/UPDATER.md), shown in Settings → Developer mode. It works only
  * inside the desktop app built with the updater; in a browser it says so.
  */
@@ -19,7 +19,7 @@ type Bridge = { status(): Promise<Status>; check(): Promise<Check>; install(): P
 const bridge = (): Bridge | undefined => (globalThis as { versaaDesktop?: { updates?: Bridge } }).versaaDesktop?.updates;
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const label = (b: Build) => `${b.number ? `build ${b.number}` : "a build made on this Mac"} · ${day(b.commitTime)} · ${b.commit.slice(0, 7)}`;
+const label = (b: Build) => `${b.number ? `build ${b.number}` : "a build made by hand"} · ${day(b.commitTime)} · ${b.commit.slice(0, 7)}`;
 // Errors from the desktop shell arrive as "Error invoking remote method '…': Error: <message>".
 const message = (e: unknown) => String(e instanceof Error ? e.message : e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
@@ -44,7 +44,7 @@ export function AppUpdates() {
     return (
       <section className="card" aria-labelledby="app-updates-title">
         <h3 id="app-updates-title">Check for updates</h3>
-        <p className="small muted">Only in the Mac app. Here, update with git pull and pnpm db:migrate.</p>
+        <p className="small muted">This copy can&apos;t update itself. In the web version, update with git pull and pnpm db:migrate.</p>
       </section>
     );
   if (!status) return null;

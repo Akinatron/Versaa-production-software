@@ -2,6 +2,8 @@ import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { toCsv, type Cell } from "../csv";
 import { toXlsx, type XlsxType } from "@/lib/xlsx";
+import { today } from "@/domain/dates";
+import { BUSINESS_TIME_ZONE } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const DT = "datetime" as const;
 
 const exports: Record<string, Export> = {
   async movements(range) {
-    const where: SQL = range ? sql`where m.occurred_at::date between ${range.from} and ${range.to}` : sql``;
+    const where: SQL = range ? sql`where (m.occurred_at at time zone ${BUSINESS_TIME_ZONE})::date between ${range.from} and ${range.to}` : sql``;
     const rows = await db().execute<Record<string, Cell>>(sql`
       select to_char(m.occurred_at, 'YYYY-MM-DD') as date, m.type::text as type, i.name as item, i.kind::text as kind, l.code as lot,
         m.quantity::text as quantity, i.stock_unit::text as unit, m.reason, m.doc_type,
@@ -120,7 +122,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ name: st
   const to = url.searchParams.get("to");
   const range = isDate(from) && isDate(to) ? { from, to } : null;
   const { header, rows, types } = await fn(range);
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = today();
   const excel = url.searchParams.get("format") === "xlsx";
   const file = `versaa-${name}-${range ? `${range.from}-to-${range.to}` : stamp}.${excel ? "xlsx" : "csv"}`;
   const headers = { "Content-Disposition": `attachment; filename="${file}"`, "Cache-Control": "no-store" };

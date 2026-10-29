@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fmtDate as fmtDay } from "./ui/format";
+import { dayOf } from "@/domain/dates";
 
 /** Shared bits for the Settings sub-pages (recipes and packaging lists are versioned the same way). */
 
@@ -9,7 +10,7 @@ export const VERSION_STATUS: Record<string, { label: string; cls: string }> = {
   retired: { label: "Retired", cls: "neutral" },
 };
 
-export const fmtDate = (d: Date | null | undefined) => (d ? fmtDay(d.toISOString().slice(0, 10), { year: true }) : "—");
+export const fmtDate = (d: Date | null | undefined) => (d ? fmtDay(dayOf(d), { year: true }) : "—");
 
 export interface VersionRow {
   id: string;

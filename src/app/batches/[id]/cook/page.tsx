@@ -12,6 +12,7 @@ import { recordIngredientsAction } from "../../cook-actions";
 import { IngredientsForm, type IngredientLine } from "./ingredients-form";
 import { fmtDate } from "../../../components/ui/format";
 import { History } from "../../../components/history";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,9 @@ export default async function ProductionBatchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id).catch(() => null);
+  const tr = await traceBatch(db(), id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "cancelled";
@@ -49,7 +51,11 @@ export default async function ProductionBatchPage({
     .from(t.items)
     .where(and(eq(t.items.kind, "ingredient"), eq(t.items.active, true)))
     .orderBy(asc(t.items.name));
-  const lots = await db().transaction((tx) => lotsOf(tx, [...new Set([...tr.ingredientUse.map((l) => l.itemId), ...ingredients.map((i) => i.id)])]));
+  // Lots with stock, plus the ones this batch already took from (even if now empty).
+  const usedLots = tr.ingredientUse.flatMap((l) => l.sources.map((s) => s.lot.id));
+  const lots = await db().transaction((tx) =>
+    lotsOf(tx, [...new Set([...tr.ingredientUse.map((l) => l.itemId), ...ingredients.map((i) => i.id)])], { withStockOr: usedLots }),
+  );
 
   // Lots a line can use: those with stock, plus the ones it already took from (even if now empty).
   const optionsFor = (itemId: string, used: Map<string, string>) =>

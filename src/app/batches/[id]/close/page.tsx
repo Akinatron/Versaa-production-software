@@ -18,11 +18,13 @@ import { History, ReasonField } from "../../../components/history";
 import { ConfirmButton } from "../../../components/unsaved-guard";
 import { fmtWhen } from "../../../components/history-format";
 import { fmtDate } from "../../../components/ui/format";
+import { dayOf } from "@/domain/dates";
+import { today as todayIso } from "@/domain/dates";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
 const q = (v: Decimal | null, unit: string) => formatQty(v, unit as UnitCode);
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const SOURCE: Record<string, string> = {
   observed: "observed average",
@@ -39,8 +41,9 @@ export default async function BatchPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id).catch(() => null);
+  const tr = await traceBatch(db(), id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "closed" && batch.status !== "cancelled";
@@ -87,7 +90,7 @@ export default async function BatchPage({
   const nextStep = !open ? (
     <li className={batch.status === "closed" ? "ok" : undefined}>
       {batch.status === "closed" ? "Closed" : "Marked as not made"}
-      {batch.closedAt ? ` on ${fmtDate(batch.closedAt.toISOString().slice(0, 10))}` : ""}.
+      {batch.closedAt ? ` on ${fmtDate(dayOf(batch.closedAt))}` : ""}.
       {batch.status === "cancelled" && batch.notMadeReason ? ` Reason: ${batch.notMadeReason}.` : ""}
       {batch.status === "closed" ? " Its packaging can still be edited or deleted." : ""}
     </li>

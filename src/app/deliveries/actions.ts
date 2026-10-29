@@ -36,13 +36,25 @@ export async function saveDelivery(form: FormData) {
       deliveryRef: String(form.get("deliveryRef") ?? "") || null,
       lines,
     });
+    // The delivery is saved by now. If its file can't be stored, say so on
+    // the delivery's page, where it can be added again, instead of an error page.
+    let fileFailed = false;
     if (files.length > 0 && !r.alreadyRecorded) {
-      await attachDocuments(db(), { kind: "delivery_note", receiptId: r.receipt.id, files });
+      try {
+        await attachDocuments(db(), { kind: "delivery_note", receiptId: r.receipt.id, files });
+      } catch (e) {
+        console.error("Delivery saved, but its file could not be attached", e);
+        fileFailed = true;
+      }
     }
     revalidatePath("/deliveries");
     revalidatePath("/stock");
     revalidatePath("/orders", "layout");
     revalidatePath("/runs", "layout");
+    if (fileFailed) {
+      const msg = "Delivery recorded and added to stock, but the file could not be attached. Add it again under Files.";
+      redirect(`/deliveries/${r.receipt.id}?error=${encodeURIComponent(msg)}`);
+    }
     redirect(withOk(po ? `/orders/${po}` : "/deliveries", r.alreadyRecorded ? "That delivery was already recorded." : "Delivery recorded and added to stock."));
   });
 }

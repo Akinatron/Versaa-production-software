@@ -7,6 +7,7 @@ import { clampInt } from "@/domain/label-sheet";
 import { JarLabel, LabelSheets } from "../../../../components/label-sheets";
 import { PrintButton } from "../../../../components/print-button";
 import { fmtDate } from "../../../../components/ui/format";
+import { idOrNotFound } from "@/lib/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function JarLabelsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id } = await params;
+  idOrNotFound(id);
   const q = await searchParams;
   const [lot] = await lotsByIds(db(), [id]);
   if (!lot) notFound();

@@ -7,8 +7,8 @@ import * as t from "@/db/schema";
 import { OperationError } from "@/db/operations";
 import { closeBatch, recordIncident, restoreBatch, setIncidentDeleted, updateBatch, updateIncident } from "@/db/production";
 import { attempt, withOk } from "../components/flash";
+import { str } from "../components/form-values";
 
-const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
 const pathOf = (batchId: string) => `/batches/${batchId}/close`;
 
 function done(batchId: string, msg: string, anchor = ""): never {

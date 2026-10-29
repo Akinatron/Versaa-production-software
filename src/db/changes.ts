@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, lt, sql, type SQL } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
+import { BUSINESS_TIME_ZONE, dayOf } from "@/domain/dates";
 
 /*
  * The change history. Every action a person takes (create, change, delete,
@@ -62,7 +63,7 @@ export function needReason(reason: string | null | undefined, what = "Say why"):
 
 const show = (v: unknown): string | null => {
   if (v === null || v === undefined || v === "") return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) return dayOf(v);
   return String(v);
 };
 
@@ -179,8 +180,8 @@ export async function listChanges(db: DB, f: HistoryFilter = {}): Promise<Change
   const conds: SQL[] = [];
   if (f.area) conds.push(eq(t.changeLog.area, f.area));
   if (f.action && (t.changeAction.enumValues as readonly string[]).includes(f.action)) conds.push(eq(t.changeLog.action, f.action as ChangeView["action"]));
-  if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(sql`${t.changeLog.at} >= ${f.from}::date`);
-  if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(sql`${t.changeLog.at} < ${f.to}::date + 1`);
+  if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(sql`${t.changeLog.at} >= (${f.from}::date)::timestamp at time zone ${BUSINESS_TIME_ZONE}`);
+  if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(sql`${t.changeLog.at} < (${f.to}::date + 1)::timestamp at time zone ${BUSINESS_TIME_ZONE}`);
   // Entries of one action share the same time, so the page cut is time + id;
   // times are compared to the millisecond, as the "Show older" link carries them.
   const atMs = sql`date_trunc('milliseconds', ${t.changeLog.at})`;

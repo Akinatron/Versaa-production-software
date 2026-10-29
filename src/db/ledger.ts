@@ -3,6 +3,7 @@ import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
 import { unitWord } from "@/domain/quantity";
+import { addDays, localMoment } from "@/domain/dates";
 
 /** Current balance of each lot of the given items (only lots with stock left). */
 export async function lotBalances(tx: Tx, itemIds: string[]) {
@@ -30,11 +31,9 @@ export async function lotBalance(tx: Tx, lotId: string) {
   return new Decimal(row?.balance ?? 0);
 }
 
-/** First moment of the day after `day` (UTC, like every movement date in the app). */
+/** First moment of the day after `day`: local midnight, in the business's time zone. */
 export function endOfDay(day: string) {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d;
+  return localMoment(addDays(day, 1), "00:00");
 }
 
 /** What a lot held at the end of a day: every movement dated that day or before. */
