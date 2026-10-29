@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
@@ -47,23 +47,25 @@ function AnyItemSelect({ items, value, kinds }: { items: Item[]; value?: string;
 /** Lots with stock now, or (with `on`) at the end of that day; `balance` is then what they held that day. */
 async function lotsOf(itemId: string | null, on?: string) {
   const until = on ? endOfDay(on) : null;
+  const balance = until
+    ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until.toISOString()}), 0)`
+    : sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`;
   const rows = await db()
     .select({
       lot: t.lots,
       item: t.items,
       supplier: t.suppliers.name,
       batchCode: t.productionBatches.code,
-      balance: until
-        ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until.toISOString()}), 0)`
-        : sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`,
+      balance,
     })
     .from(t.lots)
     .innerJoin(t.items, eq(t.lots.itemId, t.items.id))
     .leftJoin(t.suppliers, eq(t.lots.supplierId, t.suppliers.id))
     .leftJoin(t.productionBatches, eq(t.lots.batchId, t.productionBatches.id))
-    .where(itemId ? eq(t.lots.itemId, itemId) : sql`true`)
+    // Used-up lots are left out in the database, not after loading every lot there has ever been.
+    .where(and(itemId ? eq(t.lots.itemId, itemId) : undefined, sql`${balance} > 0`))
     .orderBy(asc(t.items.name), t.lots.bestBefore, t.lots.receivedOn);
-  return rows.filter((r) => new Decimal(r.balance).gt(0));
+  return rows;
 }
 
 export default async function AdjustPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {

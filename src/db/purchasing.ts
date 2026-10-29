@@ -13,7 +13,7 @@ import { diff, logChange, needReason, type FieldChange, type Ref } from "./chang
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
 import { inSentence, PO_STATUS_NAME } from "@/domain/status";
-import { localMoment } from "@/domain/dates";
+import { BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
 
 /*
  * Purchase orders and deliveries.
@@ -958,13 +958,18 @@ export interface OrderView {
   cost: Decimal | null;
 }
 
-export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: string } = {}): Promise<OrderView[]> {
+export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: string; doneSince?: string } = {}): Promise<OrderView[]> {
   const conds = [];
   if (filter.ids) {
     if (filter.ids.length === 0) return [];
     conds.push(inArray(t.purchaseOrders.id, filter.ids));
   }
   if (filter.runId) conds.push(eq(t.purchaseOrders.runId, filter.runId));
+  // Open orders always; finished ones (received, closed, cancelled) only from this day on.
+  if (filter.doneSince)
+    conds.push(
+      sql`(${t.purchaseOrders.status} not in ('received', 'closed', 'cancelled') or (${t.purchaseOrders.createdAt} at time zone ${BUSINESS_TIME_ZONE})::date >= ${filter.doneSince}::date)`,
+    );
   const orders = await db
     .select({ po: t.purchaseOrders, supplier: t.suppliers, runCode: t.productionRuns.code })
     .from(t.purchaseOrders)
@@ -973,33 +978,38 @@ export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: strin
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(sql`${t.purchaseOrders.createdAt} desc`);
   if (orders.length === 0) return [];
+  const orderIds = orders.map((o) => o.po.id);
   const lines = await db
-    .select({
-      line: t.purchaseOrderLines,
-      item: t.items,
-      accepted: sql<string>`(select coalesce(sum(r.quantity), 0) from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null where r.purchase_order_line_id = ${t.purchaseOrderLines.id})`,
-      rejected: sql<string>`(select coalesce(sum(r.rejected_qty), 0) from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null where r.purchase_order_line_id = ${t.purchaseOrderLines.id})`,
-    })
+    .select({ line: t.purchaseOrderLines, item: t.items })
     .from(t.purchaseOrderLines)
     .innerJoin(t.items, eq(t.purchaseOrderLines.itemId, t.items.id))
-    .where(
-      inArray(
-        t.purchaseOrderLines.purchaseOrderId,
-        orders.map((o) => o.po.id),
-      ),
-    );
+    .where(inArray(t.purchaseOrderLines.purchaseOrderId, orderIds));
+  // What has arrived against these lines, in one grouped query (not one per line).
+  const received = new Map<string, { accepted: string; rejected: string }>();
+  if (lines.length) {
+    const rows = await db.execute<{ line_id: string; accepted: string; rejected: string }>(sql`
+      select r.purchase_order_line_id as line_id, coalesce(sum(r.quantity), 0) as accepted, coalesce(sum(r.rejected_qty), 0) as rejected
+      from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null
+      where r.purchase_order_line_id in (select id from purchase_order_lines where purchase_order_id in (${sql.join(
+        orderIds.map((id) => sql`${id}`),
+        sql`, `,
+      )}))
+      group by r.purchase_order_line_id`);
+    for (const r of rows) received.set(r.line_id, { accepted: r.accepted, rejected: r.rejected });
+  }
   return orders.map(({ po, supplier, runCode }) => {
     const open = po.status === "sent" || po.status === "partly_received" || po.status === "draft";
     const own = lines
       .filter((l) => l.line.purchaseOrderId === po.id)
       .sort((a, b) => a.item.name.localeCompare(b.item.name))
       .map((l) => {
-        const accepted = new Decimal(l.accepted);
+        const got = received.get(l.line.id);
+        const accepted = new Decimal(got?.accepted ?? 0);
         return {
           line: l.line,
           item: l.item,
           accepted,
-          rejected: new Decimal(l.rejected),
+          rejected: new Decimal(got?.rejected ?? 0),
           pending: open ? Decimal.max(0, new Decimal(l.line.quantity).minus(accepted)) : new Decimal(0),
         };
       });

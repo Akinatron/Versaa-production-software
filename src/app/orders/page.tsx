@@ -7,14 +7,18 @@ import { PO_STATUS } from "../components/labels";
 import { MarkSentForm } from "../components/order-bits";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
-import { today } from "@/domain/dates";
+import { addDays, today } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
+const DONE_DAYS = 90;
+
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const orders = await loadOrders(db());
   const todayIso = today();
+  // Finished orders from the last 90 days, unless all were asked for.
+  const showAll = params.all === "1";
+  const orders = await loadOrders(db(), showAll ? {} : { doneSince: addDays(todayIso, -DONE_DAYS) });
   const groups: { title: string; hint: string; list: OrderView[] }[] = [
     {
       title: "Drafts: not sent yet",
@@ -28,7 +32,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     },
     {
       title: "Done",
-      hint: "",
+      hint: showAll ? "All finished orders." : `Received, closed or cancelled, created in the last ${DONE_DAYS} days.`,
       list: orders.filter((o) => ["received", "closed", "cancelled"].includes(o.po.status)),
     },
   ];
@@ -44,7 +48,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         }
       />
       <Flash params={params} />
-      {orders.length === 0 && <p className="card muted">No orders yet.</p>}
+      {orders.length === 0 && <p className="card muted">{showAll ? "No orders yet." : `No open orders, and none finished in the last ${DONE_DAYS} days.`}</p>}
       {groups
         .filter((g) => g.list.length > 0)
         .map((g) => (
@@ -113,6 +117,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
             </div>
           </section>
         ))}
+      <p className="small">
+        <Link href={showAll ? "/orders" : "/orders?all=1"}>{showAll ? `Only finished orders from the last ${DONE_DAYS} days` : "Show all finished orders"}</Link>
+      </p>
     </>
   );
 }

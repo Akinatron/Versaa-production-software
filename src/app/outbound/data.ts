@@ -27,7 +27,9 @@ export async function finishedLots(): Promise<FinishedLot[]> {
       balance: sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`,
     })
     .from(t.lots)
-    .innerJoin(t.products, eq(t.products.itemId, t.lots.itemId));
+    .innerJoin(t.products, eq(t.products.itemId, t.lots.itemId))
+    // Only lots that still have jars, picked in the database.
+    .where(sql`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0) > 0`);
   return rows
     .map((r) => ({
       id: r.lot.id,

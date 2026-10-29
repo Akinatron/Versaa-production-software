@@ -214,7 +214,7 @@ export default async function ItemPage({
       )}
 
       {tab === "stock" ? (
-        <StockTab item={item} lots={lots} withStock={withStock} empty={empty} q={q} hasStorage={hasStorage} />
+        <StockTab item={item} lots={lots} withStock={withStock} empty={empty} q={q} hasStorage={hasStorage} allMoves={flash.moves === "all"} />
       ) : (
         <SuppliersTab item={item} offers={offers} here={here} edit={flash.edit} />
       )}
@@ -234,6 +234,7 @@ async function StockTab({
   empty,
   q,
   hasStorage,
+  allMoves,
 }: {
   item: Item;
   lots: LotRow[];
@@ -241,13 +242,18 @@ async function StockTab({
   empty: LotRow[];
   q: (v: Decimal.Value) => string;
   hasStorage: boolean;
+  allMoves: boolean;
 }) {
-  const history = await db()
+  // The latest movements; all of them only when asked for.
+  const rows = await db()
     .select({ m: t.movements, lot: t.lots.code })
     .from(t.movements)
     .innerJoin(t.lots, eq(t.movements.lotId, t.lots.id))
     .where(eq(t.movements.itemId, item.id))
-    .orderBy(desc(t.movements.occurredAt), desc(t.movements.createdAt));
+    .orderBy(desc(t.movements.occurredAt), desc(t.movements.createdAt))
+    .limit(allMoves ? Number.MAX_SAFE_INTEGER : LATEST_MOVES + 1);
+  const more = !allMoves && rows.length > LATEST_MOVES;
+  const history = more ? rows.slice(0, LATEST_MOVES) : rows;
 
   const lotTable = (list: LotRow[]) => (
     <table>
@@ -357,9 +363,17 @@ async function StockTab({
           </table>
         )}
       </div>
+      {more && (
+        <p className="small">
+          The latest {LATEST_MOVES}.{" "}
+          <Link href={`/items/${item.id}?tab=stock&moves=all`}>Show all movements</Link>
+        </p>
+      )}
     </>
   );
 }
+
+const LATEST_MOVES = 50;
 
 async function SuppliersTab({ item, offers, here, edit }: { item: Item; offers: Awaited<ReturnType<typeof loadOffers>>; here: string; edit?: string }) {
   const unit = item.stockUnit as UnitCode;

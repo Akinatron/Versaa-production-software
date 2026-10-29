@@ -287,7 +287,7 @@ export const movements = pgTable(
     changeId: uuid("change_id"),
     createdAt: createdAt(),
   },
-  (t) => [index("movements_item").on(t.itemId), index("movements_lot").on(t.lotId)],
+  (t) => [index("movements_item").on(t.itemId), index("movements_lot").on(t.lotId), index("movements_doc").on(t.docType, t.docId)],
 );
 
 // ---------- Purchasing ----------
@@ -336,7 +336,7 @@ export const purchaseOrderLines = pgTable("purchase_order_lines", {
   packPrice: numeric("pack_price"),
   /** What the run needed when the order was planned (before rounding to packs). */
   neededQty: numeric("needed_qty"),
-});
+}, (t) => [index("purchase_order_lines_po").on(t.purchaseOrderId)]);
 
 export const receipts = pgTable("receipts", {
   id: id(),
@@ -370,7 +370,7 @@ export const receiptLines = pgTable("receipt_lines", {
   /** Refused at delivery (damaged, wrong). Counts as not received. */
   rejectedQty: numeric("rejected_qty").notNull().default("0"),
   damageNote: text("damage_note"),
-});
+}, (t) => [index("receipt_lines_receipt").on(t.receiptId), index("receipt_lines_po_line").on(t.purchaseOrderLineId), index("receipt_lines_lot").on(t.lotId)]);
 
 // ---------- Planning ----------
 
@@ -432,7 +432,7 @@ export const reservations = pgTable("reservations", {
   kind: text("kind", { enum: ["hold", "adjust"] }).notNull().default("hold"),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   createdAt: createdAt(),
-});
+}, (t) => [index("reservations_run_item").on(t.runId, t.itemId), index("reservations_sales_order").on(t.salesOrderId)]);
 
 // ---------- Production and packaging ----------
 
@@ -512,7 +512,7 @@ export const packagingSessions = pgTable("packaging_sessions", {
   /** Idempotency key of the last edit or delete, so a retry doesn't apply it twice. */
   changeKey: text("change_key"),
   createdAt: createdAt(),
-});
+}, (t) => [index("packaging_sessions_batch").on(t.batchId)]);
 
 export const packagingSessionLines = pgTable("packaging_session_lines", {
   id: id(),
@@ -535,7 +535,7 @@ export const packagingSessionLines = pgTable("packaging_session_lines", {
    * the sum of its lines.
    */
   changeKey: text("change_key"),
-});
+}, (t) => [index("packaging_session_lines_session").on(t.sessionId)]);
 
 export const incidentType = pgEnum("incident_type", ["loss", "spill", "quality", "other"]);
 
@@ -605,7 +605,7 @@ export const salesOrderLines = pgTable("sales_order_lines", {
     .references(() => products.id),
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
-});
+}, (t) => [index("sales_order_lines_order").on(t.salesOrderId)]);
 
 export const outflowType = pgEnum("outflow_type", ["sale", "sample", "waste", "internal_use", "test"]);
 
@@ -640,7 +640,7 @@ export const outflowLines = pgTable("outflow_lines", {
     .references(() => lots.id),
   jars: integer("jars").notNull(),
   unitPrice: numeric("unit_price"),
-});
+}, (t) => [index("outflow_lines_outflow").on(t.outflowId), index("outflow_lines_lot").on(t.lotId)]);
 
 // ---------- Paperwork ----------
 
@@ -709,7 +709,7 @@ export const changeLogLinks = pgTable(
     entityId: uuid("entity_id").notNull(),
     entityCode: text("entity_code"),
   },
-  (t) => [index("change_log_links_entity").on(t.entityType, t.entityId)],
+  (t) => [index("change_log_links_entity").on(t.entityType, t.entityId), index("change_log_links_change").on(t.changeId)],
 );
 
 // ---------- App settings ----------

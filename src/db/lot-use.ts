@@ -31,14 +31,26 @@ export interface LotInfo {
 const D0 = new Decimal(0);
 
 /** Every lot of these items with its balance, including empty ones, earliest best-before first. */
-export async function lotsOf(tx: Tx, itemIds: string[]): Promise<LotInfo[]> {
+export async function lotsOf(tx: Tx, itemIds: string[], opts: { withStockOr?: string[] } = {}): Promise<LotInfo[]> {
   if (!itemIds.length) return [];
+  const keep = opts.withStockOr;
   const rows = await tx
     .select({ lot: t.lots, balance: sql<string>`coalesce(sum(${t.movements.quantity}), 0)` })
     .from(t.lots)
     .leftJoin(t.movements, eq(t.movements.lotId, t.lots.id))
     .where(inArray(t.lots.itemId, itemIds))
-    .groupBy(t.lots.id);
+    .groupBy(t.lots.id)
+    // With `withStockOr`: only lots with stock left, plus the lots listed (used-up lots are skipped in the database).
+    .having(
+      keep
+        ? keep.length
+          ? sql`coalesce(sum(${t.movements.quantity}), 0) > 0 or ${t.lots.id} in (${sql.join(
+              keep.map((id) => sql`${id}`),
+              sql`, `,
+            )})`
+          : sql`coalesce(sum(${t.movements.quantity}), 0) > 0`
+        : undefined,
+    );
   return rows
     .map((r) => ({
       id: r.lot.id,

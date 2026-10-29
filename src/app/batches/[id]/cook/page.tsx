@@ -49,7 +49,11 @@ export default async function ProductionBatchPage({
     .from(t.items)
     .where(and(eq(t.items.kind, "ingredient"), eq(t.items.active, true)))
     .orderBy(asc(t.items.name));
-  const lots = await db().transaction((tx) => lotsOf(tx, [...new Set([...tr.ingredientUse.map((l) => l.itemId), ...ingredients.map((i) => i.id)])]));
+  // Lots with stock, plus the ones this batch already took from (even if now empty).
+  const usedLots = tr.ingredientUse.flatMap((l) => l.sources.map((s) => s.lot.id));
+  const lots = await db().transaction((tx) =>
+    lotsOf(tx, [...new Set([...tr.ingredientUse.map((l) => l.itemId), ...ingredients.map((i) => i.id)])], { withStockOr: usedLots }),
+  );
 
   // Lots a line can use: those with stock, plus the ones it already took from (even if now empty).
   const optionsFor = (itemId: string, used: Map<string, string>) =>
