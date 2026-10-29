@@ -75,4 +75,4 @@ export async function customerList() {
   return db().select().from(t.customers).orderBy(asc(t.customers.name));
 }
 
-export const todayIso = () => new Date().toISOString().slice(0, 10);
+export { today as todayIso } from "@/domain/dates";

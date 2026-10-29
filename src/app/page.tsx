@@ -10,6 +10,7 @@ import { PageHeader } from "./components/ui/header";
 import { daysFromToday, fmtDate, plural, relDate } from "./components/ui/format";
 import { SauceName } from "./components/sauce-name";
 import { daysUntil } from "@/domain/shelf-life";
+import { addDays, today as todayIso } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ type Alert = {
 };
 
 export default async function Home() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const monthStart = `${today.slice(0, 7)}-01`;
   const d = db();
   const [input, activeItems, runs, runNeeds, orders, batches, pendingSales, available, soldMonth] = await Promise.all([
@@ -296,7 +297,7 @@ export default async function Home() {
     });
   }
   // Lots in stock that are past or near their best-before: use or sell them first.
-  const soon = new Date(Date.parse(`${today}T00:00:00Z`) + EXPIRY_WARN_DAYS * 864e5).toISOString().slice(0, 10);
+  const soon = addDays(today, EXPIRY_WARN_DAYS);
   const expiring = await d.execute<{ id: string; code: string; best_before: string; name: string; kind: string; stock_unit: string; on_hand: string }>(sql`
     select l.id, l.code, l.best_before::text, i.name, i.kind::text, i.stock_unit::text, sum(m.quantity)::text as on_hand
     from lots l join items i on i.id = l.item_id join movements m on m.lot_id = l.id

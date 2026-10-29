@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createDb } from "../../src/db/client";
 import { loadStartingCatalogOnce } from "../../src/db/seed";
+import { BUSINESS_TIME_ZONE } from "../../src/domain/dates";
 
 export type Database = {
   pg: PGlite;
@@ -31,6 +32,7 @@ export type Database = {
 export async function startDatabase(opts: { dataDir: string; migrationsDir: string; log: (...p: unknown[]) => void }): Promise<Database> {
   process.env.DATABASE_POOL_MAX = "1";
   const pg = await PGlite.create(opts.dataDir);
+  await useBusinessTimeZone(pg);
   const socket = new PGLiteSocketServer({ db: pg, host: "127.0.0.1", port: 0, maxConnections: 1 });
   const listening = new Promise<number>((resolve) =>
     socket.addEventListener("listening", (e) => resolve((e as CustomEvent<{ port: number }>).detail.port), { once: true }),
@@ -70,6 +72,7 @@ export async function startDatabase(opts: { dataDir: string; migrationsDir: stri
  */
 export async function startMemoryDatabase(log: (...p: unknown[]) => void): Promise<{ url: string; stop(): Promise<void> }> {
   const pg = await PGlite.create();
+  await useBusinessTimeZone(pg);
   const socket = new PGLiteSocketServer({ db: pg, host: "127.0.0.1", port: 0, maxConnections: 1 });
   const listening = new Promise<number>((resolve) =>
     socket.addEventListener("listening", (e) => resolve((e as CustomEvent<{ port: number }>).detail.port), { once: true }),
@@ -103,4 +106,14 @@ async function refuseNewerDatabase(sql: ReturnType<typeof createDb>["$client"], 
       `This database was already updated by a newer version of Versaa (${n} database changes; this copy knows ${journal.entries.length}). Open the newer Versaa.app instead.`,
     );
   }
+}
+
+/**
+ * PGlite takes a fixed offset from the computer when it opens (no summer and
+ * winter time) and ignores the time zone a client asks for. Setting it here
+ * lasts for its one session, so days in SQL (`::date`) are the business's.
+ */
+async function useBusinessTimeZone(pg: PGlite) {
+  const tz = /^[A-Za-z0-9_+\-/]+$/.test(BUSINESS_TIME_ZONE) ? BUSINESS_TIME_ZONE : "Europe/Amsterdam";
+  await pg.exec(`SET TIME ZONE '${tz}'`);
 }

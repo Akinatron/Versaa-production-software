@@ -7,13 +7,14 @@ import { PO_STATUS } from "../components/labels";
 import { MarkSentForm } from "../components/order-bits";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
+import { today } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const orders = await loadOrders(db());
-  const today = new Date().toISOString().slice(0, 10);
+  const todayIso = today();
   const groups: { title: string; hint: string; list: OrderView[] }[] = [
     {
       title: "Drafts: not sent yet",
@@ -90,7 +91,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                         <td>{fmtDate(o.po.orderedOn)}</td>
                         <td>
                           {o.po.expectedOn ? (
-                            <span className={o.po.expectedOn < today && g.title === "On the way" ? "text-bad" : undefined}>{fmtDate(o.po.expectedOn)}</span>
+                            <span className={o.po.expectedOn < todayIso && g.title === "On the way" ? "text-bad" : undefined}>{fmtDate(o.po.expectedOn)}</span>
                           ) : (
                             "—"
                           )}

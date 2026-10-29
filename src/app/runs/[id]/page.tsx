@@ -16,6 +16,7 @@ import { budgetForTable } from "../../components/budget-format";
 import { RunOrdersTable } from "../../components/order-bits";
 import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
 import { fmtDate } from "../../components/ui/format";
+import { dayOf } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ export default async function RunPage({
       )}
       {run.status === "confirmed" && run.confirmedAt && (
         <p className="small muted" style={{ marginTop: -8 }}>
-          Confirmed {fmtDate(run.confirmedAt.toISOString().slice(0, 10))}. Its stock is reserved and is used when production is recorded.
+          Confirmed {fmtDate(dayOf(run.confirmedAt))}. Its stock is reserved and is used when production is recorded.
         </p>
       )}
 

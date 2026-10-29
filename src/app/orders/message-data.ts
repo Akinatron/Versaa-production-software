@@ -3,6 +3,7 @@ import type { OrderView } from "@/db/purchasing";
 import { supplierNaming } from "@/db/suppliers";
 import type { OrderMessageInput } from "@/domain/order-message";
 import type { UnitCode } from "@/domain/quantity";
+import { today } from "@/domain/dates";
 
 /** An order's lines and dates, ready to turn into the supplier's message or printout. */
 export async function orderMessageData(d: DB, order: OrderView): Promise<Omit<OrderMessageInput, "withPrices">> {
@@ -15,7 +16,7 @@ export async function orderMessageData(d: DB, order: OrderView): Promise<Omit<Or
   return {
     supplierName: supplier.name,
     code: po.code,
-    date: po.orderedOn ?? new Date().toISOString().slice(0, 10),
+    date: po.orderedOn ?? today(),
     expectedOn: po.expectedOn,
     reference: po.reference,
     lines: lines.map((l) => ({

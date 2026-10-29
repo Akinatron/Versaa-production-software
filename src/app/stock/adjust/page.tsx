@@ -12,6 +12,7 @@ import { fmtDate } from "../../components/ui/format";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { SubmitOnChange } from "../../components/submit-on-change";
 import { endOfDay } from "@/db/ledger";
+import { today as todayIso } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export default async function AdjustPage({ searchParams }: { searchParams: Promi
   const mode = params.mode === "writeoff" ? "writeoff" : "count";
   const items = (await db().select().from(t.items).orderBy(asc(t.items.name))).filter((i) => i.active);
   const item = items.find((i) => i.id === params.item) ?? null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const tab = (m: string, label: string) => (
     <Link href={`/stock/adjust?mode=${m}${item ? `&item=${item.id}` : ""}`} aria-current={m === mode ? "page" : undefined}>
       {label}

@@ -20,6 +20,7 @@ import { DocList, RemovedDocs } from "../../components/documents";
 import { DocUpload } from "../../components/doc-upload";
 import { SendOrder } from "../../components/send-order";
 import { orderMessageData } from "../message-data";
+import { dayOf } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -167,7 +168,7 @@ export default async function OrderPage({
             ) : (
               "restock (no run)"
             )}{" "}
-            · created {fmtDate(po.createdAt.toISOString().slice(0, 10))}
+            · created {fmtDate(dayOf(po.createdAt))}
             {po.orderedOn && ` · sent ${fmtDate(po.orderedOn)}`}
             {po.expectedOn && ` · expected ${fmtDate(po.expectedOn)}`}
             {po.reference && ` · ref ${po.reference}`}

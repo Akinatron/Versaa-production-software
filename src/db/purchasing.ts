@@ -13,6 +13,7 @@ import { diff, logChange, needReason, type FieldChange, type Ref } from "./chang
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
 import { inSentence, PO_STATUS_NAME } from "@/domain/status";
+import { localMoment } from "@/domain/dates";
 
 /*
  * Purchase orders and deliveries.
@@ -519,7 +520,8 @@ export async function recordReceipt(
           itemId: item.id,
           quantity: line.accepted.toString(),
           type: "receipt",
-          occurredAt: new Date(`${input.receivedOn}T${time ?? "12:00"}:00Z`),
+          // A typed time is local time; without one, midday.
+          occurredAt: time ? localMoment(input.receivedOn, time) : new Date(`${input.receivedOn}T12:00:00Z`),
           docType: "receipt",
           docId: receipt!.id,
           idempotencyKey: `${input.idempotencyKey}:${i++}`,

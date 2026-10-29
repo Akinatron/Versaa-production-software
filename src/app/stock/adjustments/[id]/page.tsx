@@ -11,6 +11,7 @@ import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
 import { DeletedNote, History, ReasonField } from "../../../components/history";
 import { toggleAdjustment } from "../../actions";
+import { dayOf } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ export default async function AdjustmentPage({
             {moves.map(({ m, lot, item }) => (
               <tr key={m.id} className={m.changeId ? "muted" : undefined}>
                 <td>
-                  {fmtDate(m.occurredAt.toISOString().slice(0, 10), { year: true })}
+                  {fmtDate(dayOf(m.occurredAt), { year: true })}
                   {m.changeId && <div className="small">{m.reason}</div>}
                 </td>
                 <td>

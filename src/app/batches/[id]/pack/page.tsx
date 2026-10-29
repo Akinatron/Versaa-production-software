@@ -18,10 +18,10 @@ import { deletePack, editPack, recordPack, restorePack } from "../../pack-action
 import { fmtDate } from "../../../components/ui/format";
 import { History, ReasonField } from "../../../components/history";
 import { fmtWhen } from "../../../components/history-format";
+import { today as todayIso } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default async function PackagingBatchPage({
   params,

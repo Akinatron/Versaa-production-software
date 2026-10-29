@@ -22,6 +22,7 @@ import { History } from "../../components/history";
 import { ItemStorageForm, StorageBadge } from "../../components/storage";
 import { ShelfLifeForm } from "../../components/shelf-life";
 import { SupplierPicker } from "../../components/pickers";
+import { dayOf } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -334,7 +335,7 @@ async function StockTab({
             <tbody>
               {history.map(({ m, lot }) => (
                 <tr key={m.id}>
-                  <td>{fmtDate(m.occurredAt.toISOString().slice(0, 10), { year: true })}</td>
+                  <td>{fmtDate(dayOf(m.occurredAt), { year: true })}</td>
                   <td>
                     {m.docType && m.docId ? (
                       <Link href={`/history/open/${m.docType}/${m.docId}`}>{MOVEMENT[m.type] ?? m.type}</Link>

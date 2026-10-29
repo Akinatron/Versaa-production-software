@@ -26,9 +26,9 @@ async function onionLot(kg: string) {
 }
 
 describe("end of day", () => {
-  it("is midnight UTC of the next day", () => {
-    expect(endOfDay("2026-10-24").toISOString()).toBe("2026-10-25T00:00:00.000Z");
-    expect(endOfDay("2026-12-31").toISOString()).toBe("2027-01-01T00:00:00.000Z");
+  it("is local midnight (business time zone) at the start of the next day", () => {
+    expect(endOfDay("2026-10-24").toISOString()).toBe("2026-10-24T22:00:00.000Z");
+    expect(endOfDay("2026-12-31").toISOString()).toBe("2026-12-31T23:00:00.000Z");
   });
 });
 

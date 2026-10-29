@@ -21,7 +21,8 @@ export async function lockNames(tx: Tx) {
   await tx.execute(sql`select pg_advisory_xact_lock(4545)`);
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
+/** Today in the business's time zone (see src/domain/dates.ts). */
+export { today } from "@/domain/dates";
 
 export function positive(value: Decimal.Value, what: string): Decimal {
   let d: Decimal;

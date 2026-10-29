@@ -3,6 +3,7 @@ import { removeDocumentAction, restoreDocumentAction } from "../documents/action
 import { Icon } from "./ui/icons";
 import { fmtDate } from "./ui/format";
 import { fmtWhen } from "./history-format";
+import { dayOf } from "@/domain/dates";
 
 const SHOWN_INLINE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -47,7 +48,7 @@ export function DocList({
             <span className="sub">
               {showKind && `${DOC_KIND[d.kind]} · `}
               {extra?.(d)}
-              added {fmtDate(d.createdAt.toISOString().slice(0, 10))} · {fileSize(d.sizeBytes)}
+              added {fmtDate(dayOf(d.createdAt))} · {fileSize(d.sizeBytes)}
             </span>
           </div>
           {back && (

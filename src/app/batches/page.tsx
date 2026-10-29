@@ -7,6 +7,7 @@ import { PageHeader } from "../components/ui/header";
 import { fmtDate, relDate } from "../components/ui/format";
 import { SauceName } from "../components/sauce-name";
 import { batchHref, batchStepFor } from "../components/batch-paths";
+import { dayOf } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -195,7 +196,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
                       <td>{fmtDate(r.batch.producedOn)}</td>
                       <td>
                         {badge(r)}
-                        {r.batch.closedAt ? <span className="small muted"> {fmtDate(r.batch.closedAt.toISOString().slice(0, 10))}</span> : null}
+                        {r.batch.closedAt ? <span className="small muted"> {fmtDate(dayOf(r.batch.closedAt))}</span> : null}
                       </td>
                       <td className="num">{r.sessions > 0 ? r.accepted : "—"}</td>
                     </tr>

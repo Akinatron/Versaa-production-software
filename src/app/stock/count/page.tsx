@@ -5,6 +5,7 @@ import { Flash } from "../../components/flash";
 import { saveOpeningCount } from "../actions";
 import { PageHeader, Empty } from "../../components/ui/header";
 import { GuardedForm } from "../../components/unsaved-guard";
+import { today } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function CountPage({ searchParams }: { searchParams: Promis
           <input type="hidden" name="key" value={crypto.randomUUID()} />
           <div className="card">
             <label htmlFor="countedOn">Counted on</label>
-            <input id="countedOn" name="countedOn" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} style={{ maxWidth: 200 }} />
+            <input id="countedOn" name="countedOn" type="date" required defaultValue={today()} style={{ maxWidth: 200 }} />
           </div>
           <div className="card scroll">
             <table>

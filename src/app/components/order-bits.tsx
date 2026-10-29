@@ -7,8 +7,8 @@ import { PO_STATUS } from "./labels";
 import { markSentAction } from "../orders/actions";
 import { fmtDate } from "./ui/format";
 import { OrderItems } from "./order-items";
+import { today } from "@/domain/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 /** "Mark as sent": draft → sent, with the date it was sent. */
 export function MarkSentForm({ poId, back, compact }: { poId: string; back: string; compact?: boolean }) {

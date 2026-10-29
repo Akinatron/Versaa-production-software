@@ -5,6 +5,7 @@ import { linkAction, moveRankAction, setOfferAction, unlinkAction } from "../sup
 import { fmtDate } from "./ui/format";
 import { ReasonField } from "./history";
 import { ConfirmButton } from "./unsaved-guard";
+import { dayOf } from "@/domain/dates";
 
 /** Edit one supplier ↔ item link: pack size, pack name and price. Used on both cards. */
 export function OfferForm({
@@ -91,7 +92,7 @@ export function PriceText({ offer, unit }: { offer: Pick<Offer, "packQty" | "pac
           ({money(per)} per {u === "units" ? "unit" : u})
         </span>
       )}
-      {offer.since && <span className="small muted"> · since {fmtDate(offer.since.toISOString().slice(0, 10), { year: true })}</span>}
+      {offer.since && <span className="small muted"> · since {fmtDate(dayOf(offer.since), { year: true })}</span>}
     </>
   );
 }
@@ -117,7 +118,7 @@ export function PriceHistory({ rows, unit, label }: { rows: PriceRow[]; unit: Un
           {rows.map((r, i) => (
             <tr key={r.id} style={i === 0 ? undefined : { color: "var(--muted)" }}>
               <td>
-                {fmtDate(r.createdAt.toISOString().slice(0, 10), {
+                {fmtDate(dayOf(r.createdAt), {
                   year: true,
                 })}
               </td>

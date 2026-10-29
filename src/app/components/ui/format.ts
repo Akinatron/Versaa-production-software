@@ -1,3 +1,5 @@
+import { daysBetween, today } from "@/domain/dates";
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -11,19 +13,16 @@ export function fmtDate(iso: string | null | undefined, opts: { weekday?: boolea
   if (!iso) return "—";
   const p = parse(String(iso));
   if (!p) return String(iso);
-  const thisYear = new Date().getFullYear();
+  const thisYear = Number(today().slice(0, 4));
   const wd = opts.weekday ? `${DAYS[new Date(Date.UTC(p.y, p.mo - 1, p.d)).getUTCDay()]} ` : "";
   const yr = opts.year || p.y !== thisYear ? ` ${p.y}` : "";
   return `${wd}${p.d} ${MONTHS[p.mo - 1]}${yr}`;
 }
 
-/** Days from today (local) to an ISO date: 0 today, 1 tomorrow, -1 yesterday. */
+/** Days from today (business time zone) to an ISO date: 0 today, 1 tomorrow, -1 yesterday. */
 export function daysFromToday(iso: string): number {
-  const p = parse(iso);
-  if (!p) return 0;
-  const now = new Date();
-  const a = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((Date.UTC(p.y, p.mo - 1, p.d) - a) / 86400000);
+  if (!parse(iso)) return 0;
+  return daysBetween(today(), iso);
 }
 
 /** "today", "tomorrow", "in 3 days", "2 days ago", else the date. */
@@ -41,12 +40,5 @@ export function relDate(iso: string | null | undefined): string {
 /** "1 batch", "2 batches". */
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-const DAY_ISO = new Intl.DateTimeFormat("en-CA", {
-  timeZone: process.env.APP_TIME_ZONE || "Europe/Amsterdam",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 /** The calendar day (ISO) of a timestamp, in the business's own time zone. */
-export const dayOf = (at: Date) => DAY_ISO.format(at);
+export { dayOf } from "@/domain/dates";

@@ -7,6 +7,8 @@ import { OUTFLOW } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate, plural } from "../components/ui/format";
 import { SauceName } from "../components/sauce-name";
+import { today as todayIso } from "@/domain/dates";
+import { BUSINESS_TIME_ZONE } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ const money = (v: Decimal) => `€ ${v.toFixed(2)}`;
 const pct = (num: number, den: number) => (den > 0 ? `${new Decimal(num).div(den).mul(100).toDecimalPlaces(1).toString()}%` : "—");
 
 function defaultPeriod() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   return { from: `${today.slice(0, 7)}-01`, to: today };
 }
 
@@ -81,7 +83,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       join recipe_versions v on v.id = b.recipe_version_id
       left join packaging_sessions ps on ps.batch_id = b.id and ps.deleted_at is null
       left join packaging_session_lines l on l.session_id = ps.id
-      where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
+      where b.status = 'closed' and (b.closed_at at time zone ${BUSINESS_TIME_ZONE})::date between ${from} and ${to}
       group by b.id, s.name, s.color, v.version_no
       order by b.closed_at`),
     d.execute<{
@@ -96,7 +98,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       join packaging_session_lines l on l.session_id = ps.id
       join products p on p.id = l.product_id
       join formats f on f.id = p.format_id
-      where b.status = 'closed' and b.closed_at::date between ${from} and ${to}
+      where b.status = 'closed' and (b.closed_at at time zone ${BUSINESS_TIME_ZONE})::date between ${from} and ${to}
       group by f.name, f.capacity_ml
       order by f.capacity_ml desc`),
     d.execute<{
@@ -112,7 +114,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       left join forecast_snapshots fs on fs.run_id = r.id
       where r.status = 'closed'
       group by r.id, fs.data
-      having max(b.closed_at)::date between ${from} and ${to}
+      having (max(b.closed_at) at time zone ${BUSINESS_TIME_ZONE})::date between ${from} and ${to}
       order by max(b.closed_at)`),
   ]);
 
