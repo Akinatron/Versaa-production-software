@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/client";
 import { OperationError } from "@/db/operations";
 import { changePackaging, recordPackaging, type PackagingLineInput } from "@/db/production";
-import { attempt, withOk } from "../components/flash";
+import { attempt, keepInput, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 
 const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
@@ -37,28 +37,28 @@ function done(batchId: string, msg: string): never {
 const shortNote = (short: string[]) => (short.length ? ` Check your sales orders: ${short.join(" ")}` : "");
 
 export async function recordPack(form: FormData) {
-  const batchId = str(form, "batchId");
-  await attempt(`/batches/${batchId}/pack`, async () =>
-    recordPackaging(db(), {
+  return keepInput(async () => {
+    const batchId = str(form, "batchId");
+    await recordPackaging(db(), {
       idempotencyKey: str(form, "key"),
       batchId,
       packedOn: str(form, "packedOn"),
       bestBefore: str(form, "bestBefore") || null,
       note: str(form, "note") || null,
       lines: jarLines(form),
-    }),
-  );
-  done(
-    batchId,
-    "Packaging session recorded. Accepted jars are in stock; materials were used for every filled jar. Print the jar labels from the buttons under Jars packed.",
-  );
+    });
+    done(
+      batchId,
+      "Packaging session recorded. Accepted jars are in stock; materials were used for every filled jar. Print the jar labels from the buttons under Jars packed.",
+    );
+  });
 }
 
 export async function editPack(form: FormData) {
-  const batchId = str(form, "batchId");
-  const sessionId = str(form, "sessionId");
-  const r = await attempt(`/batches/${batchId}/pack?edit=${sessionId}`, async () =>
-    changePackaging(db(), {
+  return keepInput(async () => {
+    const batchId = str(form, "batchId");
+    const sessionId = str(form, "sessionId");
+    const r = await changePackaging(db(), {
       idempotencyKey: str(form, "key"),
       sessionId,
       packedOn: str(form, "packedOn"),
@@ -66,9 +66,9 @@ export async function editPack(form: FormData) {
       note: str(form, "note") || null,
       reason: str(form, "reason"),
       lines: jarLines(form),
-    }),
-  );
-  done(batchId, `Packaging session updated. Stock was corrected by the difference.${shortNote(r.short)}`);
+    });
+    done(batchId, `Packaging session updated. Stock was corrected by the difference.${shortNote(r.short)}`);
+  });
 }
 
 export async function deletePack(form: FormData) {

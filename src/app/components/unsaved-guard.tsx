@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormHTMLAttributes } from "react";
+import { useEffect, useRef, useState, useTransition, type FormHTMLAttributes } from "react";
 
 const MESSAGE = "You have changes that aren't saved yet. Leave this page and lose them?";
 
@@ -38,22 +38,57 @@ export function useUnsavedWarning(dirty: boolean) {
   }, []);
 }
 
-/** A form that warns before leaving the page once something in it was typed and not saved. */
-export function GuardedForm({ children, onInput, onSubmit, ...rest }: FormHTMLAttributes<HTMLFormElement>) {
+/** What a form's server action hands back: nothing when it went to another page, or the problem to show. */
+export type FormResult = { error: string } | undefined | void;
+
+/**
+ * A form that warns before leaving the page once something in it was typed
+ * and not saved. When saving fails (the action returns `{ error }`), the
+ * message shows at the top of the form and everything typed stays, files
+ * picked included. On success the action redirects as usual.
+ */
+export function GuardedForm({
+  children,
+  onInput,
+  onSubmit,
+  action,
+  ...rest
+}: Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & { action: (form: FormData) => Promise<FormResult> }) {
   const [dirty, setDirty] = useState(false);
-  useUnsavedWarning(dirty);
+  const [problem, setProblem] = useState<{ text: string; n: number } | null>(null);
+  const [saving, startSaving] = useTransition();
+  const problemRef = useRef<HTMLUListElement>(null);
+  useUnsavedWarning(dirty && !saving);
+  useEffect(() => {
+    problemRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [problem]);
   return (
     <form
       {...rest}
+      data-keeps-input=""
       onInput={(e) => {
         setDirty(true);
         onInput?.(e);
       }}
       onSubmit={(e) => {
-        setDirty(false);
         onSubmit?.(e);
+        if (e.defaultPrevented) return;
+        // Sent by hand (not as a form action) so React doesn't clear the fields afterwards.
+        e.preventDefault();
+        if (saving) return;
+        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startSaving(async () => {
+          const result = await action(data);
+          if (result?.error) setProblem((p) => ({ text: result.error, n: (p?.n ?? 0) + 1 }));
+        });
       }}
     >
+      {problem && (
+        // A new key each time, so the same message shown twice still re-renders (and the button's spinner stops).
+        <ul key={problem.n} ref={problemRef} className="issues" role="alert">
+          <li className="bad">{problem.text}</li>
+        </ul>
+      )}
       {children}
     </form>
   );
