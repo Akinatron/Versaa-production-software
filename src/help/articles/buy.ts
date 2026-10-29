@@ -58,16 +58,17 @@ export const buy: Article[] = [
     summary: "Turn an order into a message for email or WhatsApp, or a printable PDF, then mark it as sent.",
     keywords: ["send", "email", "whatsapp", "pdf", "print order", "mark as sent", "copy text", "prices"],
     steps: [
-      "Open the draft order. Under **Not sent yet** you see the order as text.",
+      "Open the draft order. The lines come first; change them and press **Save draft** if needed. Under **Not sent yet** you see the order as text.",
       "Tick **Include prices** if the supplier should see them.",
       "Press **Copy text** and paste it anywhere, or **Open in email** / **Open in WhatsApp** (shown when the supplier's contact has an email or phone number), or **Print or save as PDF**.",
-      "Once the supplier has the order, set **Sent on** (and **Expected delivery** if you know it) and press **Mark as sent**.",
+      "Once the supplier has the order, set **Sent on** and press **Mark as sent**. **Expected delivery** is set with the lines of the draft.",
     ],
     changes: [
       "The app never sends anything by itself: you send it, then mark it as sent.",
       "A sent order counts as **on order** in plans and moves to **On the way**. The expected date drives the **late delivery** warning on Today.",
     ],
     more: [
+      "While a change to the lines isn't saved, the message and **Mark as sent** are greyed out: save the draft first, so the supplier gets the quantities you see.",
       "To resend later, open **Send to supplier again** on the order page.",
       "On the run's **Receive** step, **Mark as sent today** marks a draft as sent with today's date.",
     ],
@@ -196,7 +197,7 @@ export const buy: Article[] = [
     more: [
       "The supplier page also shows **Recent orders**, **Paperwork** and **Details** (name, contact, notes). **Mark as not in use** hides a supplier from new orders without losing its history.",
       "A supplier not in use is never proposed when ordering and its prices are left out of budgets. If it was an item's favourite, the cheapest supplier in use takes its place (marked **cheapest in use**), and the item's **Suppliers** tab says so. If no supplier in use is left, the item shows **No supplier in use**: add one.",
-      "**Remove link** under **Edit price** stops a supplier being offered for that item.",
+      "**Remove link** under **Edit price** stops a supplier being offered for that item. It asks for a reason and to confirm, keeps the old prices on record, and tells you which supplier is the favourite now.",
     ],
     related: ["order-whats-missing", "item-card", "items"],
   },
