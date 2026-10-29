@@ -29,7 +29,7 @@ const s = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
 
 export async function saveStockCount(form: FormData) {
   const itemId = s(form, "itemId");
-  const back = `/stock/adjust?item=${itemId}`;
+  const back = `/stock/adjust?item=${itemId}${s(form, "countedOn") ? `&on=${encodeURIComponent(s(form, "countedOn"))}` : ""}`;
   const lines: CountLine[] = [];
   for (const [k, v] of form.entries()) {
     if (k.startsWith("count:") && String(v).trim() !== "") lines.push({ lotId: k.slice(6), counted: String(v).trim() });

@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
 
@@ -26,6 +26,22 @@ export async function lotBalance(tx: Tx, lotId: string) {
     .select({ balance: sql<string>`coalesce(sum(${t.movements.quantity}), 0)` })
     .from(t.movements)
     .where(eq(t.movements.lotId, lotId));
+  return new Decimal(row?.balance ?? 0);
+}
+
+/** First moment of the day after `day` (UTC, like every movement date in the app). */
+export function endOfDay(day: string) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d;
+}
+
+/** What a lot held at the end of a day: every movement dated that day or before. */
+export async function lotBalanceAt(tx: Tx, lotId: string, day: string) {
+  const [row] = await tx
+    .select({ balance: sql<string>`coalesce(sum(${t.movements.quantity}), 0)` })
+    .from(t.movements)
+    .where(and(eq(t.movements.lotId, lotId), lt(t.movements.occurredAt, endOfDay(day))));
   return new Decimal(row?.balance ?? 0);
 }
 

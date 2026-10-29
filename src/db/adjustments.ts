@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx } from "./base";
-import { lotBalance } from "./ledger";
+import { lotBalance, lotBalanceAt } from "./ledger";
 import { logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
@@ -25,7 +25,9 @@ export interface CountLine {
 
 /**
  * Record a stock count. For each lot, the difference between what's counted
- * and what the ledger says is posted as a count correction.
+ * and what the ledger held at the end of the count day is posted as a count
+ * correction. So a count entered days later doesn't undo what was recorded
+ * after it (cooking, packing, deliveries, write-offs).
  */
 export async function recordStockCount(db: DB, input: { idempotencyKey: string; countedOn?: string; reason: string; lines: CountLine[] }) {
   const reason = input.reason.trim();
@@ -67,7 +69,7 @@ export async function recordStockCount(db: DB, input: { idempotencyKey: string; 
           .returning();
         lotId = lot!.id;
       }
-      const diff = counted.minus(await lotBalance(tx, lotId));
+      const diff = counted.minus(await lotBalanceAt(tx, lotId, on));
       if (diff.isZero()) continue;
       await tx.insert(t.movements).values({
         lotId,
