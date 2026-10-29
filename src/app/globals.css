@@ -452,8 +452,6 @@ button.exp-toggle:hover { background: none; color: var(--text); }
 .bad-text { color: var(--bad); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-/* ---------------------------------------------------------------- sign-in */
-
 /* ---------------------------------------------------------------- trace diagram (components/trace-flow.tsx) */
 .flow {
   position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(148px, 1fr)); gap: 0 40px;

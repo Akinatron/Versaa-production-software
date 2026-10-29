@@ -103,7 +103,7 @@ async function refuseNewerDatabase(sql: ReturnType<typeof createDb>["$client"], 
   const n = row?.n ?? 0;
   if (n > journal.entries.length) {
     throw new Error(
-      `This database was already updated by a newer version of Versaa (${n} database changes; this copy knows ${journal.entries.length}). Open the newer Versaa.app instead.`,
+      `This database was already updated by a newer version of Versaa (${n} database changes; this copy knows ${journal.entries.length}). Install the newest version of Versaa and open that one.`,
     );
   }
 }

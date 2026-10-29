@@ -51,13 +51,3 @@ export function who(customer: string | null | undefined, destination: string | n
   if (customer && destination) return `${customer} (${destination})`;
   return customer || destination || "—";
 }
-
-/** Inline style that makes a link look like the primary button. */
-export const buttonLink: React.CSSProperties = {
-  display: "inline-block",
-  background: "var(--accent)",
-  color: "#fff",
-  borderRadius: 8,
-  padding: "10px 18px",
-  textDecoration: "none",
-};

@@ -8,7 +8,6 @@
 export const BOUGHT_KINDS = ["ingredient", "packaging", "other"] as const;
 export type BoughtKind = (typeof BOUGHT_KINDS)[number];
 
-export const KIND_LABEL: Record<BoughtKind, string> = { ingredient: "Ingredient", packaging: "Packaging", other: "Other" };
 export const KIND_PLURAL: Record<BoughtKind, string> = { ingredient: "Ingredients", packaging: "Packaging", other: "Other" };
 
 export const isBoughtKind = (kind: string | null | undefined): kind is BoughtKind => (BOUGHT_KINDS as readonly string[]).includes(kind ?? "");

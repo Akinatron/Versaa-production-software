@@ -63,38 +63,50 @@ Uploaded delivery notes and invoices are saved in an `uploads` folder next to th
 
 At the bottom of Settings you can turn on **Developer mode** (off by default; it stays on until "Back to normal mode"). It adds:
 
-- **Check for updates** (Mac app only, see below).
-- **Mock data**: the app switches to a separate test database with four test suppliers and an example of every stage. The real database is not touched, and the test database is thrown away when it is turned off or the server restarts. In the web version it is a second database on the same PostgreSQL server, named after yours with `_mock` (`versaa_mock`), so the `DATABASE_URL` user must be allowed to create databases. In the Mac app it lives in memory.
-- **Delete database**: delete activity, suppliers, recipes, items and/or sauces & products, with what depends on them. The Mac app saves a backup first.
+- **Check for updates** (desktop app, see below).
+- **Mock data**: the app switches to a separate test database with four test suppliers and an example of every stage. The real database is not touched, and the test database is thrown away when it is turned off or the server restarts. In the web version it is a second database on the same PostgreSQL server, named after yours with `_mock` (`versaa_mock`), so the `DATABASE_URL` user must be allowed to create databases. In the desktop app it lives in memory.
+- **Delete database**: delete activity, suppliers, recipes, items and/or sauces & products, with what depends on them. The desktop app saves a backup first.
 
 Build or run with `VERSAA_DEVTOOLS=0` to leave developer mode out.
 
 Tests: `pnpm test` needs `TEST_DATABASE_URL` pointing at an empty PostgreSQL database, which is wiped on each run; without it the run stops with a message. To run only the tests that need no database, use `SKIP_DB_TESTS=1 pnpm test`.
 
-## Desktop app (Mac)
+## Desktop app
 
-The same app also runs as a normal Mac program, opened with a double click, with no Terminal, browser or database to install. Its data stays on that Mac only, and it is separate from the `pnpm dev` database.
+The same app also runs as a normal program for Windows (the main target) and Mac, opened with a double click, with no Terminal, browser or database to install. Its data stays on that computer only, and it is separate from the `pnpm dev` database.
 
-Build and install it from this folder (needs Node 22 and pnpm, like the web version; the desktop part installs its own tools with npm):
+Build it from this folder (needs Node 22 and pnpm, like the web version; the desktop part installs its own tools with npm):
 
 ```sh
-pnpm desktop:mac    # builds Versaa.app and copies it into /Applications
+pnpm desktop:win    # on a Windows PC: builds the installer in desktop/dist (Versaa Setup ….exe)
+pnpm desktop:mac    # on a Mac: builds Versaa.app and copies it into /Applications
 ```
 
-Then open **Versaa** from Applications or Launchpad. The first start takes a few seconds longer while it creates the database; then it asks for the first account, as the web version does. Run the same command again after pulling an update: the app is replaced, the data is kept, and migrations run by themselves when it opens.
+On Windows, run the installer from `desktop/dist`; it lets you choose the folder. It has not been tested on a Windows PC yet. On a Mac, open **Versaa** from Applications or Launchpad. The first start takes a few seconds longer while it creates the database; then it opens on Today. To update, build again after pulling and install the new copy over the old one: the data is kept, and migrations run by themselves when it opens.
 
-While the app is in development it can also update itself from GitHub (Settings → Developer mode → Check for updates). See [desktop/UPDATER.md](desktop/UPDATER.md), which also says how to build it without that or remove it.
+While the app is in development, the Mac app can also update itself from GitHub (Settings → Developer mode → Check for updates). On Windows that button only says to install the new version by hand. See [desktop/UPDATER.md](desktop/UPDATER.md), which also says how to build it without the updater or remove it.
 
-The app isn't signed with an Apple developer account. A copy built on the same Mac opens normally. A copy brought from another Mac (the zip in `desktop/dist`) is blocked the first time: right-click it, choose **Open**, then **Open** again (or allow it in System Settings → Privacy & Security).
+The app isn't signed. On Windows, SmartScreen may warn the first time: choose **More info**, then **Run anyway**. On a Mac, a copy built on the same Mac opens normally; one brought from another Mac (the zip in `desktop/dist`) is blocked the first time: right-click it, choose **Open**, then **Open** again (or allow it in System Settings → Privacy & Security).
 
-What it keeps, in `~/Library/Application Support/Versaa/data` (File → Show Data Folder):
+What it keeps, in the data folder (File → Show Data Folder): `%APPDATA%\Versaa\data` on Windows, `~/Library/Application Support/Versaa/data` on a Mac.
 
 - `database`: the database. It is PostgreSQL running inside the app ([PGlite](https://pglite.dev)), so the code, migrations and rules are the same as the web version.
 - `uploads`: delivery notes and invoices.
-- `backups`: copies of the database, named by kind and time. `versaa-auto-…` is made every time the app opens; the newest 10 are kept, plus the newest of each day of the last 30 days. `versaa-manual-…` (File → Back Up Database Now) and `versaa-before-delete-…` (made just before "Delete database", with the uploads next to it in `uploads-before-delete-…`, the last 3 kept) are never removed by the app: delete them yourself when you no longer need them. A copy is written under a temporary name and only gets its real name once it is complete. To go back to one, quit Versaa, rename `database` to `database-old`, create an empty `database` folder and unpack the backup into it (`tar -xzf <backup>.tar.gz -C database`).
+- `backups`: copies of the database, named by kind and time. `versaa-auto-…` is made every time the app opens; the newest 10 are kept, plus the newest of each day of the last 30 days. `versaa-manual-…` (File → Back Up Database Now) and `versaa-before-delete-…` (made just before "Delete database", with the uploads next to it in `uploads-before-delete-…`, the last 3 kept) are never removed by the app: delete them yourself when you no longer need them. A copy is written under a temporary name and only gets its real name once it is complete. To go back to one, quit Versaa, rename `database` to `database-old`, create an empty `database` folder and unpack the backup into it (`tar -xzf <backup>.tar.gz -C database`; `tar` comes with Windows 10 and 11).
 - `versaa.log`: what happened at start-up, for when something goes wrong.
 
-How it works: `desktop/` is an [Electron](https://www.electronjs.org) shell. On start it opens the database and serves it on a private local port, runs the migrations and, until it has been loaded once, the starting catalog (like `pnpm db:migrate` and `pnpm db:seed`; a first start cut short loads it on the next one), starts the Next.js server (built with `NEXT_OUTPUT=standalone`) on another local port and shows it in a window. Nothing listens outside the computer. The built-in database takes one connection at a time, so the app uses a pool of one there (`DATABASE_POOL_MAX=1`). `pnpm desktop:dev` runs it without packaging; `pnpm desktop:win` packages a Windows installer (build it on Windows; not tried yet).
+How it works: `desktop/` is an [Electron](https://www.electronjs.org) shell. On start it opens the database and serves it on a private local port, runs the migrations and, until it has been loaded once, the starting catalog (like `pnpm db:migrate` and `pnpm db:seed`; a first start cut short loads it on the next one), starts the Next.js server (built with `NEXT_OUTPUT=standalone`) on another local port and shows it in a window. Nothing listens outside the computer. The built-in database takes one connection at a time, so the app uses a pool of one there (`DATABASE_POOL_MAX=1`). `pnpm desktop:dev` runs it without packaging.
+
+## Changing the database
+
+Migrations live in `drizzle/` and run in order (`pnpm db:migrate`, and by themselves when the desktop app opens). A migration that has run is never edited; every change is a new one:
+
+1. Change `src/db/schema.ts`.
+2. Run `pnpm drizzle-kit generate --name <what_it_does>`. It compares the schema with the latest snapshot in `drizzle/meta/` and writes the next `drizzle/00NN_<name>.sql`, its journal entry and a new snapshot.
+3. Read the SQL. Add by hand what Drizzle doesn't write (triggers, filling a new column for existing rows), keeping it safe to run on a database that already has data.
+4. `pnpm db:migrate`, then `pnpm test`. `test/migration-snapshot.test.ts` fails if `schema.ts` changed without a new snapshot.
+
+Commit the SQL, `drizzle/meta/_journal.json` and the new snapshot together, so the next `generate` starts from the right place. A migration that only has hand-written SQL (no schema change) can be made with `pnpm drizzle-kit generate --custom --name <name>`.
 
 ## Stack
 

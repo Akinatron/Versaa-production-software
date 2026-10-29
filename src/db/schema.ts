@@ -1,4 +1,5 @@
-import { pgTable, pgEnum, uuid, text, integer, numeric, boolean, timestamp, date, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, uuid, text, integer, numeric, boolean, timestamp, date, jsonb, uniqueIndex, index, primaryKey, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /*
  * Data model. Three rules shape it:
@@ -26,20 +27,29 @@ export const shelfLifeUnit = pgEnum("shelf_life_unit", ["days", "weeks", "months
 
 // ---------- Catalog (Settings) ----------
 
-export const items = pgTable("items", {
-  id: id(),
-  code: text("code").notNull().unique(),
-  name: text("name").notNull(),
-  kind: itemKind("kind").notNull(),
-  stockUnit: unitCode("stock_unit").notNull(),
-  /** Default storage for new lots of this item (ingredients and finished jars). Null = not set yet. */
-  storage: storagePlace("storage"),
-  /** How long a new lot keeps from packing (jars) or receipt (ingredients); fills in its best-before. Null = not set. */
-  shelfLife: integer("shelf_life"),
-  shelfLifeUnit: shelfLifeUnit("shelf_life_unit"),
-  active: boolean("active").notNull().default(true),
-  createdAt: createdAt(),
-});
+export const items = pgTable(
+  "items",
+  {
+    id: id(),
+    code: text("code").notNull().unique(),
+    name: text("name").notNull(),
+    kind: itemKind("kind").notNull(),
+    stockUnit: unitCode("stock_unit").notNull(),
+    /** Default storage for new lots of this item (ingredients and finished jars). Null = not set yet. */
+    storage: storagePlace("storage"),
+    /** How long a new lot keeps from packing (jars) or receipt (ingredients); fills in its best-before. Null = not set. */
+    shelfLife: integer("shelf_life"),
+    shelfLifeUnit: shelfLifeUnit("shelf_life_unit"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      "items_shelf_life_check",
+      sql`(${t.shelfLife} is null and ${t.shelfLifeUnit} is null) or (${t.shelfLife} between 1 and 3650 and ${t.shelfLifeUnit} is not null)`,
+    ),
+  ],
+);
 
 export const sauces = pgTable("sauces", {
   id: id(),
@@ -100,7 +110,11 @@ export const recipeVersions = pgTable(
     activatedAt: timestamp("activated_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("recipe_versions_sauce_no").on(t.sauceId, t.versionNo)],
+  (t) => [
+    uniqueIndex("recipe_versions_sauce_no").on(t.sauceId, t.versionNo),
+    // At most one active recipe per sauce.
+    uniqueIndex("recipe_versions_one_active").on(t.sauceId).where(sql`${t.status} = 'active'`),
+  ],
 );
 
 export const recipeLines = pgTable("recipe_lines", {
@@ -128,7 +142,11 @@ export const packagingVersions = pgTable(
     activatedAt: timestamp("activated_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("packaging_versions_product_no").on(t.productId, t.versionNo)],
+  (t) => [
+    uniqueIndex("packaging_versions_product_no").on(t.productId, t.versionNo),
+    // At most one active packaging list per product.
+    uniqueIndex("packaging_versions_one_active").on(t.productId).where(sql`${t.status} = 'active'`),
+  ],
 );
 
 export const packagingLines = pgTable("packaging_lines", {
@@ -668,7 +686,16 @@ export const documents = pgTable(
     createdAt: createdAt(),
     removedAt: timestamp("removed_at", { withTimezone: true }),
   },
-  (t) => [index("documents_receipt").on(t.receiptId), index("documents_po").on(t.purchaseOrderId), index("documents_supplier").on(t.supplierId)],
+  (t) => [
+    index("documents_receipt").on(t.receiptId),
+    index("documents_po").on(t.purchaseOrderId),
+    index("documents_supplier").on(t.supplierId),
+    // A delivery note belongs to a delivery, an invoice to a purchase order.
+    check(
+      "documents_belongs",
+      sql`(${t.kind} = 'delivery_note' and ${t.receiptId} is not null) or (${t.kind} = 'invoice' and ${t.purchaseOrderId} is not null)`,
+    ),
+  ],
 );
 
 // ---------- Change history ----------
@@ -709,7 +736,11 @@ export const changeLogLinks = pgTable(
     entityId: uuid("entity_id").notNull(),
     entityCode: text("entity_code"),
   },
-  (t) => [index("change_log_links_entity").on(t.entityType, t.entityId), index("change_log_links_change").on(t.changeId)],
+  (t) => [
+    primaryKey({ name: "change_log_links_pkey", columns: [t.changeId, t.entityType, t.entityId] }),
+    index("change_log_links_entity").on(t.entityType, t.entityId),
+    index("change_log_links_change").on(t.changeId),
+  ],
 );
 
 // ---------- App settings ----------

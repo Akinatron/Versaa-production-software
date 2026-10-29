@@ -27,7 +27,7 @@ export function EnterDeveloperMode() {
           <p>Developer mode is for testing the app, not for daily work. It adds three tools to Settings:</p>
           <ul>
             <li>
-              <strong>Check for updates</strong>: install a new version of the Mac app.
+              <strong>Check for updates</strong>: install a new version of the desktop app.
             </li>
             <li>
               <strong>Mock data</strong>: look at the app with test data. Your real data stays as it is.
@@ -136,7 +136,7 @@ export function DeleteDatabase({ counts, mock }: { counts: WipeCounts; mock: boo
               <strong>Will delete:</strong> {lines.join(", ")}.
             </p>
           )}
-          {!mock && <p className="small muted">In the Mac app a copy of the database and its files is saved to the backups folder first.</p>}
+          {!mock && <p className="small muted">In the desktop app a copy of the database and its files is saved to the backups folder first.</p>}
           <label htmlFor="wipe-confirm">Type DELETE to confirm</label>
           <input
             id="wipe-confirm"

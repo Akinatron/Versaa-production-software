@@ -1,5 +1,5 @@
 /*
- * Talking to the Mac app's shell (desktop/src/main.ts) from the server. The
+ * Talking to the desktop app's shell (desktop/src/main.ts) from the server. The
  * shell owns the built-in database, so backups and the mock database are made
  * there. It listens on a private local port and passes its address and a
  * secret in VERSAA_DESKTOP_CONTROL / VERSAA_DESKTOP_TOKEN; in a browser setup

@@ -15,7 +15,7 @@ import { desktopRequest, isDesktop } from "@/lib/desktop";
  * when it is turned off, and turning it on again starts from the same data.
  *
  * Where the test database lives:
- * - Mac app: an in-memory database the app's shell starts on request.
+ * - Desktop app: an in-memory database the app's shell starts on request.
  * - Browser setup (pnpm dev): a database next to the real one on the same
  *   PostgreSQL server, named after it with "_mock" (versaa → versaa_mock).
  *   It is dropped and made again each time.

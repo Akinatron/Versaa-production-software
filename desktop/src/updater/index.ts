@@ -1,5 +1,5 @@
 /*
- * "Check for updates" for the Mac app, for development. Everything about it
+ * "Check for updates" for the desktop app, for development. Everything about it
  * lives in this folder; desktop/UPDATER.md says how to take it out.
  *
  * GitHub builds Versaa.app for every commit on main that passes the checks
@@ -70,7 +70,7 @@ async function readJson<T>(p: string): Promise<T | undefined> {
 
 async function canInstall(): Promise<string | undefined> {
   const bundle = appBundle();
-  if (!bundle) return "Updates install only in the packaged Mac app (not when run with pnpm desktop:dev).";
+  if (!bundle) return "Updates install by themselves only in the packaged Mac app (not when run with pnpm desktop:dev). On Windows, build the new installer with pnpm desktop:win and run it.";
   try {
     await access(path.dirname(bundle), constants.W_OK);
   } catch {
