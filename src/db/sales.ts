@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, today, type Tx } from "./base";
-import { allocate, itemOnHand, reservedForSales } from "./ledger";
+import { allocate, jarsFree } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
 /*
@@ -249,7 +249,8 @@ export async function deliverSalesOrder(
     if (!o) throw new OperationError("Order not found.");
     if (o.status !== "pending") throw new OperationError(`This order is already ${o.status}.`);
     const lines = await tx.select().from(t.salesOrderLines).where(eq(t.salesOrderLines.salesOrderId, o.id));
-    const outflow = await writeOutflow(tx, {
+    const lotsByLine = await splitChosenLots(tx, lines, input.lots);
+    const { outflow } = await writeOutflow(tx, {
       idempotencyKey: input.idempotencyKey,
       type: "sale",
       salesOrderId: o.id,
@@ -257,7 +258,7 @@ export async function deliverSalesOrder(
       destination: o.destination,
       reference: o.reference,
       occurredOn: input.deliveredOn && isDate(input.deliveredOn) ? input.deliveredOn : today(),
-      lines: lines.map((l) => ({ productId: l.productId, jars: l.jars, unitPrice: l.unitPrice, lots: input.lots?.[l.productId] })),
+      lines: lines.map((l, i) => ({ productId: l.productId, jars: l.jars, unitPrice: l.unitPrice, lots: lotsByLine[i] })),
       exceptOrderId: o.id,
     });
     await tx.update(t.reservations).set({ releasedAt: new Date() }).where(and(eq(t.reservations.salesOrderId, o.id), isNull(t.reservations.releasedAt)));
@@ -293,11 +294,49 @@ export async function recordOutflow(
   if (input.type === "waste" && !input.note?.trim()) throw new OperationError("Say why the jars are written off.");
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.outflows).where(eq(t.outflows.idempotencyKey, input.idempotencyKey));
-    if (existing) return { outflow: existing, alreadyRecorded: true };
+    if (existing) return { outflow: existing, alreadyRecorded: true, short: [] as string[] };
     await tx.execute(sql`select pg_advisory_xact_lock(4343)`);
-    const outflow = await writeOutflow(tx, { ...input, occurredOn: input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today() });
+    const { outflow, short } = await writeOutflow(tx, { ...input, occurredOn: input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today() });
     await logOutflow(tx, outflow, "create", `${OUTFLOW[outflow.type]} recorded: ${outflow.code}`);
-    return { outflow, alreadyRecorded: false };
+    return { outflow, alreadyRecorded: false, short };
+  });
+}
+
+/**
+ * Lots picked by hand, per product, split over the order's lines of that
+ * product in order: with 6 + 2 jars of one size, the picked 8 fill the first
+ * line and then the second.
+ */
+async function splitChosenLots(
+  tx: Tx,
+  lines: { productId: string; jars: number }[],
+  lots: Record<string, { lotId: string; jars: number }[]> | undefined,
+): Promise<({ lotId: string; jars: number }[] | undefined)[]> {
+  if (!lots) return lines.map(() => undefined);
+  const queue = new Map(Object.entries(lots).map(([productId, ls]) => [productId, ls.filter((x) => x.jars > 0).map((x) => ({ ...x }))]));
+  for (const [productId, picked] of queue) {
+    if (!picked.length) continue;
+    const want = lines.filter((l) => l.productId === productId).reduce((n, l) => n + l.jars, 0);
+    const sum = picked.reduce((n, x) => n + x.jars, 0);
+    if (sum !== want) {
+      const [p] = await tx.select({ name: t.products.name }).from(t.products).where(eq(t.products.id, productId));
+      throw new OperationError(`${p?.name ?? "A product"}: the lots add up to ${sum} jars, not ${want}.`);
+    }
+  }
+  return lines.map((l) => {
+    const picked = queue.get(l.productId);
+    if (!picked?.length) return undefined;
+    const out: { lotId: string; jars: number }[] = [];
+    let left = l.jars;
+    while (left > 0 && picked.length) {
+      const head = picked[0]!;
+      const take = Math.min(left, head.jars);
+      out.push({ lotId: head.lotId, jars: take });
+      head.jars -= take;
+      left -= take;
+      if (head.jars === 0) picked.shift();
+    }
+    return out;
   });
 }
 
@@ -323,20 +362,26 @@ async function writeOutflow(
   for (const l of lines) if (!Number.isInteger(l.jars) || l.jars < 0) throw new OperationError("Jars must be whole numbers.");
   const products = await productsById(tx, lines.map((l) => l.productId));
 
-  // Nothing leaves that isn't there, and jars promised to other orders stay put.
+  // Nothing leaves that isn't there. A sale also leaves jars promised to other
+  // orders alone; waste, samples, tests and own use only need the jars to be
+  // there (broken is broken), and say which orders are now short.
+  const isSale = input.type === "sale";
   const problems: string[] = [];
+  const short: string[] = [];
   const totals = new Map<string, number>();
   for (const l of lines) totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.jars);
   for (const [productId, jars] of totals) {
     const p = products.get(productId);
     if (!p) throw new OperationError("Unknown product.");
-    const onHand = await itemOnHand(tx, p.itemId);
-    const reserved = await reservedForSales(tx, p.itemId, input.exceptOrderId);
-    const free = Decimal.max(0, onHand.minus(reserved));
-    if (free.lt(jars)) {
+    const { onHand, promised, free } = await jarsFree(tx, p.itemId, input.exceptOrderId);
+    if (isSale && free.lt(jars)) {
       problems.push(
-        `${p.name}: ${jars} jars needed, ${free} available${reserved.gt(0) ? ` (${onHand} in stock, ${reserved} promised to other orders)` : ""}.`,
+        `${p.name}: ${jars} jars needed, ${free} available${promised.gt(0) ? ` (${onHand} in stock, ${promised} promised to other orders)` : ""}.`,
       );
+    } else if (!isSale && onHand.lt(jars)) {
+      problems.push(`${p.name}: ${jars} jars needed, ${onHand} in stock.`);
+    } else if (!isSale && promised.gt(onHand.minus(jars))) {
+      short.push(`${p.name}: sales orders are now ${promised.minus(Decimal.max(0, onHand.minus(jars)))} jars short.`);
     }
   }
   if (problems.length) throw new OperationError(`Not enough stock. ${problems.join(" ")}`);
@@ -385,7 +430,7 @@ async function writeOutflow(
       });
     }
   }
-  return outflow!;
+  return { outflow: outflow!, short };
 }
 
 // ---------------------------------------------------------------- correcting outflows

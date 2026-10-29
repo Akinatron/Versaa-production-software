@@ -10,7 +10,7 @@ import { PageHeader } from "../../components/ui/header";
 import { fmtDate, relDate } from "../../components/ui/format";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { saveOutflow } from "../actions";
-import { activeProducts, customerList, finishedLots, todayIso } from "../data";
+import { customerList, finishedLots, productsWithJars, todayIso } from "../data";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ export default async function NewOutboundPage({ searchParams }: { searchParams: 
 
 async function SaleForm() {
   const [products, customers, avail, lots, pending] = await Promise.all([
-    activeProducts(),
+    productsWithJars(),
     customerList(),
     finishedAvailability(db()),
     finishedLots(),
@@ -135,8 +135,9 @@ async function SaleForm() {
 }
 
 async function ExitForm({ reason }: { reason: Exclude<OutflowReason, "sale"> }) {
-  const [products, avail, lots] = await Promise.all([activeProducts(), finishedAvailability(db()), finishedLots()]);
-  const free = new Map(avail.map((a) => [a.productId, a.available]));
+  const [products, avail, lots] = await Promise.all([productsWithJars(), finishedAvailability(db()), finishedLots()]);
+  // Jars promised to sales orders can still break or be given away: show what is physically there.
+  const inStock = new Map(avail.map((a) => [a.productId, a.onHand]));
   const noteRequired = reason === "waste";
 
   return (
@@ -154,7 +155,7 @@ async function ExitForm({ reason }: { reason: Exclude<OutflowReason, "sale"> }) 
           <textarea id="note" name="note" rows={2} required={noteRequired} />
         </div>
       </div>
-      <Lines products={products} lots={lots} free={free} />
+      <Lines products={products} lots={lots} free={inStock} freeLabel="in stock" />
       <div className="savebar">
         <button type="submit">Record {OUTFLOW[reason]!.toLowerCase()}</button>
       </div>
@@ -166,11 +167,13 @@ function Lines({
   products,
   lots,
   free,
+  freeLabel = "free",
   withPrice = false,
 }: {
-  products: Awaited<ReturnType<typeof activeProducts>>;
+  products: Awaited<ReturnType<typeof productsWithJars>>;
   lots: Awaited<ReturnType<typeof finishedLots>>;
   free: Map<string, { toString(): string }>;
+  freeLabel?: string;
   withPrice?: boolean;
 }) {
   return (
@@ -192,7 +195,7 @@ function Lines({
                   <option value="">Choose…</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({free.get(p.id)?.toString() ?? "0"} free)
+                      {p.name} ({free.get(p.id)?.toString() ?? "0"} {freeLabel})
                     </option>
                   ))}
                 </select>

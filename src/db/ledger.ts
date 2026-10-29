@@ -118,6 +118,17 @@ export async function reservedForSales(tx: Tx, itemId: string, exceptOrderId?: s
   return new Decimal(row?.qty ?? 0);
 }
 
+/**
+ * Finished jars of an item: in stock, promised to pending sales orders, and
+ * free to sell (in stock − promised, never below 0). The one place this rule
+ * lives; `exceptOrderId` leaves that order's own promise out.
+ */
+export async function jarsFree(tx: Tx, itemId: string, exceptOrderId?: string) {
+  const onHand = await itemOnHand(tx, itemId);
+  const promised = await reservedForSales(tx, itemId, exceptOrderId);
+  return { onHand, promised, free: Decimal.max(0, onHand.minus(promised)) };
+}
+
 export async function itemOnHand(tx: Tx, itemId: string) {
   const [row] = await tx
     .select({ qty: sql<string>`coalesce(sum(${t.movements.quantity}), 0)` })
