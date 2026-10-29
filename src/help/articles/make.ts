@@ -41,7 +41,7 @@ export const make: Article[] = [
       "Pick a tab and fill it in. Leave a size empty if you don't want it.",
       "Press **Calculate**. Calculating saves nothing and never changes stock.",
       "Read the **Result** line: batches, jars to fill, and how many items are to buy or have unknown stock.",
-      "Check the tables below: **Jars** (target, reject allowance, jars to fill), **Batches** (litres needed, litres per batch, batches, expected surplus, recipe version) and **Ingredients** / **Packaging** (needed, in stock, held by other runs, on order, to buy).",
+      "Check the tables below: **Jars** (target, reject allowance, jars to fill), **Batches** (litres needed, litres per batch, batches, expected surplus, recipe version) and **Ingredients** / **Packaging** (needed, in stock, held by earlier runs, on order, to buy).",
       "Choose a **Production date** and press **Save as production run**. It is saved as a draft run.",
     ],
     changes: [
@@ -78,7 +78,7 @@ export const make: Article[] = [
       {
         ul: [
           "**Held by earlier runs**: what confirmed runs that come first still need. Runs go in order of production date (then the order they were confirmed in); a new plan comes after all of them. Stock and orders go to earlier runs first, so an order placed for one run is never counted again for the next.",
-          "**On order**: orders already **sent** and not yet received. Draft orders don't count.",
+          "**On order**: orders already **sent** and not yet received. Draft orders don't count. For a run, an order whose expected date is after the run's production date doesn't count either (an order with no expected date does); the plan warns you which items arrive too late.",
           "**Unknown**: the item was never counted, so the app can't say whether it is covered.",
         ],
       },
@@ -89,7 +89,7 @@ export const make: Article[] = [
       { h: "From sales orders" },
       "For each product: to make = jars in pending orders − jars in stock − jars that confirmed runs still plan to pack, never below 0. Draft runs don't count until confirmed. With a **deliver by** date, orders due later are left out, but orders with no date are always included.",
       {
-        note: 'Budgets use the favourite supplier\'s current price. "To buy" is only what\'s missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock.',
+        note: 'Budgets use the favourite supplier\'s current price. "To buy" is only what\'s missing, rounded up to whole packs; "Total cost" is everything the run needs, including what is already in stock. A total says "+ N without price" for items with no price and "+ N unknown" for items whose amount can\'t be worked out yet (for example, never counted), so it never looks complete when it isn\'t.',
       },
     ],
     related: ["plan-production", "yields", "runs"],
@@ -143,6 +143,10 @@ export const make: Article[] = [
       {
         problem: '**Confirm run** says "Can\'t confirm yet".',
         fix: "Something blocks the plan, such as a missing recipe, packaging list or litres per batch. The message names it; fix it in Settings and confirm again.",
+      },
+      {
+        problem: "**Confirm run** says a size is not in use any more.",
+        fix: "That size was turned off after the draft was saved. Press **Edit** and set it to 0, or turn it back on in [Settings → Catalog](/settings/catalog).",
       },
       {
         problem: "I need to change the jars of a confirmed run.",
@@ -321,7 +325,7 @@ export const make: Article[] = [
       { h: "Corrections after closing" },
       "Use **Correct the cooking date or note** for those two. Ingredients can still be corrected from **Cook**, and packaging sessions edited from **Pack**, each with a reason.",
       { h: "A batch that wasn't made" },
-      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its reservations are freed. **Restore batch** brings it back while the run is still open.",
+      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again.",
     ],
     changes: [
       "The closed batch's litres (jars filled × fill) feed the measured litres per batch and reject rates used by the next plans.",

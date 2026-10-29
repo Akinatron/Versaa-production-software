@@ -45,7 +45,7 @@ export const buy: Article[] = [
       "Press **Save draft order**, then send it and mark it as sent.",
     ],
     more: [
-      "One order is always for one supplier. A draft can still be changed: edit the lines, set a quantity to 0 to remove a line, and press **Save draft**.",
+      "One order is always for one supplier. A draft can still be changed: edit the lines, set a quantity to 0 to remove a line (a quantity can't be left empty), and press **Save draft**.",
       "Quantities that are whole packs of that supplier are recorded as packs.",
     ],
     related: ["send-order", "order-whats-missing", "orders"],

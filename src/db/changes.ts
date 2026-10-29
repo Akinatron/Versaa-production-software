@@ -168,8 +168,9 @@ export interface HistoryFilter {
   to?: string | null;
   /** Matches a record code (B-…, PO-…, a lot code) on the change or anything it touched. */
   code?: string | null;
-  /** Older than this time (for "Show older"). */
+  /** Older than this entry (for "Show older"): its time and id. */
   before?: Date | null;
+  beforeId?: string | null;
   limit?: number;
 }
 
@@ -180,7 +181,11 @@ export async function listChanges(db: DB, f: HistoryFilter = {}): Promise<Change
   if (f.action && (t.changeAction.enumValues as readonly string[]).includes(f.action)) conds.push(eq(t.changeLog.action, f.action as ChangeView["action"]));
   if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(sql`${t.changeLog.at} >= ${f.from}::date`);
   if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(sql`${t.changeLog.at} < ${f.to}::date + 1`);
-  if (f.before) conds.push(lt(t.changeLog.at, f.before));
+  // Entries of one action share the same time, so the page cut is time + id;
+  // times are compared to the millisecond, as the "Show older" link carries them.
+  const atMs = sql`date_trunc('milliseconds', ${t.changeLog.at})`;
+  if (f.before && f.beforeId) conds.push(sql`(${atMs}, ${t.changeLog.id}) < (${f.before.toISOString()}::timestamptz, ${f.beforeId}::uuid)`);
+  else if (f.before) conds.push(lt(t.changeLog.at, f.before));
   const code = f.code?.trim();
   if (code) {
     const like = `%${code.replaceAll("%", "").replaceAll("_", "")}%`;
@@ -192,7 +197,7 @@ export async function listChanges(db: DB, f: HistoryFilter = {}): Promise<Change
     .select(cols)
     .from(t.changeLog)
     .where(conds.length ? and(...conds) : undefined)
-    .orderBy(desc(t.changeLog.at))
+    .orderBy(desc(atMs), desc(t.changeLog.id))
     .limit(f.limit ?? 100);
   return rows.map(asView);
 }

@@ -190,10 +190,14 @@ suite("production, packaging, sales and traceability", () => {
     expect(a.onHand.toString()).toBe("28");
     expect(a.available.toString()).toBe("8");
 
-    // Only 8 free for anyone else.
+    // Only 8 free to sell to anyone else.
     await expect(
-      recordOutflow(db, { idempotencyKey: "sample-too-many", type: "sample", destination: "Market", lines: [{ productId: big, jars: 9 }] }),
+      recordOutflow(db, { idempotencyKey: "sale-too-many", type: "sale", destination: "Market", lines: [{ productId: big, jars: 9 }] }),
     ).rejects.toThrow(/8 available/);
+    // A sample only needs the jars to be there.
+    await expect(
+      recordOutflow(db, { idempotencyKey: "sample-too-many", type: "sample", destination: "Market", lines: [{ productId: big, jars: 29 }] }),
+    ).rejects.toThrow(/28 in stock/);
     await recordOutflow(db, { idempotencyKey: "sample-1", type: "sample", destination: "Market tasting", occurredOn: "2026-10-22", lines: [{ productId: big, jars: 2 }] });
 
     const { outflow } = await deliverSalesOrder(db, { idempotencyKey: "deliver-1", salesOrderId: order.id, deliveredOn: "2026-10-23" });

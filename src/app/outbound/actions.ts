@@ -138,7 +138,8 @@ export async function saveOutflow(form: FormData) {
     });
   });
   refresh();
-  redirect(withOk("/outbound", r.alreadyRecorded ? "That was already recorded." : `Recorded ${r.outflow.code}. The jars have left stock.`));
+  const short = r.short.length ? ` Check your sales orders: ${r.short.join(" ")}` : "";
+  redirect(withOk("/outbound", r.alreadyRecorded ? "That was already recorded." : `Recorded ${r.outflow.code}. The jars have left stock.${short}`));
 }
 
 export async function restoreOrder(form: FormData) {

@@ -62,6 +62,15 @@ export async function activeProducts() {
   return db().select().from(t.products).where(eq(t.products.active, true)).orderBy(asc(t.products.name));
 }
 
+/** Sizes in use, plus sizes no longer in use that still have jars in stock (marked as such), so those jars can still leave. */
+export async function productsWithJars() {
+  const rows = await db().execute<{ id: string; on_hand: string | null }>(sql`
+    select p.id, (select sum(m.quantity) from movements m where m.item_id = p.item_id) as on_hand from products p where not p.active`);
+  const stocked = new Set([...rows].filter((r) => new Decimal(r.on_hand ?? 0).gt(0)).map((r) => r.id));
+  const all = await db().select().from(t.products).orderBy(asc(t.products.name));
+  return all.filter((p) => p.active || stocked.has(p.id)).map((p) => (p.active ? p : { ...p, name: `${p.name} (not in use)` }));
+}
+
 export async function customerList() {
   return db().select().from(t.customers).orderBy(asc(t.customers.name));
 }

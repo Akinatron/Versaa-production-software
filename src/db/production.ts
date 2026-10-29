@@ -136,7 +136,7 @@ export async function ensureBatches(db: DB, runId: string) {
  * "Originally reserved" is only what was held at confirmation, minus batches
  * not made; the adjustments this function adds never count towards it.
  */
-async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
+async function syncRunReservation(tx: Tx, runId: string, itemId: string, notMadePackaging?: Map<string, Decimal>) {
   const [row] = await tx.execute<{ original: string | null; current: string | null; used: string | null }>(sql`
     select
       (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and kind = 'hold')
@@ -150,11 +150,55 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
            or (m.doc_type = 'packaging_session' and m.doc_id in (
               select s.id from packaging_sessions s join production_batches b on b.id = s.batch_id where b.run_id = ${runId}))
          )) as used`);
-  const original = Decimal.max(D0, new Decimal(row?.original ?? 0));
+  const packagingFreed = (notMadePackaging ?? (await packagingOfBatchesNotMade(tx, runId)).freed).get(itemId) ?? D0;
+  const original = Decimal.max(D0, new Decimal(row?.original ?? 0).minus(packagingFreed));
   if (original.isZero() && new Decimal(row?.current ?? 0).isZero()) return;
   const target = Decimal.max(D0, original.minus(row?.used ?? 0));
   const diff = target.minus(row?.current ?? 0);
   if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString(), kind: "adjust" });
+}
+
+/**
+ * Packaging a run no longer needs because some of its batches are marked as
+ * not made. Each such batch frees its share of the jars, lids and labels of
+ * its sauce's sizes: what the forecast planned for the sauce ÷ the sauce's
+ * batches in the run. Whole units are rounded down, so nothing a made batch
+ * needs is freed. `items` lists every packaging item the run planned.
+ */
+async function packagingOfBatchesNotMade(tx: Tx, runId: string): Promise<{ freed: Map<string, Decimal>; items: string[] }> {
+  const freed = new Map<string, Decimal>();
+  const [snap] = await tx.select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, runId));
+  if (!snap) return { freed, items: [] };
+  // Saved as JSON: quantities come back as strings.
+  const plan = snap.data as unknown as PlanResult;
+  const packaging = plan.requirements.filter((r) => r.kind === "packaging");
+  const items = packaging.map((r) => r.itemId);
+  const notMade = await tx
+    .select({ sauceId: t.productionBatches.sauceId })
+    .from(t.productionBatches)
+    .where(and(eq(t.productionBatches.runId, runId), eq(t.productionBatches.status, "cancelled")));
+  if (!notMade.length) return { freed, items };
+  const notMadeBySauce = new Map<string, number>();
+  for (const b of notMade) notMadeBySauce.set(b.sauceId, (notMadeBySauce.get(b.sauceId) ?? 0) + 1);
+  const ids = plan.products.map((p) => p.productId);
+  const products = ids.length ? await tx.select({ id: t.products.id, sauceId: t.products.sauceId }).from(t.products).where(inArray(t.products.id, ids)) : [];
+  const sauceOfProduct = new Map(products.map((p) => [p.id, p.sauceId]));
+  // Contributions name the size they come from.
+  const sauceOfName = new Map(plan.products.map((p) => [p.name, sauceOfProduct.get(p.productId)]));
+  const batchesOf = new Map(plan.sauces.map((x) => [x.sauceId, x.batches ?? 0]));
+  for (const r of packaging) {
+    let share = D0;
+    for (const c of r.contributions) {
+      const sauceId = sauceOfName.get(c.from);
+      const k = sauceId ? (notMadeBySauce.get(sauceId) ?? 0) : 0;
+      const n = sauceId ? (batchesOf.get(sauceId) ?? 0) : 0;
+      if (!k || !n || c.quantity === null) continue;
+      share = share.plus(new Decimal(c.quantity).mul(Math.min(k, n)).div(n));
+    }
+    if (r.unit === "unit") share = share.floor();
+    if (share.gt(0)) freed.set(r.itemId, share);
+  }
+  return { freed, items };
 }
 
 // ---------------------------------------------------------------- ingredients used
@@ -944,7 +988,8 @@ export async function updateBatch(db: DB, input: { batchId: string; reason: stri
 
 /**
  * Bring back a batch marked as not made, so it can be cooked after all. Its
- * ingredients are reserved again. Not possible once its run is closed.
+ * ingredients and its share of the packaging are reserved again. Not possible
+ * once its run is closed.
  */
 export async function restoreBatch(db: DB, input: { batchId: string; reason: string }) {
   const reason = needReason(input.reason, "Say why the batch is restored");
@@ -956,11 +1001,13 @@ export async function restoreBatch(db: DB, input: { batchId: string; reason: str
     await tx.update(t.productionBatches).set({ status: "planned", closedAt: null }).where(eq(t.productionBatches.id, batch.id));
     const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
     for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);
+    const pkg = await packagingOfBatchesNotMade(tx, batch.runId);
+    for (const itemId of pkg.items) await syncRunReservation(tx, batch.runId, itemId, pkg.freed);
     await logChange(tx, {
       action: "restore",
       area: "production",
       entity: { type: "batch", id: batch.id, code: batch.code },
-      summary: `${batch.code} back on the plan: its ingredients are reserved again`,
+      summary: `${batch.code} back on the plan: its ingredients and packaging are reserved again`,
       changes: diff([["Status", "Not made", "To cook"]]),
       reason,
       links: batchRefs(batch, run),
@@ -1001,6 +1048,9 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         const release = Decimal.min(new Decimal(l.plannedQty), new Decimal(row?.q ?? 0));
         if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString(), kind: "adjust" });
       }
+      // And its share of the jars, lids and labels.
+      const pkg = await packagingOfBatchesNotMade(tx, batch.runId);
+      for (const itemId of pkg.items) await syncRunReservation(tx, batch.runId, itemId, pkg.freed);
     } else {
       const pending = await tx
         .select({ name: t.items.name })

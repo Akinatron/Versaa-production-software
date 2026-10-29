@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { money } from "./pricing";
+import { money, unitMoney } from "./pricing";
 import { formatQty, type UnitCode } from "./quantity";
 
 /**
@@ -58,7 +58,7 @@ export function lineQuantity(l: OrderMessageLine): string {
 /** "12.50 € each" for a pack, "3.20 €/kg" per stock unit. */
 export function linePrice(l: OrderMessageLine): string | null {
   if (l.packQty && l.packPrice) return `${money(new Decimal(l.packPrice))} each`;
-  if (l.unitPrice) return `${money(new Decimal(l.unitPrice))}/${l.unit}`;
+  if (l.unitPrice) return `${unitMoney(new Decimal(l.unitPrice))}/${l.unit}`;
   return null;
 }
 

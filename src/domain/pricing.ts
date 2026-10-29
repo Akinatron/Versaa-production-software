@@ -72,9 +72,18 @@ export function favourite<T extends Pick<Offer, "rank">>(offers: T[]): T | null 
 /** Human text for a price, e.g. "12 € / 25 kg sack" or "0.40 € / unit". */
 export function describePrice(offer: Pick<Offer, "packQty" | "packName" | "price">, unitLabel: string): string {
   if (offer.price === null) return "no price";
-  const price = `${money(offer.price)}`;
+  const price = offer.packQty === null ? unitMoney(offer.price) : money(offer.price);
   if (offer.packQty === null) return `${price} / ${unitLabel === "units" ? "unit" : unitLabel}`;
   return `${price} / ${offer.packQty.toString()} ${unitLabel}${offer.packName ? ` ${offer.packName}` : ""}`;
+}
+
+/**
+ * A price per unit: cents as usual, but cheap items keep the digits that
+ * matter (0.035 €, 0.004 €), up to 4 decimals.
+ */
+export function unitMoney(v: Decimal | null): string {
+  if (v === null) return "unknown";
+  return v.decimalPlaces() <= 2 ? money(v) : `${v.toDecimalPlaces(4).toString()} €`;
 }
 
 export function money(v: Decimal | null): string {
@@ -100,22 +109,31 @@ export interface BudgetLineInput {
 export interface BudgetGroup {
   kind: ItemKind;
   lines: BudgetLineInput[];
-  /** Per column: sum of known costs, and how many lines had no price. */
-  totals: Record<string, { cost: Decimal; missing: number }>;
+  /** Per column: sum of known costs, how many lines had no price, and how many an unknown quantity. */
+  totals: Record<string, BudgetTotal>;
+}
+
+export interface BudgetTotal {
+  cost: Decimal;
+  /** Lines with a quantity but no price. */
+  missing: number;
+  /** Lines whose quantity can't be worked out (e.g. stock never counted). */
+  unknown: number;
 }
 
 export interface Budget {
   groups: BudgetGroup[];
-  total: Record<string, { cost: Decimal; missing: number }>;
+  total: Record<string, BudgetTotal>;
 }
 
 /**
  * Group lines into Ingredients and Packaging with per-column totals. A line
- * with a quantity but no price is counted as missing, so a total is never
- * presented as complete when it isn't.
+ * with a quantity but no price is counted as missing, and a line whose
+ * quantity is unknown as unknown, so a total is never presented as complete
+ * when it isn't.
  */
 export function buildBudget(lines: BudgetLineInput[], columns: string[]): Budget {
-  const empty = () => Object.fromEntries(columns.map((c) => [c, { cost: new Decimal(0), missing: 0 }]));
+  const empty = (): Record<string, BudgetTotal> => Object.fromEntries(columns.map((c) => [c, { cost: new Decimal(0), missing: 0, unknown: 0 }]));
   const total = empty();
   const groups: BudgetGroup[] = (["ingredient", "packaging"] as const).map((kind) => {
     const own = lines.filter((l) => l.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
@@ -123,7 +141,13 @@ export function buildBudget(lines: BudgetLineInput[], columns: string[]): Budget
     for (const l of own) {
       for (const c of columns) {
         const col = l.columns[c];
-        if (!col || col.quantity === null || col.quantity.isZero()) continue;
+        if (!col) continue;
+        if (col.quantity === null) {
+          totals[c]!.unknown++;
+          total[c]!.unknown++;
+          continue;
+        }
+        if (col.quantity.isZero()) continue;
         if (col.cost === null) {
           totals[c]!.missing++;
           total[c]!.missing++;

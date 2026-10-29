@@ -16,7 +16,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames } from "./base";
 
 // ---------------------------------------------------------------- stock count
 
@@ -87,9 +87,14 @@ export async function recordOpeningCount(db: DB, input: { idempotencyKey: string
 export async function addSupplier(db: DB, input: { name: string; contact?: string | null }) {
   const name = input.name.trim();
   if (!name) throw new OperationError("Supplier name is required.");
-  const [row] = await db.insert(t.suppliers).values({ name, contact: input.contact?.trim() || null }).returning();
-  await logChange(db, { action: "create", area: "purchasing", entity: { type: "supplier", id: row!.id, code: name }, summary: `Added supplier ${name}` });
-  return row!;
+  return db.transaction(async (tx) => {
+    await lockNames(tx);
+    const [dup] = await tx.select().from(t.suppliers).where(sql`lower(${t.suppliers.name}) = lower(${name})`);
+    if (dup) throw new OperationError(`${dup.name} already exists.`);
+    const [row] = await tx.insert(t.suppliers).values({ name, contact: input.contact?.trim() || null }).returning();
+    await logChange(tx, { action: "create", area: "purchasing", entity: { type: "supplier", id: row!.id, code: name }, summary: `Added supplier ${name}` });
+    return row!;
+  });
 }
 
 // ---------------------------------------------------------------- purchase orders and deliveries
@@ -144,11 +149,13 @@ export async function runTargets(db: DB, runId: string) {
  * already used isn't asked for again.
  */
 export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
-  const [catalog, stock, targets, [run], held] = await Promise.all([
+  const [run] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
+  if (!run) throw new OperationError("Run not found.");
+  const [catalog, stock, targets, held] = await Promise.all([
     loadPlanCatalog(db),
-    loadStockPositions(db),
+    // An order that arrives after the run's date doesn't help it.
+    loadStockPositions(db, { arrivingBy: run.plannedFor }),
     runTargets(db, runId),
-    db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId)),
     db
       .select({
         runId: t.reservations.runId,
@@ -161,7 +168,6 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
       .innerJoin(t.productionRuns, eq(t.productionRuns.id, t.reservations.runId))
       .where(isNull(t.reservations.releasedAt)),
   ]);
-  if (!run) throw new OperationError("Run not found.");
   const confirmed = run.status !== "draft";
   const comesAfter = (r: { runId: string | null; plannedFor: string; confirmedAt: Date | null }) => {
     if (!confirmed || !run.confirmedAt) return false;
@@ -183,7 +189,20 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
     const pos = stock[itemId];
     if (pos) pos.reservedEarlier = Decimal.max(0, pos.reservedEarlier.minus(q));
   }
-  return planProduction({ ...catalog, stock, targets, ...(confirmed ? { stillToUse } : {}) });
+  const plan = planProduction({ ...catalog, stock, targets, ...(confirmed ? { stillToUse } : {}) });
+  // The planner only knows sizes in use; a draft that still asks for one that
+  // was turned off would silently drop those jars when confirmed.
+  if (!confirmed) {
+    const inUse = new Set(catalog.products.map((p) => p.id));
+    const off = Object.entries(targets).filter(([id, n]) => n > 0 && !inUse.has(id));
+    if (off.length) {
+      const names = await db.select({ id: t.products.id, name: t.products.name }).from(t.products).where(inArray(t.products.id, off.map(([id]) => id)));
+      for (const n of names) {
+        plan.issues.unshift({ level: "blocker", message: `${n.name} is not in use any more. Press Edit and set it to 0, or turn it back on in Settings.` });
+      }
+    }
+  }
+  return plan;
 }
 
 /**
