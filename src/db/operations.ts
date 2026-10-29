@@ -198,7 +198,7 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
     if (off.length) {
       const names = await db.select({ id: t.products.id, name: t.products.name }).from(t.products).where(inArray(t.products.id, off.map(([id]) => id)));
       for (const n of names) {
-        plan.issues.unshift({ level: "blocker", message: `${n.name} is not in use any more. Remove it from the run or turn it back on in Settings.` });
+        plan.issues.unshift({ level: "blocker", message: `${n.name} is not in use any more. Press Edit and set it to 0, or turn it back on in Settings.` });
       }
     }
   }

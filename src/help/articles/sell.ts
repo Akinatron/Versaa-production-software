@@ -74,7 +74,7 @@ export const sell: Article[] = [
     steps: [
       "In [Outbound](/outbound) → **To deliver**, press **Deliver** on the order.",
       "Set the **Delivery date**.",
-      "For each product, choose where the jars come from: **Earliest best-before first (recommended)** shows which lots it will take, or **I'll choose the lots** and enter jars per lot (they must add up).",
+      "For each product, choose where the jars come from: **Earliest best-before first (recommended)** shows which lots it will take, or **I'll choose the lots** and enter jars per lot (they must add up to the product's jars in the order; with the same product on several lines, the lots fill the lines in order).",
       "Press **Deliver now** and confirm.",
     ],
     changes: [
@@ -109,7 +109,8 @@ export const sell: Article[] = [
       "Press the record button.",
     ],
     changes: [
-      "The jars leave stock from those lots straight away. Only free jars can leave: jars promised to sales orders are kept for them.",
+      "The jars leave stock from those lots straight away. A **Sale** can only take free jars: jars promised to sales orders are kept for them. Waste, samples, tests and own use only need the jars to be there, even promised ones (broken is broken); the app then tells you which sales orders are now short.",
+      "Sizes no longer in use still appear, marked **(not in use)**, while they have jars in stock.",
       "Each exit gets a code: `OUT-` sales, `SMP-` samples, `INT-` own use, `TST-` tests, `WST-` waste, then the date and a number.",
     ],
     more: [

@@ -108,7 +108,7 @@ describe.skipIf(!testDbUrl)("sizes no longer in use", () => {
     await setProductActive(db, kip700, false);
     const plan = await planForRun(db, run.id);
     expect(plan.issues.filter((i) => i.level === "blocker").map((i) => i.message)).toContain(
-      "Liberiaanse Kip 700 ml is not in use any more. Remove it from the run or turn it back on in Settings.",
+      "Liberiaanse Kip 700 ml is not in use any more. Press Edit and set it to 0, or turn it back on in Settings.",
     );
     await expect(confirmRun(db, run.id)).rejects.toThrow(/not in use any more/);
     await setProductActive(db, kip700, true);

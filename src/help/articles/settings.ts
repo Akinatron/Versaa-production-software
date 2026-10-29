@@ -103,7 +103,7 @@ export const settings: Article[] = [
     keywords: ["sauce", "jar size", "fill", "ml", "product", "colour", "color", "batch number prefix", "shelf life", "storage"],
     more: [
       { h: "Sauces" },
-      "Each sauce has a **Colour** (a small dot that identifies it across the app, never a status), its **Batch numbers** prefix (for example `BOL`-YYYYMMDD-01) and a link to its recipe. Add one with **New sauce name** and an optional prefix of up to 5 letters.",
+      "Each sauce has a **Colour** (a small dot that identifies it across the app, never a status), its **Batch numbers** prefix (for example `BOL`-YYYYMMDD-01) and a link to its recipe. Add one with **New sauce name** and an optional prefix of up to 5 letters. Names and prefixes must be different from the other sauces' (capitals don't count).",
       { h: "Jar sizes" },
       "Each size has a **Capacity** and a **Fill per jar** in ml. The fill is what the planner uses to turn jars into litres. **Change fill** applies to future plans and packaging; past packaging keeps the fill it used.",
       "Two sizes can have the same capacity (for example a 250 ml jar and a 250 ml bottle). Each keeps its own stock and its own lots: the second gets a code like `f250-2`, and its lots end in `-250-2`.",
