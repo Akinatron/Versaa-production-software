@@ -303,14 +303,41 @@ export async function loadOffers(db: Exec, filter: { itemIds?: string[]; supplie
       packName: p?.pack_name ?? null,
       price: p?.price != null ? new Decimal(p.price) : null,
       since: p ? new Date(p.created_at) : null,
+      supplierActive: supplier.active,
     };
   });
 }
 
-/** Offers grouped by item, favourite first. */
+/**
+ * Offers to buy from, grouped by item, favourite first. Suppliers marked
+ * "Not in use" are left out. When the favourite is one of them, the cheapest
+ * supplier still in use takes its place (rank 1, marked standIn).
+ */
 export async function offersByItem(db: Exec, itemIds: string[]): Promise<Map<string, Offer[]>> {
+  const all = new Map<string, Offer[]>();
+  for (const o of await loadOffers(db, { itemIds })) all.set(o.itemId, [...(all.get(o.itemId) ?? []), o]);
   const out = new Map<string, Offer[]>();
-  for (const o of await loadOffers(db, { itemIds })) out.set(o.itemId, [...(out.get(o.itemId) ?? []), o]);
+  for (const [itemId, list] of all) {
+    const inUse = list.filter((o) => o.supplierActive !== false);
+    if (inUse.length === 0) continue;
+    if (list[0]!.supplierActive !== false) {
+      out.set(itemId, inUse);
+      continue;
+    }
+    const cost = (o: Offer) => unitPrice(o);
+    const ranked = [...inUse].sort((a, b) => {
+      const ca = cost(a);
+      const cb = cost(b);
+      if (ca && cb && !ca.eq(cb)) return ca.cmp(cb);
+      if (ca && !cb) return -1;
+      if (!ca && cb) return 1;
+      return a.rank - b.rank;
+    });
+    out.set(
+      itemId,
+      ranked.map((o, i) => ({ ...o, rank: i + 1, ...(i === 0 ? { standIn: true } : {}) })),
+    );
+  }
   return out;
 }
 

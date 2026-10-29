@@ -20,6 +20,16 @@ export default async function RunStockPage({
   const live = await planForRun(db(), id);
   const short = live.requirements.filter((r) => r.status === "short").length;
   const unknown = live.requirements.filter((r) => r.status === "unknown").length;
+  if (run.status === "closed" || run.status === "cancelled") {
+    return (
+      <>
+        <RunHeader run={run} step="stock" />
+        <Flash params={flash} />
+        <p className="card muted">This run is {run.status}; it doesn&apos;t need any more stock.</p>
+      </>
+    );
+  }
+  const started = live.requirements.some((r) => r.stillToUse != null && r.required != null && !r.stillToUse.eq(r.required));
 
   return (
     <>
@@ -32,6 +42,11 @@ export default async function RunStockPage({
             : `${short} item${short === 1 ? "" : "s"} to buy${unknown ? `, ${unknown} with unknown stock` : ""}. "On order" counts only orders already sent.`}
         </li>
       </ul>
+      {started && (
+        <p className="small muted">
+          Some batches are already cooked or packed: &quot;Still to use&quot; is what the run needs from now on, and only that is checked against stock.
+        </p>
+      )}
       <PlanView result={live} only={["requirements"]} />
       {short > 0 && <NextStep href={`/runs/${id}/order`}>Order what's missing</NextStep>}
     </>

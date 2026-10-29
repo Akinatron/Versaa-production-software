@@ -133,11 +133,13 @@ export async function ensureBatches(db: DB, runId: string) {
 /**
  * Bring a run's reservation of an item in line with what its batches have
  * used so far: reserved = originally reserved − used (never below 0).
+ * "Originally reserved" is only what was held at confirmation, minus batches
+ * not made; the adjustments this function adds never count towards it.
  */
 async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
   const [row] = await tx.execute<{ original: string | null; current: string | null; used: string | null }>(sql`
     select
-      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and quantity > 0)
+      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and kind = 'hold')
         - (select coalesce(sum(c.planned_qty), 0) from batch_consumption c join production_batches b on b.id = c.batch_id
            where b.run_id = ${runId} and b.status = 'cancelled' and c.item_id = ${itemId}) as original,
       (select sum(quantity) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null) as current,
@@ -152,7 +154,7 @@ async function syncRunReservation(tx: Tx, runId: string, itemId: string) {
   if (original.isZero() && new Decimal(row?.current ?? 0).isZero()) return;
   const target = Decimal.max(D0, original.minus(row?.used ?? 0));
   const diff = target.minus(row?.current ?? 0);
-  if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString() });
+  if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString(), kind: "adjust" });
 }
 
 // ---------------------------------------------------------------- ingredients used
@@ -982,7 +984,7 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         const [row] = await tx.execute<{ q: string | null }>(sql`
           select sum(quantity) as q from reservations where run_id = ${batch.runId} and item_id = ${l.itemId} and released_at is null`);
         const release = Decimal.min(new Decimal(l.plannedQty), new Decimal(row?.q ?? 0));
-        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString() });
+        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString(), kind: "adjust" });
       }
     } else {
       const pending = await tx

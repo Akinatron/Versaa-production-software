@@ -142,14 +142,17 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
           if (rows.length === 0) return null;
           const attention = rows.filter((r) => r.status !== "covered");
           const covered = rows.filter((r) => r.status === "covered");
+          // A confirmed run shows what it still has to use once it has used some.
+          const showLeft = rows.some((r) => r.stillToUse != null && (r.required == null || !new Decimal(r.stillToUse).eq(r.required)));
           const table = (list: typeof rows) => (
             <table>
               <thead>
                 <tr>
                   <th>Item</th>
                   <th className="num">Needed</th>
+                  {showLeft && <th className="num">Still to use</th>}
                   <th className="num">In stock</th>
-                  <th className="num">Held by other runs</th>
+                  <th className="num">Held by earlier runs</th>
                   <th className="num">On order</th>
                   <th className="num">To buy</th>
                   <th></th>
@@ -165,6 +168,7 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
                       )}
                     </td>
                     <td className="num">{q(r.required, r.unit)}</td>
+                    {showLeft && <td className="num">{q(r.stillToUse ?? null, r.unit)}</td>}
                     <td className="num">{r.onHand === null ? <span className="text-warn">not counted</span> : q(r.onHand, r.unit)}</td>
                     <td className="num">{q(r.reservedEarlier, r.unit)}</td>
                     <td className="num">{q(r.onOrder, r.unit)}</td>

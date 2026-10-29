@@ -423,6 +423,12 @@ export const reservations = pgTable("reservations", {
     .notNull()
     .references(() => items.id),
   quantity: numeric("quantity").notNull(),
+  /**
+   * "hold": what was set aside when the run was confirmed (or the sales order
+   * made). "adjust": later changes as batches use it, give it back or are
+   * not made. Only holds count as the original amount.
+   */
+  kind: text("kind", { enum: ["hold", "adjust"] }).notNull().default("hold"),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
