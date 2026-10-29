@@ -16,6 +16,7 @@ import { restorePurchaseOrder } from "@/db/purchasing";
 import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
+import { fmtDate } from "../components/ui/format";
 
 const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const backTo = (form: FormData, fallback: string) => {
@@ -71,7 +72,7 @@ export async function markSentAction(form: FormData) {
   const back = backTo(form, "/orders");
   const r = await attempt(back, () => markOrderSent(db(), id, { sentOn: str(form, "sentOn") || null, expectedOn: str(form, "expectedOn") || null }));
   refresh();
-  redirect(withOk(back, r.alreadySent ? `${r.po.code} was already sent.` : `${r.po.code} marked as sent on ${r.po.orderedOn}. It now counts as on order.`));
+  redirect(withOk(back, r.alreadySent ? `${r.po.code} was already sent.` : `${r.po.code} marked as sent on ${fmtDate(r.po.orderedOn)}. It now counts as on order.`));
 }
 
 export async function updateDraftAction(form: FormData) {

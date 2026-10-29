@@ -12,6 +12,7 @@ import { wipeCounts } from "@/db/wipe";
 import { devToolsBuilt, isDeveloperMode } from "@/lib/developer";
 import { DeleteDatabase, EnterDeveloperMode } from "./developer-dialogs";
 import { leaveDeveloperModeAction, startMockAction, stopMockAction } from "./developer-actions";
+import { plural } from "../components/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -66,16 +67,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         noPackaging.length > 0
           ? {
               cls: "bad",
-              text: `${noPackaging.length} product(s) without a packaging list`,
+              text: `${plural(noPackaging.length, "product")} without a packaging list`,
             }
           : draftCount("packaging") > 0
             ? {
                 cls: "warn",
-                text: `${draftCount("packaging")} draft not activated yet`,
+                text: `${plural(draftCount("packaging"), "draft")} not activated yet`,
               }
             : {
                 cls: "ok",
-                text: `${catalog.products.length} packaging lists active`,
+                text: `${plural(catalog.products.length, "packaging list")} active`,
               },
     },
     {
@@ -93,7 +94,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       text: "What you make and sell: sauces, jar sizes (fill per jar) and sauce × size products.",
       status: {
         cls: "",
-        text: `${catalog.sauces.length} sauces · ${catalog.products.length} products in use`,
+        text: `${plural(catalog.sauces.length, "sauce")} · ${plural(catalog.products.length, "product")} in use`,
       },
     },
     {
@@ -104,12 +105,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         noYield.length > 0
           ? {
               cls: "bad",
-              text: `${noYield.length} sauce(s) without a litres-per-batch figure`,
+              text: `${plural(noYield.length, "sauce")} without a litres-per-batch figure`,
             }
           : estimated.length > 0
             ? {
                 cls: "warn",
-                text: `${estimated.length} sauce(s) still planned with an estimate`,
+                text: `${plural(estimated.length, "sauce")} still planned with an estimate`,
               }
             : { cls: "ok", text: "All yields measured from recorded batches" },
     },

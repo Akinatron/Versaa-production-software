@@ -315,7 +315,7 @@ export function planProduction(input: PlanInput): PlanResult {
   if (uncounted > 0) {
     issues.push({
       level: "warning",
-      message: `${uncounted} item(s) have no stock count yet, so their coverage is unknown. Record an opening stock count.`,
+      message: `${uncounted} ${uncounted === 1 ? "item has" : "items have"} no stock count yet, so their coverage is unknown. Record an opening stock count.`,
     });
   }
 

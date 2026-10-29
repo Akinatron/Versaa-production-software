@@ -10,6 +10,7 @@ import { OperationError } from "@/db/base";
 import { recordStockCount, recordWriteOff, setAdjustmentDeleted, type CountLine } from "@/db/adjustments";
 import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
+import { plural } from "../components/ui/format";
 
 export async function saveOpeningCount(form: FormData) {
   return keepInput(async () => {
@@ -22,7 +23,7 @@ export async function saveOpeningCount(form: FormData) {
     }
     const r = await recordOpeningCount(db(), { idempotencyKey: String(form.get("key")), countedOn: String(form.get("countedOn")), lines });
     revalidatePath("/stock");
-    redirect(withOk("/stock", r.alreadyRecorded ? "That count was already saved." : `Saved the count for ${r.created} item(s).`));
+    redirect(withOk("/stock", r.alreadyRecorded ? "That count was already saved." : `Saved the count for ${plural(r.created, "item")}.`));
   });
 }
 
@@ -46,7 +47,7 @@ export async function saveStockCount(form: FormData) {
           ? "That count was already saved."
           : r.changed === 0
             ? "Count saved: everything matched, nothing changed."
-            : `Count saved: ${r.changed} lot(s) corrected. The history below shows each correction.`,
+            : `Count saved: ${plural(r.changed, "lot")} corrected. The history below shows each correction.`,
       ),
     );
   });
