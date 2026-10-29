@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isOnTheWay } from "@/domain/status";
 import Decimal from "decimal.js";
 import type { OrderView } from "@/db/purchasing";
 import { money } from "@/domain/pricing";
@@ -83,7 +84,7 @@ export function RunOrdersTable({ orders, back }: { orders: OrderView[]; back: st
                 <td className="num">{money(o.cost)}</td>
                 <td>
                   {o.po.status === "draft" && <MarkSentForm poId={o.po.id} back={back} compact />}
-                  {(o.po.status === "sent" || o.po.status === "partly_received") && (
+                  {isOnTheWay(o.po.status) && (
                     <Link href={`/deliveries/new?po=${o.po.id}`} className="btn secondary sm">
                       Record delivery
                     </Link>

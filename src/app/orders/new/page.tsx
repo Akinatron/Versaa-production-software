@@ -2,7 +2,7 @@ import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { loadPlanCatalog } from "@/db/planning";
+import { boughtItems } from "@/db/planning";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
 import { saveOrder } from "../actions";
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, suppliers, runs] = await Promise.all([
-    loadPlanCatalog(db()),
+  const [items, suppliers, runs] = await Promise.all([
+    boughtItems(db()),
     db().select().from(t.suppliers).where(eq(t.suppliers.active, true)),
     db()
       .select()
@@ -95,7 +95,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 {lines.map((l, i) => (
                   <tr key={i}>
                     <td>
-                      <ItemSelect name={`item_${i}`} items={catalog.items} defaultValue={l.itemId} />
+                      <ItemSelect name={`item_${i}`} items={items} defaultValue={l.itemId} />
                     </td>
                     <td>
                       <input name={`qty_${i}`} type="number" min="0" step="any" defaultValue={l.qty} aria-label="Quantity" />

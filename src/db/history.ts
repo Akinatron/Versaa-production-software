@@ -1,5 +1,7 @@
 import Decimal from "decimal.js";
+import { sumLitres } from "./base";
 import { sql } from "drizzle-orm";
+import { cache } from "react";
 import type { DB } from "./client";
 
 /*
@@ -22,7 +24,14 @@ export interface YieldStats {
   avgSellableLitres: Decimal;
 }
 
-export async function observedYields(db: DB): Promise<Map<string, YieldStats>> {
+/**
+ * Asked for by the plan catalog and by pages directly, so cached for the
+ * page being drawn (React cache): worked out once per page, fresh next visit.
+ */
+export const observedYields = cache(readObservedYields);
+export const observedRejects = cache(readObservedRejects);
+
+async function readObservedYields(db: DB): Promise<Map<string, YieldStats>> {
   const rows = await db.execute<{
     sauce_id: string;
     n: number;
@@ -33,8 +42,8 @@ export async function observedYields(db: DB): Promise<Map<string, YieldStats>> {
   }>(sql`
     with per_batch as (
       select b.id, b.sauce_id,
-        sum(l.filled * l.fill_ml) / 1000.0 as filled_l,
-        sum(l.accepted * l.fill_ml) / 1000.0 as sellable_l
+        ${sumLitres("l.filled", "l.fill_ml")} as filled_l,
+        ${sumLitres("l.accepted", "l.fill_ml")} as sellable_l
       from production_batches b
       join packaging_sessions s on s.batch_id = b.id and s.deleted_at is null
       join packaging_session_lines l on l.session_id = s.id
@@ -69,7 +78,7 @@ export interface RejectStats {
   rate: Decimal;
 }
 
-export async function observedRejects(db: DB): Promise<Map<string, RejectStats>> {
+async function readObservedRejects(db: DB): Promise<Map<string, RejectStats>> {
   const rows = await db.execute<{ product_id: string; filled: number; rejected: number; sessions: number }>(sql`
     select product_id, sum(filled)::int as filled, sum(rejected)::int as rejected, count(distinct l.session_id)::int as sessions
     from packaging_session_lines l join packaging_sessions s on s.id = l.session_id and s.deleted_at is null

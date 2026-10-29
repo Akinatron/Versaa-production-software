@@ -1,10 +1,11 @@
 import { shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
+import { PO_ON_THE_WAY } from "@/domain/status";
 import { STORAGE, STORAGE_KEYS, storageLabel } from "@/domain/storage";
 import { eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { loadPlanCatalog } from "@/db/planning";
+import { boughtItems } from "@/db/planning";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
@@ -18,14 +19,14 @@ export const dynamic = "force-dynamic";
 
 export default async function NewDeliveryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, suppliers, openOrders] = await Promise.all([
-    loadPlanCatalog(db()),
+  const [items, suppliers, openOrders] = await Promise.all([
+    boughtItems(db()),
     db().select().from(t.suppliers),
     db()
       .select({ po: t.purchaseOrders, supplier: t.suppliers.name })
       .from(t.purchaseOrders)
       .innerJoin(t.suppliers, eq(t.purchaseOrders.supplierId, t.suppliers.id))
-      .where(inArray(t.purchaseOrders.status, ["sent", "partly_received"])),
+      .where(inArray(t.purchaseOrders.status, [...PO_ON_THE_WAY])),
   ]);
   const po = openOrders.find((o) => o.po.id === params.po)?.po;
   const poLines = po
@@ -169,7 +170,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                 return (
                   <tr key={`b${i}`}>
                     <td>
-                      <ItemSelect name={`item_${i}`} items={catalog.items} />
+                      <ItemSelect name={`item_${i}`} items={items} />
                       <input type="hidden" name={`pol_${i}`} value="" />
                     </td>
                     <td>

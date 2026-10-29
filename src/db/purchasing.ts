@@ -12,7 +12,7 @@ import { UNITS, type UnitCode, unitWord } from "@/domain/quantity";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
-import { inSentence, PO_STATUS_NAME } from "@/domain/status";
+import { inSentence, isOnTheWay, isPoDone, PO_ON_THE_WAY, PO_STATUS_NAME } from "@/domain/status";
 import { BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
 
 /*
@@ -367,7 +367,7 @@ export async function closePurchaseOrder(db: DB, purchaseOrderId: string, note?:
   return db.transaction(async (tx) => {
     const [po] = await tx.select().from(t.purchaseOrders).where(eq(t.purchaseOrders.id, purchaseOrderId));
     if (!po) throw new OperationError("Order not found.");
-    if (po.status !== "sent" && po.status !== "partly_received") throw new OperationError("Only an order that is on its way can be closed.");
+    if (!isOnTheWay(po.status)) throw new OperationError("Only an order that is on its way can be closed.");
     const text = note?.trim();
     await tx
       .update(t.purchaseOrders)
@@ -542,7 +542,7 @@ async function refreshOrderStatus(tx: Tx, poId: string) {
   await tx
     .update(t.purchaseOrders)
     .set({ status: complete ? "received" : any ? "partly_received" : "sent" })
-    .where(and(eq(t.purchaseOrders.id, poId), inArray(t.purchaseOrders.status, ["sent", "partly_received", "received"])));
+    .where(and(eq(t.purchaseOrders.id, poId), inArray(t.purchaseOrders.status, [...PO_ON_THE_WAY, "received"])));
 }
 
 // ---------------------------------------------------------------- correcting deliveries
@@ -976,7 +976,7 @@ export async function loadOrders(db: DB, filter: { ids?: string[]; runId?: strin
     for (const r of rows) received.set(r.line_id, { accepted: r.accepted, rejected: r.rejected });
   }
   return orders.map(({ po, supplier, runCode }) => {
-    const open = po.status === "sent" || po.status === "partly_received" || po.status === "draft";
+    const open = !isPoDone(po.status);
     const own = lines
       .filter((l) => l.line.purchaseOrderId === po.id)
       .sort((a, b) => a.item.name.localeCompare(b.item.name))
@@ -1017,7 +1017,7 @@ export interface OrderPlanLine {
  * is already in draft orders for this run (sent orders already count as on order).
  */
 export async function orderPlan(db: DB, plan: PlanResult, runId?: string | null): Promise<OrderPlanLine[]> {
-  const short = plan.requirements.filter((r) => r.toBuy !== null && new Decimal(r.toBuy).gt(0));
+  const short = plan.requirements.filter((r) => r.toBuy !== null && r.toBuy.gt(0));
   const drafts = new Map<string, Decimal>();
   if (runId) {
     const rows = await db
@@ -1040,7 +1040,7 @@ export async function orderPlan(db: DB, plan: PlanResult, runId?: string | null)
         name: r.name,
         kind: r.kind,
         unit: r.unit,
-        missing: Decimal.max(0, new Decimal(r.toBuy!).minus(inDrafts)),
+        missing: Decimal.max(0, r.toBuy!.minus(inDrafts)),
         inDrafts,
         offers: offers.get(r.itemId) ?? [],
       };
@@ -1065,8 +1065,8 @@ export async function planBudget(db: DB, plan: PlanResult) {
   const lines: BudgetLineInput[] = plan.requirements.map((r) => {
     const fav = favourite(offers.get(r.itemId) ?? []);
     const up = unitPrice(fav);
-    const required = D(r.required as Decimal.Value | null);
-    const toBuy = D(r.toBuy as Decimal.Value | null);
+    const required = r.required;
+    const toBuy = r.toBuy;
     const rounded = toBuy !== null && toBuy.gt(0) ? roundToPacks(toBuy, fav, r.unit) : null;
     return {
       itemId: r.itemId,

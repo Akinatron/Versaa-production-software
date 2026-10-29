@@ -1,4 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
+import { sumLitres } from "@/db/base";
 import { db } from "@/db/client";
 import { toCsv, type Cell } from "../csv";
 import { toXlsx, type XlsxType } from "@/lib/xlsx";
@@ -94,7 +95,7 @@ const exports: Record<string, Export> = {
     const rows = await db().execute<Record<string, Cell>>(sql`
       select b.code, s.name as sauce, r.code as run, v.version_no, b.status::text as status, r.planned_for::text as planned_for,
         b.produced_on::text as produced_on, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on,
-        (select (sum(l.filled * l.fill_ml) / 1000.0)::text from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null) as litres,
+        (select ${sumLitres("l.filled", "l.fill_ml")}::text from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null) as litres,
         (select sum(l.filled) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as filled,
         (select sum(l.rejected) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as rejected,
         (select sum(l.accepted) from packaging_sessions ps join packaging_session_lines l on l.session_id = ps.id where ps.batch_id = b.id and ps.deleted_at is null)::int as accepted,

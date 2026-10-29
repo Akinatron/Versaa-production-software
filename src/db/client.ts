@@ -5,12 +5,30 @@ import { BUSINESS_TIME_ZONE } from "@/domain/dates";
 
 export type DB = ReturnType<typeof createDb>;
 
+/**
+ * Postgres notices go to the log, except the routine ones that migrations,
+ * tests and "Delete database" print by the hundred ("…, skipping", "drop
+ * cascades to…") and would hide the ones worth reading.
+ */
+const ROUTINE_NOTICE = [
+  /, skipping$/,
+  /^(drop|truncate) cascades to /,
+  // Made by an early migration; Postgres keeps the name cut to 63 characters, which works.
+  /^identifier "packaging_session_lines_packaging_version_id_packaging_versions_id_fk" will be truncated/,
+];
+
+export const routineNotice = (message: string) => ROUTINE_NOTICE.some((r) => r.test(message));
+
+function showNotice(notice: { message?: string }) {
+  if (!routineNotice(notice.message ?? "")) console.log("Database notice:", notice.message);
+}
+
 export function createDb(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("DATABASE_URL is not set");
   // The desktop app's built-in database takes one connection at a time (DATABASE_POOL_MAX=1).
   // Days in SQL (`::date`, `now()`) follow the business's time zone, like the app.
   // The desktop database ignores this and sets it itself (desktop/src/database.ts).
-  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 5, connection: { TimeZone: BUSINESS_TIME_ZONE } });
+  const sql = postgres(url, { max: Number(process.env.DATABASE_POOL_MAX) || 5, connection: { TimeZone: BUSINESS_TIME_ZONE }, onnotice: showNotice });
   return drizzle(sql, { schema });
 }
 

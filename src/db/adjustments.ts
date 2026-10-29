@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
+import { ADJUSTMENT_NAME } from "@/domain/status";
 import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate, readNumber, zeroOrMore } from "./base";
 import { lotBalance, lotBalanceAt } from "./ledger";
 import { logChange, needReason, type FieldChange, type Ref } from "./changes";
@@ -138,7 +139,7 @@ export async function recordWriteOff(
 
 // ---------------------------------------------------------------- deleting and restoring
 
-export const KIND: Record<string, string> = { count_correction: "Stock count", waste: "Write-off", internal_use: "Own use", sample: "Sample" };
+const KIND = ADJUSTMENT_NAME;
 
 /** What an adjustment did, per lot, from its own movements (not the ones that undid it). */
 async function effect(tx: Tx, adjId: string) {

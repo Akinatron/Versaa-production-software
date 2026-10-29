@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { sumLitres } from "@/db/base";
 import { sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import type { PlanResult } from "@/domain/planner";
+import { thawPlan } from "@/db/frozen-plan";
 import { OUTFLOW } from "../components/labels";
 import { PageHeader } from "../components/ui/header";
 import { fmtDate, plural } from "../components/ui/format";
@@ -76,7 +77,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       rejected: number;
       accepted: number;
     }>(sql`
-      select b.id, b.code, s.name as sauce, s.color as sauce_color, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, (sum(l.filled * l.fill_ml) / 1000.0)::text as litres, v.version_no,
+      select b.id, b.code, s.name as sauce, s.color as sauce_color, to_char(b.closed_at, 'YYYY-MM-DD') as closed_on, ${sumLitres("l.filled", "l.fill_ml")}::text as litres, v.version_no,
         coalesce(sum(l.filled), 0)::int as filled, coalesce(sum(l.rejected), 0)::int as rejected, coalesce(sum(l.accepted), 0)::int as accepted
       from production_batches b
       join sauces s on s.id = b.sauce_id
@@ -106,7 +107,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       code: string;
       planned_for: string;
       closed_on: string;
-      data: PlanResult | null;
+      data: unknown;
     }>(sql`
       select r.id, r.code, r.planned_for::text, to_char(max(b.closed_at), 'YYYY-MM-DD') as closed_on, fs.data
       from production_runs r
@@ -387,7 +388,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <p className="card muted">No run was closed in this period.</p>
       ) : (
         [...runs].map((r) => {
-          const plan = r.data;
+          const plan = r.data ? thawPlan(r.data) : null;
           const ab = [...actualBatches].filter((x) => x.run_id === r.id);
           const aj = [...actualJars].filter((x) => x.run_id === r.id);
           return (

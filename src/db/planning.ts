@@ -1,4 +1,6 @@
 import { BOUGHT_KINDS, type BoughtKind } from "@/domain/item-kinds";
+import { sqlList } from "./base";
+import { PO_ON_THE_WAY } from "@/domain/status";
 import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
@@ -14,6 +16,13 @@ export interface PlanCatalog {
 }
 
 /** The active catalog as the planner needs it. */
+const toPlanItem = (i: typeof t.items.$inferSelect): PlanItem => ({ id: i.id, name: i.name, kind: i.kind as BoughtKind, stockUnit: i.stockUnit as UnitCode });
+
+/** Just the items that are bought (ingredients, packaging, other), for a pick list. One query. */
+export async function boughtItems(db: DB): Promise<PlanItem[]> {
+  return (await db.select().from(t.items).where(inArray(t.items.kind, [...BOUGHT_KINDS]))).map(toPlanItem);
+}
+
 export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
   const [itemRows, sauceRows, recipeRows, lineRows, productRows, pkgRows, yieldRows, rejectRows, seenYields, seenRejects] = await Promise.all([
     db.select().from(t.items).where(inArray(t.items.kind, [...BOUGHT_KINDS])),
@@ -98,7 +107,7 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
     });
 
   return {
-    items: itemRows.map((i) => ({ id: i.id, name: i.name, kind: i.kind as BoughtKind, stockUnit: i.stockUnit as UnitCode })),
+    items: itemRows.map(toPlanItem),
     sauces,
     products,
   };
@@ -125,7 +134,7 @@ export async function loadStockPositions(db: DB, opts: { arrivingBy?: string } =
         sum(case when ${by}::date is null or o.expected_on is null or o.expected_on <= ${by}::date then greatest(l.quantity - coalesce(r.received, 0), 0) else 0 end) as qty,
         sum(case when ${by}::date is not null and o.expected_on > ${by}::date then greatest(l.quantity - coalesce(r.received, 0), 0) else 0 end) as late
       from purchase_order_lines l
-      join purchase_orders o on o.id = l.purchase_order_id and o.status in ('sent', 'partly_received')
+      join purchase_orders o on o.id = l.purchase_order_id and o.status::text in (${sqlList(PO_ON_THE_WAY)})
       left join (select r.purchase_order_line_id, sum(r.quantity) as received from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null group by 1) r
         on r.purchase_order_line_id = l.id
       group by l.item_id`),

@@ -1,13 +1,13 @@
 import Link from "next/link";
+import { batchTrace } from "../../../components/page-data";
 import { notFound } from "next/navigation";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { traceBatch } from "@/db/trace";
 import { batchBudget } from "@/db/budget";
+import { frozenPlan } from "@/db/frozen-plan";
 import { formatQty, type UnitCode } from "@/domain/quantity";
-import type { PlanResult } from "@/domain/planner";
 import { Flash } from "../../../components/flash";
 import { INCIDENT } from "../../../components/labels";
 import { BatchSteps } from "../../../components/batch-steps";
@@ -43,7 +43,7 @@ export default async function BatchPage({
   const { id } = await params;
   idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id);
+  const tr = await batchTrace(id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "closed" && batch.status !== "cancelled";
@@ -58,10 +58,9 @@ export default async function BatchPage({
     .where(and(eq(t.products.sauceId, sauce.id), eq(t.products.active, true)))
     .orderBy(desc(t.formats.capacityMl));
 
-  const [snap] = await db().select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, run.id));
-  const plan = snap ? (snap.data as unknown as PlanResult) : null;
+  const plan = await frozenPlan(db(), run.id);
   const sauceLine = plan?.sauces.find((s) => s.sauceId === sauce.id) ?? null;
-  const perBatch = sauceLine?.litresPerBatch != null ? new Decimal(sauceLine.litresPerBatch) : null;
+  const perBatch = sauceLine?.litresPerBatch ?? null;
   const yieldLabel = SOURCE[sauceLine?.yieldSource ?? "missing"] ?? "unknown";
 
   const [{ others } = { others: 0 }] = await db()

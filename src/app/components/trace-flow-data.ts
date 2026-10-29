@@ -1,5 +1,5 @@
-import { db } from "@/db/client";
-import { traceBatch, traceForward, type LotSummary } from "@/db/trace";
+import { batchTrace, lotTrace } from "./page-data";
+import type { LotSummary } from "@/db/trace";
 import { OUTFLOW } from "./labels";
 import { jars, lotQty, who } from "./trace-format";
 import type { FlowColumn, FlowEdge, FlowNode } from "./trace-flow";
@@ -19,7 +19,7 @@ function originOf(lot: LotSummary): { id: string; label: string; sub?: string } 
  * A lot made here (jars, bulk sauce) is traced back through its batch.
  */
 export async function lotFlow(lotId: string): Promise<{ columns: FlowColumn[]; edges: FlowEdge[] } | null> {
-  const fw = await traceForward(db(), lotId);
+  const fw = await lotTrace(lotId);
   if (!fw) return null;
   const { lot, jarLots, destinations } = fw;
   const edges: FlowEdge[] = [];
@@ -29,7 +29,7 @@ export async function lotFlow(lotId: string): Promise<{ columns: FlowColumn[]; e
 
   if (lot.batchId) {
     // Made here: go back through the batch to the ingredient lots and their suppliers.
-    const b = await traceBatch(db(), lot.batchId);
+    const b = await batchTrace(lot.batchId);
     if (b) {
       const batchId = `batch:${b.batch.id}`;
       batches.push({ id: batchId, label: b.batch.code, sub: b.sauce.name, href: `/batches/${b.batch.id}` });

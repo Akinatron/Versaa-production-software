@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { litresFromJars } from "@/domain/quantity";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
@@ -250,8 +251,8 @@ export async function traceBatch(db: DB, batchId: string) {
     cur.accepted += line.accepted;
     bySize.set(product.id, cur);
   }
-  const filledLitres = sessionLines.reduce((s, x) => s.plus(new Decimal(x.line.filled).mul(x.line.fillMl).div(1000)), new Decimal(0));
-  const sellableLitres = sessionLines.reduce((s, x) => s.plus(new Decimal(x.line.accepted).mul(x.line.fillMl).div(1000)), new Decimal(0));
+  const filledLitres = sessionLines.reduce((s, x) => s.plus(litresFromJars(x.line.filled, x.line.fillMl)), new Decimal(0));
+  const sellableLitres = sessionLines.reduce((s, x) => s.plus(litresFromJars(x.line.accepted, x.line.fillMl)), new Decimal(0));
 
   return {
     ...row,

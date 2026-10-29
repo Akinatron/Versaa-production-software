@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { sqlList } from "@/db/base";
+import { PO_ON_THE_WAY } from "@/domain/status";
 import type { Metadata } from "next";
 import { sql } from "drizzle-orm";
 import { activeMock, db } from "@/db/client";
@@ -26,7 +28,7 @@ async function navCounts(): Promise<NavCounts> {
          where b.status in ('planned', 'in_production') and r.status in ('confirmed', 'in_progress')) as production,
       (select count(*)::int from production_batches where status in ('awaiting_packaging', 'packing')) as packaging,
       (select count(*)::int from purchase_orders where status = 'draft') as draft_orders,
-      (select count(*)::int from purchase_orders where status in ('sent', 'partly_received')) as on_the_way,
+      (select count(*)::int from purchase_orders where status::text in (${sqlList(PO_ON_THE_WAY)})) as on_the_way,
       (select count(*)::int from sales_orders where status = 'pending') as sales`);
   return {
     production: row?.production ?? 0,

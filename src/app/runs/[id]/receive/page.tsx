@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isOnTheWay, isPoDone } from "@/domain/status";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import { loadOrders } from "@/db/purchasing";
@@ -25,9 +26,9 @@ export default async function RunReceivePage({
   const flash = await searchParams;
   const run = await loadRun(id);
   const orders = await loadOrders(db(), { runId: id });
-  const waiting = orders.filter((o) => o.po.status === "sent" || o.po.status === "partly_received");
+  const waiting = orders.filter((o) => isOnTheWay(o.po.status));
   const drafts = orders.filter((o) => o.po.status === "draft");
-  const done = orders.filter((o) => ["received", "closed", "cancelled"].includes(o.po.status));
+  const done = orders.filter((o) => isPoDone(o.po.status));
 
   return (
     <>

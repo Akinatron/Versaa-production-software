@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { uploadProblem } from "@/domain/uploads";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
@@ -16,9 +17,7 @@ export type DocumentRow = typeof t.documents.$inferSelect;
 
 export const DOC_KIND: Record<DocumentKind, string> = { delivery_note: "Delivery note", invoice: "Invoice" };
 
-/** A phone photo of a multi-page note can be large; 20 MB leaves room. */
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
-export const MAX_FILES = 10;
+export { MAX_FILE_BYTES, MAX_FILES } from "@/domain/uploads";
 
 /** What a file really is, from its first bytes (never from its name). Only photos and PDFs. */
 export function detectFileType(b: Uint8Array): { contentType: string; ext: string } | null {
@@ -52,9 +51,9 @@ function cleanName(name: string, ext: string) {
 /** Check every file before anything is saved, so a bad file never leaves half a delivery behind. */
 export function checkUploads(files: UploadFile[]) {
   const real = files.filter((f) => f.data.length > 0);
-  if (real.length > MAX_FILES) throw new OperationError(`Attach at most ${MAX_FILES} files at once.`);
+  const problem = uploadProblem(real.map((f) => ({ name: f.name, size: f.data.length })));
+  if (problem) throw new OperationError(problem);
   return real.map((f) => {
-    if (f.data.length > MAX_FILE_BYTES) throw new OperationError(`"${f.name}" is over 20 MB. Take the photo again at a lower size or upload a PDF.`);
     const type = detectFileType(f.data);
     if (!type) throw new OperationError(`"${f.name}" isn't a photo or PDF. Upload a JPG, PNG, HEIC or PDF.`);
     return { ...f, ...type, name: cleanName(f.name, type.ext) };

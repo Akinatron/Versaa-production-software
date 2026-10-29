@@ -1,8 +1,8 @@
 import Link from "next/link";
+import { sauceColors } from "./page-data";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { sauceColorMaps } from "@/db/catalog";
 import type { PlanResult } from "@/domain/planner";
 import { BATCH_STATUS } from "./labels";
 import { createBatches } from "../runs/actions";
@@ -51,7 +51,7 @@ export async function BatchRunSection({ runId, runStatus, frozen }: { runId: str
       .filter((r) => !frozen?.products.some((p) => p.productId === r.product_id))
       .map((r) => ({ productId: r.product_id, name: r.name, target: null })),
   ];
-  const colors = await sauceColorMaps(db());
+  const colors = await sauceColors();
   const sauceIds = [...new Set([...(frozen?.sauces ?? []).map((s) => s.sauceId), ...batches.map((b) => b.batch.sauceId)])];
 
   return (

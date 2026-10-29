@@ -5,6 +5,7 @@ import * as t from "./schema";
 import { loadPlanCatalog, loadStockPositions } from "./planning";
 import { planProduction, type PlanResult } from "@/domain/planner";
 import { createBatchesForRun } from "./production";
+import { freezePlan } from "./frozen-plan";
 import { diff, logChange, needReason } from "./changes";
 
 /*
@@ -16,7 +17,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lockNames, isDate, zeroOrMore, type Tx } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lock, lockNames, isDate, zeroOrMore, type Tx } from "./base";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
@@ -217,7 +218,7 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
 export async function confirmRun(db: DB, runId: string) {
   return db.transaction(async (tx) => {
     // Serialize confirmations so two runs can't reserve the same stock at once.
-    await tx.execute(sql`select pg_advisory_xact_lock(4242)`);
+    await lock(tx, "runConfirm");
     const [run] = await tx.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
     if (!run) throw new OperationError("Run not found.");
     if (run.status === "confirmed") return { run, alreadyConfirmed: true };
@@ -229,7 +230,7 @@ export async function confirmRun(db: DB, runId: string) {
       throw new OperationError(`Can't confirm yet: ${blockers.map((b) => b.message).join(" ")}`);
     }
 
-    await tx.insert(t.forecastSnapshots).values({ runId, data: JSON.parse(JSON.stringify(plan)) });
+    await tx.insert(t.forecastSnapshots).values({ runId, data: freezePlan(plan) });
     const toReserve = plan.requirements.filter((r) => r.required !== null && r.required.gt(0));
     if (toReserve.length) {
       await tx.insert(t.reservations).values(toReserve.map((r) => ({ runId, itemId: r.itemId, quantity: r.required!.toString() })));

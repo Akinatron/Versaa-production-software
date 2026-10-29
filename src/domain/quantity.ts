@@ -49,6 +49,9 @@ export function convert(value: Decimal.Value, from: UnitCode, to: UnitCode): Dec
 }
 
 /** Format a quantity for display, trimming trailing zeros (max 3 decimals). */
+/** Litres in so many jars of a size: jars × fill per jar (ml) ÷ 1000. The SQL twin is sumLitres() in src/db/base.ts. */
+export const litresFromJars = (jars: Decimal.Value, fillMl: Decimal.Value) => new Decimal(jars).mul(fillMl).div(1000);
+
 export function formatQty(value: Decimal | null, unit: UnitCode): string {
   if (value === null) return `unknown ${UNITS[unit].label}`;
   const dp = unit === "unit" ? 0 : 3;

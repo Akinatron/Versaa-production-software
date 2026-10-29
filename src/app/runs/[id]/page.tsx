@@ -1,7 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
 import { planForRun, runTargets } from "@/db/operations";
+import { frozenPlan } from "@/db/frozen-plan";
 import { loadPlanCatalog } from "@/db/planning";
 import { loadOrders, planBudget } from "@/db/purchasing";
 import type { PlanResult } from "@/domain/planner";
@@ -33,14 +34,14 @@ export default async function RunPage({
   idOrNotFound(id);
   const flash = await searchParams;
   const run = await loadRun(id);
-  const [snapshot] = await db().select().from(t.forecastSnapshots).where(eq(t.forecastSnapshots.runId, id));
-  const live = await planForRun(db(), id);
-  const frozen = snapshot ? (snapshot.data as PlanResult) : null;
-  const [orders, budget] = await Promise.all([loadOrders(db(), { runId: id }), planBudget(db(), live)]);
-  const shortCount = live.requirements.filter((r) => r.status === "short").length;
-  const editing = run.status === "draft" && flash.edit === "1";
-  const shown = frozen ?? live;
   const finished = run.status === "closed" || run.status === "cancelled";
+  const frozen = await frozenPlan(db(), id);
+  // A closed or cancelled run doesn't change any more: its saved plan is enough, no need to work it out again.
+  const live = finished && frozen ? null : await planForRun(db(), id);
+  const shown = frozen ?? live!;
+  const [orders, budget] = await Promise.all([loadOrders(db(), { runId: id }), planBudget(db(), live ?? shown)]);
+  const shortCount = live ? live.requirements.filter((r) => r.status === "short").length : 0;
+  const editing = run.status === "draft" && flash.edit === "1";
 
   const actions = editing ? null : (
     <>

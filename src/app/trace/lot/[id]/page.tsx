@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { lotTrace } from "../../../components/page-data";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
 import { inArray } from "drizzle-orm";
 import * as t from "@/db/schema";
-import { lotsByIds, traceForward } from "@/db/trace";
+import { lotsByIds } from "@/db/trace";
 import { OUTFLOW } from "../../../components/labels";
 import { BatchBackward } from "../../../components/trace-backward";
 import { LotOrigin, batchCodes, jars, lotQty, who } from "../../../components/trace-format";
@@ -40,7 +41,7 @@ export default async function LotTracePage({
   const { id } = await params;
   idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceForward(db(), id);
+  const tr = await lotTrace(id);
   if (!tr) notFound();
   const { lot, batches, jarLots, destinations, jarsInStock, jarsOut } = tr;
   const codes = await batchCodes([lot.batchId, ...jarLots.map((l) => l.batchId)]);
