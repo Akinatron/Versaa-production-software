@@ -3,8 +3,8 @@ import { money } from "@/domain/pricing";
 import { formatQty } from "@/domain/quantity";
 import type { BudgetColumn, BudgetTableData } from "./budget-table";
 
-const totalText = (t: { cost: import("decimal.js").default; missing: number }) =>
-  t.missing === 0 ? money(t.cost) : `${money(t.cost)} + ${t.missing} without price`;
+const totalText = (t: { cost: import("decimal.js").default; missing: number; unknown: number }) =>
+  [money(t.cost), t.missing ? `${t.missing} without price` : "", t.unknown ? `${t.unknown} unknown` : ""].filter(Boolean).join(" + ");
 
 /** Turn a Budget (from buildBudget) into the plain strings BudgetTable shows. */
 export function budgetForTable(budget: Budget, columns: BudgetColumn[]): BudgetTableData {

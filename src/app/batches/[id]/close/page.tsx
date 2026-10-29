@@ -184,7 +184,7 @@ export default async function BatchPage({
                 </button>
               </form>
               <p className="muted" style={{ margin: "8px 0 0" }}>
-                Only possible while nothing is recorded for this batch. Its stock reservations are freed.
+                Only possible while nothing is recorded for this batch. Its ingredients and its share of the jars, lids and labels are freed.
               </p>
             </details>
           )}

@@ -518,13 +518,13 @@ export async function addRejectFigure(db: DB, input: { productId: string; percen
       .where(eq(t.rejectFigures.productId, p.id))
       .orderBy(sql`${t.rejectFigures.createdAt} desc`)
       .limit(1);
-    await tx.insert(t.rejectFigures).values({ productId: p.id, rate: String(input.percent / 100), source: "estimate", note: input.note || null });
+    await tx.insert(t.rejectFigures).values({ productId: p.id, rate: new Decimal(input.percent).div(100).toString(), source: "estimate", note: input.note || null });
     await logChange(tx, {
       action: "update",
       area: "settings",
       entity: { type: "yield", id: p.id, code: p.name },
       summary: `Reject rate of ${p.name} estimated`,
-      changes: diff([["Rejects", prev ? `${new Decimal(prev.rate).mul(100)}%` : null, `${input.percent}%`]]),
+      changes: diff([["Rejects", prev ? `${new Decimal(prev.rate).mul(100).toDecimalPlaces(2)}%` : null, `${input.percent}%`]]),
       reason: input.note,
       links: [{ type: "product", id: p.id, code: p.name }],
     });

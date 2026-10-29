@@ -81,7 +81,7 @@ export async function PlanView({ result, only, batchesTitle = "Batches" }: { res
                       <SauceName name={p.name} color={colors.byProduct.get(p.productId)} />
                     </td>
                     <td className="num">{p.targetJars}</td>
-                    <td className="num">{p.rejectRate ? `${D(p.rejectRate)!.mul(100).toString()}%` : "unknown"}</td>
+                    <td className="num">{p.rejectRate ? `${D(p.rejectRate)!.mul(100).toDecimalPlaces(2).toString()}%` : "unknown"}</td>
                     <td className="num">{p.jarsToFill}</td>
                     <td>
                       {p.packable === null ? (

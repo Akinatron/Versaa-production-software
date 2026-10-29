@@ -88,10 +88,11 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
         name: product.name,
         fillMl: format.fillMl,
         packaging: pkgRows.filter((p) => p.productId === product.id).map((p) => ({ itemId: p.itemId, perJar: p.perJar })),
+        // Older estimates were saved with float noise (1.1% as 0.011000000000000001).
         reject: seen
           ? { rate: seen.rate, source: "observed" as const }
           : r
-            ? { rate: new Decimal(r.rate), source: r.source }
+            ? { rate: new Decimal(r.rate).toDecimalPlaces(6), source: r.source }
             : { rate: null, source: "missing" as const },
       };
     });
@@ -106,8 +107,12 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
 /**
  * Stock position per item, from the ledger. An item with no movements at all
  * has never been counted, so its stock is unknown (null), not zero.
+ *
+ * With `arrivingBy` (a run's date), only orders expected by that day, or with
+ * no expected date, count as on order; later ones are given as lateOnOrder.
  */
-export async function loadStockPositions(db: DB): Promise<Record<string, StockPosition>> {
+export async function loadStockPositions(db: DB, opts: { arrivingBy?: string } = {}): Promise<Record<string, StockPosition>> {
+  const by = opts.arrivingBy ?? null;
   const [onHand, reserved, onOrder] = await Promise.all([
     db.select({ itemId: t.movements.itemId, qty: sql<string>`sum(${t.movements.quantity})` }).from(t.movements).groupBy(t.movements.itemId),
     db
@@ -115,8 +120,10 @@ export async function loadStockPositions(db: DB): Promise<Record<string, StockPo
       .from(t.reservations)
       .where(isNull(t.reservations.releasedAt))
       .groupBy(t.reservations.itemId),
-    db.execute<{ item_id: string; qty: string }>(sql`
-      select l.item_id, sum(greatest(l.quantity - coalesce(r.received, 0), 0)) as qty
+    db.execute<{ item_id: string; qty: string; late: string }>(sql`
+      select l.item_id,
+        sum(case when ${by}::date is null or o.expected_on is null or o.expected_on <= ${by}::date then greatest(l.quantity - coalesce(r.received, 0), 0) else 0 end) as qty,
+        sum(case when ${by}::date is not null and o.expected_on > ${by}::date then greatest(l.quantity - coalesce(r.received, 0), 0) else 0 end) as late
       from purchase_order_lines l
       join purchase_orders o on o.id = l.purchase_order_id and o.status in ('sent', 'partly_received')
       left join (select r.purchase_order_line_id, sum(r.quantity) as received from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null group by 1) r
@@ -128,7 +135,10 @@ export async function loadStockPositions(db: DB): Promise<Record<string, StockPo
   const get = (id: string) => (out[id] ??= { onHand: null, reservedEarlier: new Decimal(0), onOrder: new Decimal(0) });
   for (const r of onHand) get(r.itemId).onHand = new Decimal(r.qty);
   for (const r of reserved) get(r.itemId).reservedEarlier = new Decimal(r.qty);
-  for (const r of onOrder) get(r.item_id).onOrder = new Decimal(r.qty);
+  for (const r of onOrder) {
+    get(r.item_id).onOrder = new Decimal(r.qty);
+    if (new Decimal(r.late).gt(0)) get(r.item_id).lateOnOrder = new Decimal(r.late);
+  }
   return out;
 }
 

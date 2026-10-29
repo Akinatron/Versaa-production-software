@@ -144,11 +144,13 @@ export async function runTargets(db: DB, runId: string) {
  * already used isn't asked for again.
  */
 export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
-  const [catalog, stock, targets, [run], held] = await Promise.all([
+  const [run] = await db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId));
+  if (!run) throw new OperationError("Run not found.");
+  const [catalog, stock, targets, held] = await Promise.all([
     loadPlanCatalog(db),
-    loadStockPositions(db),
+    // An order that arrives after the run's date doesn't help it.
+    loadStockPositions(db, { arrivingBy: run.plannedFor }),
     runTargets(db, runId),
-    db.select().from(t.productionRuns).where(eq(t.productionRuns.id, runId)),
     db
       .select({
         runId: t.reservations.runId,
@@ -161,7 +163,6 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
       .innerJoin(t.productionRuns, eq(t.productionRuns.id, t.reservations.runId))
       .where(isNull(t.reservations.releasedAt)),
   ]);
-  if (!run) throw new OperationError("Run not found.");
   const confirmed = run.status !== "draft";
   const comesAfter = (r: { runId: string | null; plannedFor: string; confirmedAt: Date | null }) => {
     if (!confirmed || !run.confirmedAt) return false;
@@ -183,7 +184,20 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
     const pos = stock[itemId];
     if (pos) pos.reservedEarlier = Decimal.max(0, pos.reservedEarlier.minus(q));
   }
-  return planProduction({ ...catalog, stock, targets, ...(confirmed ? { stillToUse } : {}) });
+  const plan = planProduction({ ...catalog, stock, targets, ...(confirmed ? { stillToUse } : {}) });
+  // The planner only knows sizes in use; a draft that still asks for one that
+  // was turned off would silently drop those jars when confirmed.
+  if (!confirmed) {
+    const inUse = new Set(catalog.products.map((p) => p.id));
+    const off = Object.entries(targets).filter(([id, n]) => n > 0 && !inUse.has(id));
+    if (off.length) {
+      const names = await db.select({ id: t.products.id, name: t.products.name }).from(t.products).where(inArray(t.products.id, off.map(([id]) => id)));
+      for (const n of names) {
+        plan.issues.unshift({ level: "blocker", message: `${n.name} is not in use any more. Remove it from the run or turn it back on in Settings.` });
+      }
+    }
+  }
+  return plan;
 }
 
 /**

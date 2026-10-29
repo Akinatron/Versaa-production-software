@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { convert, type UnitCode } from "./quantity";
+import { convert, formatQty, type UnitCode } from "./quantity";
 
 /*
  * Production planner: from target sellable jars to batches, ingredients,
@@ -59,8 +59,10 @@ export interface StockPosition {
   onHand: Decimal | null;
   /** Committed to production runs that come before this one. */
   reservedEarlier: Decimal;
-  /** Ordered and sent, not yet received. */
+  /** Ordered and sent, not yet received, arriving by the run date (or with no date). */
   onOrder: Decimal;
+  /** Ordered and sent but expected after the run date: not counted in onOrder. */
+  lateOnOrder?: Decimal;
 }
 
 export interface PlanInput {
@@ -126,6 +128,8 @@ export interface RequirementLine {
   /** onHand − reservedEarlier, never below 0. */
   available: Decimal | null;
   onOrder: Decimal;
+  /** Ordered but expected after the run date, so not counted. */
+  lateOnOrder?: Decimal;
   /**
    * What still has to be bought, or null when it can't be worked out:
    * need − (onHand + onOrder − reservedEarlier), never below 0. Orders count
@@ -295,9 +299,16 @@ export function planProduction(input: PlanInput): PlanResult {
       reservedEarlier: pos.reservedEarlier,
       available,
       onOrder: pos.onOrder,
+      ...(pos.lateOnOrder?.gt(0) ? { lateOnOrder: pos.lateOnOrder } : {}),
       toBuy,
       status,
     });
+    if (status === "short" && pos.lateOnOrder?.gt(0)) {
+      issues.push({
+        level: "warning",
+        message: `${item.name}: ${formatQty(pos.lateOnOrder, item.stockUnit)} on order arrive after the run date, so they aren't counted. Ask for it sooner or buy it elsewhere.`,
+      });
+    }
   }
 
   const uncounted = requirements.filter((r) => r.onHand === null).length;
