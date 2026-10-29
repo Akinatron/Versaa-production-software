@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { batchTrace } from "../../../components/page-data";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { traceBatch } from "@/db/trace";
 import { lotsOf, type LotInfo } from "@/db/lot-use";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../../components/flash";
@@ -40,7 +40,7 @@ export default async function ProductionBatchPage({
   const { id } = await params;
   idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id);
+  const tr = await batchTrace(id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "cancelled";

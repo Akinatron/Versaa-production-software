@@ -1065,8 +1065,8 @@ export async function planBudget(db: DB, plan: PlanResult) {
   const lines: BudgetLineInput[] = plan.requirements.map((r) => {
     const fav = favourite(offers.get(r.itemId) ?? []);
     const up = unitPrice(fav);
-    const required = D(r.required as Decimal.Value | null);
-    const toBuy = D(r.toBuy as Decimal.Value | null);
+    const required = r.required;
+    const toBuy = r.toBuy;
     const rounded = toBuy !== null && toBuy.gt(0) ? roundToPacks(toBuy, fav, r.unit) : null;
     return {
       itemId: r.itemId,

@@ -14,6 +14,13 @@ export interface PlanCatalog {
 }
 
 /** The active catalog as the planner needs it. */
+const toPlanItem = (i: typeof t.items.$inferSelect): PlanItem => ({ id: i.id, name: i.name, kind: i.kind as BoughtKind, stockUnit: i.stockUnit as UnitCode });
+
+/** Just the items that are bought (ingredients, packaging, other), for a pick list. One query. */
+export async function boughtItems(db: DB): Promise<PlanItem[]> {
+  return (await db.select().from(t.items).where(inArray(t.items.kind, [...BOUGHT_KINDS]))).map(toPlanItem);
+}
+
 export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
   const [itemRows, sauceRows, recipeRows, lineRows, productRows, pkgRows, yieldRows, rejectRows, seenYields, seenRejects] = await Promise.all([
     db.select().from(t.items).where(inArray(t.items.kind, [...BOUGHT_KINDS])),
@@ -98,7 +105,7 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
     });
 
   return {
-    items: itemRows.map((i) => ({ id: i.id, name: i.name, kind: i.kind as BoughtKind, stockUnit: i.stockUnit as UnitCode })),
+    items: itemRows.map(toPlanItem),
     sauces,
     products,
   };

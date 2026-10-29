@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { batchTrace } from "../../../components/page-data";
 import { notFound } from "next/navigation";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { storageLabel } from "@/domain/storage";
 import * as t from "@/db/schema";
-import { traceBatch } from "@/db/trace";
 import { Flash } from "../../../components/flash";
 import { BatchSteps } from "../../../components/batch-steps";
 import { PackRows } from "../../../components/batch-pack-row";
@@ -34,7 +34,7 @@ export default async function PackagingBatchPage({
   const { id } = await params;
   idOrNotFound(id);
   const sp = await searchParams;
-  const tr = await traceBatch(db(), id);
+  const tr = await batchTrace(id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "closed" && batch.status !== "cancelled";

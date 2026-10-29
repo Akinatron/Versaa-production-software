@@ -4,7 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { loadPlanCatalog } from "@/db/planning";
+import { boughtItems } from "@/db/planning";
 import { UNITS, type UnitCode } from "@/domain/quantity";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
 
 export default async function NewDeliveryPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
-  const [catalog, suppliers, openOrders] = await Promise.all([
-    loadPlanCatalog(db()),
+  const [items, suppliers, openOrders] = await Promise.all([
+    boughtItems(db()),
     db().select().from(t.suppliers),
     db()
       .select({ po: t.purchaseOrders, supplier: t.suppliers.name })
@@ -169,7 +169,7 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                 return (
                   <tr key={`b${i}`}>
                     <td>
-                      <ItemSelect name={`item_${i}`} items={catalog.items} />
+                      <ItemSelect name={`item_${i}`} items={items} />
                       <input type="hidden" name={`pol_${i}`} value="" />
                     </td>
                     <td>

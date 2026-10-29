@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { batchTrace } from "./page-data";
 import { db } from "@/db/client";
-import { traceBatch, type LotSummary } from "@/db/trace";
+import type { LotSummary } from "@/db/trace";
 import { BATCH_STATUS } from "./labels";
 import { LotOrigin, lotQty } from "./trace-format";
 import { fmtDate } from "./ui/format";
@@ -8,7 +9,7 @@ import { deliveryNotesForLots } from "@/db/documents";
 
 /** Backward trace of one batch: the ingredient and packaging lots it used, with suppliers. */
 export async function BatchBackward({ batchId, heading = true }: { batchId: string; heading?: boolean }) {
-  const b = await traceBatch(db(), batchId);
+  const b = await batchTrace(batchId);
   if (!b) return <p className="muted">Batch not found.</p>;
   const st = BATCH_STATUS[b.batch.status];
   // The batch's own bulk sauce shows up as "used" by packaging; it isn't a bought material.

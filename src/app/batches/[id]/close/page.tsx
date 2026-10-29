@@ -1,10 +1,10 @@
 import Link from "next/link";
+import { batchTrace } from "../../../components/page-data";
 import { notFound } from "next/navigation";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import * as t from "@/db/schema";
-import { traceBatch } from "@/db/trace";
 import { batchBudget } from "@/db/budget";
 import { frozenPlan } from "@/db/frozen-plan";
 import { formatQty, type UnitCode } from "@/domain/quantity";
@@ -43,7 +43,7 @@ export default async function BatchPage({
   const { id } = await params;
   idOrNotFound(id);
   const flash = await searchParams;
-  const tr = await traceBatch(db(), id);
+  const tr = await batchTrace(id);
   if (!tr) notFound();
   const { batch, run, sauce, recipe } = tr;
   const open = batch.status !== "closed" && batch.status !== "cancelled";

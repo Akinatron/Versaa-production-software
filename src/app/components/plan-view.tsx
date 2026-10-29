@@ -1,8 +1,7 @@
 import Decimal from "decimal.js";
+import { sauceColors } from "./page-data";
 import type { CoverageStatus, PlanResult, Source } from "@/domain/planner";
 import { formatQty, type UnitCode } from "@/domain/quantity";
-import { db } from "@/db/client";
-import { sauceColorMaps } from "@/db/catalog";
 import { SauceName } from "./sauce-name";
 
 const STATUS: Record<CoverageStatus, { label: string; cls: string }> = {
@@ -23,7 +22,7 @@ type Part = "issues" | "production" | "requirements";
 /** The plan; `only` shows just some parts (the run splits them over its steps). */
 export async function PlanView({ result, only, batchesTitle = "Batches" }: { result: PlanResult; only?: Part[]; batchesTitle?: string }) {
   const show = (p: Part) => !only || only.includes(p);
-  const colors = await sauceColorMaps(db());
+  const colors = await sauceColors();
   return (
     <>
       {show("issues") && result.issues.some((i) => i.level === "blocker") && (
