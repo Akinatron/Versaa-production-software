@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx, isDate } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx, isDate, zeroOrMore } from "./base";
 import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
@@ -73,8 +73,7 @@ async function resolveLines(tx: Tx, supplierId: string, lines: OrderLine[]) {
       if (offer?.packQty && quantity.mod(offer.packQty).isZero()) packs = quantity.div(offer.packQty).toNumber();
     }
     checkWholeUnits(item, quantity);
-    const given = line.unitPrice != null && String(line.unitPrice).trim() !== "" ? new Decimal(String(line.unitPrice).replace(",", ".")) : null;
-    if (given && (given.isNaN() || given.lt(0))) throw new OperationError(`${item.name}: price can't be negative.`);
+    const given = zeroOrMore(line.unitPrice, `${item.name} price`);
     const up = given ?? unitPrice(offer);
     out.push({
       purchaseOrderId: "",
@@ -246,11 +245,10 @@ export async function updateDraftOrder(
         packs = change.packs;
         quantity = new Decimal(line.packQty).mul(packs);
       } else {
-        const raw = String(change.quantity ?? "").trim();
         // An empty box is a slip, not a removal: only 0 removes a line.
-        if (raw === "") throw new OperationError(`${item.name}: enter a quantity (0 removes the line).`);
-        quantity = new Decimal(raw.replace(",", "."));
-        if (quantity.isNaN() || quantity.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
+        const q = zeroOrMore(change.quantity, item.name);
+        if (!q) throw new OperationError(`${item.name}: enter a quantity (0 removes the line).`);
+        quantity = q;
         if (line.packQty && quantity.mod(line.packQty).isZero()) packs = quantity.div(line.packQty).toNumber();
       }
       const got = arrived.get(line.id);
@@ -269,9 +267,7 @@ export async function updateDraftOrder(
         continue;
       }
       checkWholeUnits(item, quantity);
-      const rawPrice = String(change.unitPrice ?? "").trim();
-      const price = rawPrice === "" ? null : new Decimal(rawPrice.replace(",", "."));
-      if (price && (price.isNaN() || price.lt(0))) throw new OperationError(`${item.name}: price can't be negative.`);
+      const price = zeroOrMore(change.unitPrice, `${item.name} price`);
       const priceChanged = change.unitPrice !== undefined && (price === null ? line.unitPrice !== null : line.unitPrice === null || !price.eq(line.unitPrice));
       if (!quantity.eq(line.quantity))
         changes.push({ label: item.name, before: qtyText(line.quantity, item.stockUnit), after: qtyText(quantity, item.stockUnit) });
@@ -411,18 +407,7 @@ export interface ReceiptLineInput {
   storage?: string | null;
 }
 
-const qtyOrZero = (v: Decimal.Value | null | undefined, what: string) => {
-  const raw = v === null || v === undefined ? "" : String(v).trim().replace(",", ".");
-  if (raw === "") return new Decimal(0);
-  let d: Decimal;
-  try {
-    d = new Decimal(raw);
-  } catch {
-    throw new OperationError(`${what}: "${v}" is not a number.`);
-  }
-  if (d.isNaN() || d.lt(0)) throw new OperationError(`${what} can't be negative.`);
-  return d;
-};
+const qtyOrZero = (v: Decimal.Value | null | undefined, what: string) => zeroOrMore(v, what) ?? new Decimal(0);
 
 /**
  * Record what actually arrived. Accepted quantities become lots with their

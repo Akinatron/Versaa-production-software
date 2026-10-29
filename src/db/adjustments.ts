@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate } from "./base";
+import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate, readNumber, zeroOrMore } from "./base";
 import { lotBalance, lotBalanceAt } from "./ledger";
 import { logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -46,8 +46,7 @@ export async function recordStockCount(db: DB, input: { idempotencyKey: string; 
     let i = 0;
     let changed = 0;
     for (const line of lines) {
-      const counted = new Decimal(line.counted);
-      if (counted.isNaN() || counted.lt(0)) throw new OperationError("Counted quantities can't be negative.");
+      const counted = zeroOrMore(line.counted, "Counted quantity")!;
       let lotId = line.lotId || null;
       let itemId: string;
       if (lotId) {
@@ -101,7 +100,7 @@ export async function recordWriteOff(
 ) {
   const reason = input.reason.trim();
   if (!reason) throw new OperationError("Say what happened.");
-  const lines = input.lines.filter((l) => l.lotId && String(l.quantity).trim() !== "" && !new Decimal(l.quantity).isZero());
+  const lines = input.lines.filter((l) => l.lotId && !(readNumber(l.quantity, "Quantity")?.isZero() ?? true));
   if (!lines.length) throw new OperationError("Enter at least one quantity.");
   const on = input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today();
 
@@ -116,8 +115,7 @@ export async function recordWriteOff(
       const item = (await itemsById(tx, [lot.itemId])).get(lot.itemId)!;
       // Finished jars leave through an outflow, which knows about jars promised to sales orders.
       if (item.kind === "finished") throw new OperationError(`${item.name}: finished jars leave stock with "Record a stock exit", not here.`);
-      const qty = new Decimal(line.quantity);
-      if (qty.isNaN() || qty.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
+      const qty = zeroOrMore(line.quantity, item.name)!;
       checkWholeUnits(item, qty);
       const balance = await lotBalance(tx, lot.id);
       if (balance.lt(qty)) throw new OperationError(`${item.name}: lot ${lot.code} only has ${balance} left.`);

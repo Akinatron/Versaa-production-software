@@ -16,7 +16,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames, isDate } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames, isDate, zeroOrMore } from "./base";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
@@ -56,8 +56,7 @@ export async function recordOpeningCount(db: DB, input: { idempotencyKey: string
     for (const line of lines) {
       const item = items.get(line.itemId);
       if (!item) throw new OperationError("Unknown item.");
-      const qty = new Decimal(line.quantity);
-      if (qty.isNaN() || qty.lt(0)) throw new OperationError(`${item.name}: quantity can't be negative.`);
+      const qty = zeroOrMore(line.quantity, item.name)!;
       checkWholeUnits(item, qty);
       const code = await nextLotCode(tx, `OPEN-${on.replaceAll("-", "")}`);
       const [lot] = await tx

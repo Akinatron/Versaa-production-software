@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lockNames, type Tx } from "./base";
+import { OperationError, lockNames, readNumber, type Tx } from "./base";
 import { diff, logChange, type FieldChange } from "./changes";
 import { batchPrefixFor, sizeTag } from "@/domain/codes";
 import { isSauceColor, nextSauceColor } from "@/domain/sauce-colors";
@@ -55,8 +55,8 @@ export interface RecipeLineInput {
 /** Replace a draft's lines and reference data. Only drafts can change. */
 export async function saveRecipeDraft(db: DB, input: { versionId: string; batchReferenceKg: string; note?: string | null; lines: RecipeLineInput[] }) {
   const lines = input.lines.filter((l) => l.itemId);
-  const ref = new Decimal(input.batchReferenceKg || "NaN");
-  if (ref.isNaN() || ref.lte(0)) throw new OperationError("Batch size must be more than 0 kg.");
+  const ref = readNumber(input.batchReferenceKg, "Batch size");
+  if (!ref || ref.lte(0)) throw new OperationError("Batch size must be more than 0 kg.");
   return db.transaction(async (tx) => {
     const [v] = await tx.select().from(t.recipeVersions).where(eq(t.recipeVersions.id, input.versionId));
     if (!v) throw new OperationError("Recipe version not found.");
@@ -72,8 +72,8 @@ export async function saveRecipeDraft(db: DB, input: { versionId: string; batchR
       if (dimensionOf(l.unit) !== dimensionOf(item.stockUnit as UnitCode)) {
         throw new OperationError(`${item.name} is stocked in ${unitWord(item.stockUnit)}, so the recipe can't use ${unitWord(l.unit)}.`);
       }
-      const q = new Decimal(l.quantity || "NaN");
-      if (q.isNaN() || q.lte(0)) throw new OperationError(`${item.name}: enter a quantity more than 0, or remove the line.`);
+      const q = readNumber(l.quantity, item.name);
+      if (!q || q.lte(0)) throw new OperationError(`${item.name}: enter a quantity more than 0, or remove the line.`);
       return { recipeVersionId: v.id, itemId: item.id, quantity: q.toString(), unit: l.unit as UnitCode, position: idx + 1 };
     });
     await tx.delete(t.recipeLines).where(eq(t.recipeLines.recipeVersionId, v.id));

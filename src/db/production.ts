@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, today, type Tx, isDate } from "./base";
+import { OperationError, checkWholeUnits, itemsById, today, type Tx, isDate, zeroOrMore } from "./base";
 import { jarsFree, lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
@@ -212,14 +212,8 @@ export interface IngredientLineInput {
 }
 
 function parseQty(name: string, v: Decimal.Value): Decimal {
-  let d: Decimal;
-  try {
-    d = new Decimal(String(v).trim() === "" ? NaN : v);
-  } catch {
-    throw new OperationError(`${name}: "${v}" is not a number.`);
-  }
-  if (d.isNaN()) throw new OperationError(`${name}: enter the quantity used (0 if none was used).`);
-  if (d.lt(0)) throw new OperationError(`${name}: quantity can't be negative.`);
+  const d = zeroOrMore(v, name);
+  if (!d) throw new OperationError(`${name}: enter the quantity used (0 if none was used).`);
   return d;
 }
 

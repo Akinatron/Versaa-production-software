@@ -34,12 +34,9 @@ import {
 import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 import { isBoughtKind } from "@/domain/item-kinds";
+import { backOr, str } from "../components/form-values";
 
-const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
-const back = (form: FormData, fallback: string) => {
-  const b = str(form, "back");
-  return b.startsWith("/settings") ? b : fallback;
-};
+const back = (form: FormData, fallback: string) => backOr(form, fallback, ["/settings"]);
 
 function refresh() {
   revalidatePath("/settings", "layout");
@@ -49,9 +46,12 @@ function refresh() {
 
 // ---------------------------------------------------------------- yields and rejects
 
+/** A typed number for zod: "7,5" reads as 7.5, like everywhere else in the app. */
+const typedNumber = () => z.preprocess((v) => (typeof v === "string" ? v.trim().replace(",", ".") : v), z.coerce.number());
+
 const yieldForm = z.object({
   sauceId: z.uuid(),
-  litresPerBatch: z.coerce.number().positive("Litres per batch must be more than 0").max(1000),
+  litresPerBatch: typedNumber().pipe(z.number().positive("Litres per batch must be more than 0").max(1000)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -68,7 +68,7 @@ export async function addYieldEstimate(form: FormData) {
 
 const rejectForm = z.object({
   productId: z.uuid(),
-  percent: z.coerce.number().min(0).max(99),
+  percent: typedNumber().pipe(z.number().min(0).max(99)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -182,11 +182,6 @@ export async function addItemAction(form: FormData) {
   redirect(withOk("/settings/items", `${item.name} added. Count its stock before planning with it.`));
 }
 
-/** The page to go back to: the form's "back" when it is a path in this app, otherwise the fallback. */
-function backOr(form: FormData, fallback: string) {
-  const back = str(form, "back");
-  return back.startsWith("/") && !back.startsWith("//") ? back : fallback;
-}
 
 export async function renameItemAction(form: FormData) {
   const path = backOr(form, "/settings/items");
@@ -197,8 +192,7 @@ export async function renameItemAction(form: FormData) {
 }
 
 export async function setItemStorageAction(form: FormData) {
-  const back = str(form, "back");
-  const path = back.startsWith("/") && !back.startsWith("//") ? back : "/settings/items";
+  const path = backOr(form, "/settings/items");
   await attempt(path, () => setItemStorage(db(), str(form, "itemId"), str(form, "storage")));
   refresh();
   revalidatePath("/trace", "layout");
@@ -208,8 +202,7 @@ export async function setItemStorageAction(form: FormData) {
 }
 
 export async function setItemShelfLifeAction(form: FormData) {
-  const back = str(form, "back");
-  const path = back.startsWith("/") && !back.startsWith("//") ? back : "/settings/items";
+  const path = backOr(form, "/settings/items");
   await attempt(path, () => setItemShelfLife(db(), str(form, "itemId"), str(form, "shelfLife"), str(form, "shelfLifeUnit")));
   refresh();
   revalidatePath("/batches", "layout");

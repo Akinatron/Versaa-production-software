@@ -24,14 +24,35 @@ export async function lockNames(tx: Tx) {
 /** Today in the business's time zone (see src/domain/dates.ts). */
 export { today } from "@/domain/dates";
 
-export function positive(value: Decimal.Value, what: string): Decimal {
-  let d: Decimal;
-  try {
-    d = new Decimal(value);
-  } catch {
-    throw new OperationError(`${what}: "${value}" is not a number.`);
-  }
-  if (d.isNaN() || d.lte(0)) throw new OperationError(`${what} must be more than 0.`);
+/**
+ * Read a number typed in a form. The one reader every form uses, so they all
+ * accept the same things and say the same thing when it's wrong: "7,5" and
+ * "7.5" are both 7.5, spaces around are ignored. Empty gives null.
+ */
+export function readNumber(value: Decimal.Value | null | undefined, what: string): Decimal | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return new Decimal(value);
+  const raw = value.trim().replace(/\s+/g, "");
+  if (raw === "") return null;
+  // One decimal mark, comma or point. "1.250,5" or "1,250.5" are refused rather than guessed.
+  const text = raw.includes(",") && !raw.includes(".") && raw.split(",").length === 2 ? raw.replace(",", ".") : raw;
+  let d: Decimal | null = null;
+  if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(text)) d = new Decimal(text);
+  if (!d || d.isNaN() || !d.isFinite()) throw new OperationError(`${what}: "${value}" is not a number. Write it like 7.5 or 7,5.`);
+  return d;
+}
+
+/** A number of 0 or more, or null when left empty. */
+export function zeroOrMore(value: Decimal.Value | null | undefined, what: string): Decimal | null {
+  const d = readNumber(value, what);
+  if (d && d.lt(0)) throw new OperationError(`${what}: can't be negative.`);
+  return d;
+}
+
+/** A number of more than 0; empty isn't allowed. */
+export function positive(value: Decimal.Value | null | undefined, what: string): Decimal {
+  const d = readNumber(value, what);
+  if (!d || d.lte(0)) throw new OperationError(`${what}: must be more than 0.`);
   return d;
 }
 

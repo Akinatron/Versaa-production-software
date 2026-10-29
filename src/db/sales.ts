@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lockNames, today, type Tx, isDate } from "./base";
+import { OperationError, lockNames, today, type Tx, isDate, zeroOrMore } from "./base";
 import { allocate, jarsFree, lotBalance } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { inSentence, SALES_STATUS_NAME } from "@/domain/status";
@@ -40,9 +40,8 @@ async function productsById(tx: Tx, ids: string[]) {
 }
 
 function price(v: Decimal.Value | null | undefined) {
-  if (v === null || v === undefined || String(v).trim() === "") return null;
-  const d = new Decimal(v);
-  if (d.isNaN() || d.lt(0)) throw new OperationError("Prices can't be negative.");
+  const d = zeroOrMore(v, "Price");
+  if (!d) return null;
   return d.toString();
 }
 

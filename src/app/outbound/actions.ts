@@ -21,8 +21,8 @@ import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { OUTFLOW_REASONS, type OutflowReason } from "../components/labels";
+import { localPath, str } from "../components/form-values";
 
-const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
 
 function wholeJars(v: string, what: string) {
   if (v === "") return 0;
@@ -40,7 +40,7 @@ function refresh() {
 
 export async function saveCustomer(form: FormData) {
   const back = str(form, "back");
-  const safeBack = back.startsWith("/outbound") ? back : "/outbound/customers";
+  const safeBack = localPath(back, "/outbound/customers", ["/outbound"]);
   const c = await attempt("/outbound/customers" + (back ? `?back=${encodeURIComponent(back)}` : ""), () =>
     addCustomer(db(), { name: str(form, "name"), contact: str(form, "contact") || null, notes: str(form, "notes") || null }),
   );

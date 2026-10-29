@@ -69,7 +69,7 @@ At the bottom of Settings you can turn on **Developer mode** (off by default; it
 
 Build or run with `VERSAA_DEVTOOLS=0` to leave developer mode out.
 
-Tests: `pnpm test` runs the planner rules. Set `TEST_DATABASE_URL` to an empty database to also run the database tests; that database is wiped on each run.
+Tests: `pnpm test` needs `TEST_DATABASE_URL` pointing at an empty PostgreSQL database, which is wiped on each run; without it the run stops with a message. To run only the tests that need no database, use `SKIP_DB_TESTS=1 pnpm test`.
 
 ## Desktop app (Mac)
 

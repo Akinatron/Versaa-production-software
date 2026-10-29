@@ -17,12 +17,9 @@ import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { fmtDate } from "../components/ui/format";
+import { backOr, str } from "../components/form-values";
 
-const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
-const backTo = (form: FormData, fallback: string) => {
-  const b = str(form, "back");
-  return b.startsWith("/orders") || b.startsWith("/runs") ? b : fallback;
-};
+const backTo = (form: FormData, fallback: string) => backOr(form, fallback, ["/orders", "/runs"]);
 
 function refresh() {
   revalidatePath("/orders", "layout");
