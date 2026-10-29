@@ -96,12 +96,20 @@ suite("suppliers, orders and deliveries", () => {
     await moveSupplierRank(db, b.id, "down");
     expect((await loadOffers(db, { itemIds: [ids["ing-onions"]!] })).map((o) => o.supplierName)).toEqual(["Groente BV", "Metro"]);
 
-    await unlinkSupplierItem(db, b.id);
+    // Removing a link needs a reason, like every delete.
+    await expect(unlinkSupplierItem(db, b.id, " ")).rejects.toThrow(/reason/);
+    expect(await unlinkSupplierItem(db, b.id, "they stopped selling onions")).toMatchObject({ supplier: "Metro", wasFavourite: false, newFavourite: null });
     expect((await loadOffers(db, { itemIds: [ids["ing-onions"]!] })).map((o) => o.supplierName)).toEqual(["Groente BV"]);
     // Linking again brings back the same link and its history.
     const again = await linkSupplierItem(db, { supplierId: metro, itemId: ids["ing-onions"]! });
     expect(again.id).toBe(b.id);
     expect((await loadOffers(db, { itemIds: [ids["ing-onions"]!] })).find((o) => o.supplierId === metro)!.price!.toString()).toBe("0.9");
+
+    // Removing the favourite says who the favourite is now.
+    expect(await unlinkSupplierItem(db, a.id, "too expensive")).toMatchObject({ supplier: "Groente BV", wasFavourite: true, newFavourite: "Metro" });
+    await linkSupplierItem(db, { supplierId: groente, itemId: ids["ing-onions"]! });
+    await moveSupplierRank(db, a.id, "first");
+    expect((await loadOffers(db, { itemIds: [ids["ing-onions"]!] })).map((o) => o.supplierName)).toEqual(["Groente BV", "Metro"]);
   });
 
   it("a run's missing items become one draft order per supplier, rounded to packs and linked to the run", async () => {

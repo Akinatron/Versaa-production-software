@@ -296,6 +296,8 @@ span.ok:not(.badge):not(.dot), span.warn:not(.badge):not(.dot), span.bad:not(.ba
 .price-edit > summary:hover { background: var(--surface-2); }
 .price-edit > summary::before { display: none; }
 .price-edit[open] > summary { margin-bottom: 10px; }
+.price-edit .unlink { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.price-edit .unlink .field { flex: 0 1 320px !important; margin: 0; }
 .offerlist > li:target { scroll-margin-top: 80px; }
 
 .supplier-prices { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; white-space: nowrap; }

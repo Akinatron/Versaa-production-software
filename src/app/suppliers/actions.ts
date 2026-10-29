@@ -75,9 +75,10 @@ export async function setOfferAction(form: FormData) {
 
 export async function unlinkAction(form: FormData) {
   const path = back(form, "/suppliers");
-  await attempt(path, () => unlinkSupplierItem(db(), str(form, "supplierItemId")));
+  const r = await attempt(path, () => unlinkSupplierItem(db(), str(form, "supplierItemId"), str(form, "reason")));
   refresh();
-  redirect(withOk(path, "Removed. Its past prices stay on record."));
+  const fav = r.wasFavourite ? (r.newFavourite ? ` ${r.newFavourite} is the favourite now.` : ` No other supplier sells ${r.item} now.`) : "";
+  redirect(withOk(path, `${r.supplier} no longer sells ${r.item}. Its past prices stay on record.${fav}`));
 }
 
 export async function moveRankAction(form: FormData) {

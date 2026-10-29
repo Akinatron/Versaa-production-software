@@ -4,7 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { OperationError } from "./base";
-import { diff, logChange } from "./changes";
+import { diff, logChange, needReason } from "./changes";
 import { favourite, unitPrice, type Offer } from "@/domain/pricing";
 
 /*
@@ -209,20 +209,40 @@ export async function setOffer(db: DB, supplierItemId: string, input: OfferInput
 }
 
 /** Remove a supplier from an item. The link and its prices are kept for history. */
-export async function unlinkSupplierItem(db: DB, supplierItemId: string) {
+/**
+ * Stop buying an item from a supplier. Its past prices stay on record. Says
+ * which supplier is the favourite now when the removed one was.
+ */
+export async function unlinkSupplierItem(db: DB, supplierItemId: string, reason: string) {
+  const why = needReason(reason, "Say why you stop buying it from this supplier");
   return db.transaction(async (tx) => {
     const [link] = await tx.select().from(t.supplierItems).where(eq(t.supplierItems.id, supplierItemId));
-    if (!link) throw new OperationError("Supplier link not found.");
+    if (!link || !link.active) throw new OperationError("Supplier link not found.");
+    await renumber(tx, link.itemId);
+    const [now] = await tx.select({ rank: t.supplierItems.rank }).from(t.supplierItems).where(eq(t.supplierItems.id, supplierItemId));
+    const wasFavourite = now?.rank === 1;
     await tx.update(t.supplierItems).set({ active: false }).where(eq(t.supplierItems.id, supplierItemId));
     await renumber(tx, link.itemId);
     const r = await linkRefs(tx, link.supplierId, link.itemId);
+    let newFavourite: string | null = null;
+    if (wasFavourite) {
+      const [next] = await tx
+        .select({ name: t.suppliers.name })
+        .from(t.supplierItems)
+        .innerJoin(t.suppliers, eq(t.supplierItems.supplierId, t.suppliers.id))
+        .where(and(eq(t.supplierItems.itemId, link.itemId), eq(t.supplierItems.active, true), eq(t.supplierItems.rank, 1)));
+      newFavourite = next?.name ?? null;
+    }
+    const favNote = wasFavourite ? (newFavourite ? `; favourite is now ${newFavourite}` : "; no supplier left") : "";
     await logChange(tx, {
       action: "delete",
       area: "purchasing",
       entity: { type: "supplier", id: link.supplierId, code: r.sup?.name },
-      summary: `${r.sup?.name ?? "Supplier"} no longer sells ${r.item?.name ?? "item"}`,
+      summary: `${r.sup?.name ?? "Supplier"} no longer sells ${r.item?.name ?? "item"}${favNote}`,
+      reason: why,
       links: r.links,
     });
+    return { supplier: r.sup?.name ?? "Supplier", item: r.item?.name ?? "item", wasFavourite, newFavourite };
   });
 }
 

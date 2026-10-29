@@ -119,7 +119,7 @@ export default async function SupplierPage({
                 <div>
                   <PriceText offer={o} unit={unit} />
                 </div>
-                <OfferForm offer={o} unit={unit} back={back} supplierCode={link?.supplierCode} open={flash.edit === o.supplierItemId} />
+                <OfferForm offer={o} itemName={item.name} unit={unit} back={back} supplierCode={link?.supplierCode} open={flash.edit === o.supplierItemId} />
                 <PriceHistory rows={history.filter((h) => h.supplierItemId === o.supplierItemId)} unit={unit} />
               </li>
             );

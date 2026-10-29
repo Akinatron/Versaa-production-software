@@ -133,6 +133,8 @@ export function ConfirmButton({ message, children, ...rest }: React.ButtonHTMLAt
       type="submit"
       {...rest}
       onClick={(e) => {
+        // Missing fields first (the browser points at them), then the question.
+        if (e.currentTarget.form && !e.currentTarget.form.checkValidity()) return;
         if (!window.confirm(message)) e.preventDefault();
       }}
     >
