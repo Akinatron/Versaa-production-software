@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lockNames, today, type Tx } from "./base";
+import { OperationError, lockNames, today, type Tx, isDate } from "./base";
 import { allocate, jarsFree } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -17,7 +17,6 @@ import { diff, logChange, needReason, type FieldChange, type Ref } from "./chang
  *   unless you pick), and nothing can go out that isn't there.
  */
 
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 type OutflowType = (typeof t.outflowType.enumValues)[number];
 
 export async function addCustomer(db: DB, input: { name: string; contact?: string | null; notes?: string | null }) {

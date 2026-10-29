@@ -325,7 +325,7 @@ export const make: Article[] = [
       { h: "Corrections after closing" },
       "Use **Correct the cooking date or note** for those two. Ingredients can still be corrected from **Cook**, and packaging sessions edited from **Pack**, each with a reason.",
       { h: "A batch that wasn't made" },
-      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again.",
+      "Open **This batch wasn't made**, say why and press **Mark as not made**. Only possible while nothing is recorded for the batch. Its ingredients and its share of the jars, lids and labels are freed (the sizes of its sauce, split evenly over the sauce's batches). **Restore batch** brings it back while the run is still open and holds them again. The reason shows on the batch and in History; the batch's own note is never changed.",
     ],
     changes: [
       "The closed batch's litres (jars filled × fill) feed the measured litres per batch and reject rates used by the next plans.",

@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, today, type Tx } from "./base";
+import { OperationError, checkWholeUnits, itemsById, today, type Tx, isDate } from "./base";
 import { lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
@@ -28,7 +28,6 @@ import { diff, logChange, needReason, type FieldChange, type Ref } from "./chang
  */
 
 const D0 = new Decimal(0);
-const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function getBatch(tx: Tx, batchId: string) {
   const [row] = await tx
@@ -288,6 +287,7 @@ export async function recordIngredients(
           for (const c of chosen) {
             if (!c.lotId) throw new OperationError(`${item.name}: choose the lot for each quantity.`);
             const q = parseQty(item.name, c.quantity);
+            if (item.stockUnit === "unit" && !q.isInteger()) throw new OperationError(`${item.name} is counted in whole units: enter a whole number for each lot.`);
             if (target.has(c.lotId)) throw new OperationError(`${item.name}: the same lot is chosen twice.`);
             if (!q.isZero()) target.set(c.lotId, q);
           }
@@ -856,6 +856,7 @@ export async function recordIncident(
 ) {
   if (!input.note.trim()) throw new OperationError("Describe what happened.");
   if (!input.batchId && !input.lotId) throw new OperationError("Link the incident to a batch or a lot.");
+  if (input.occurredOn !== undefined && input.occurredOn !== "" && !isDate(input.occurredOn)) throw new OperationError("Enter the date of the incident.");
   return db.transaction(async (tx) => {
     const [row] = await tx
       .insert(t.incidents)
@@ -998,7 +999,7 @@ export async function restoreBatch(db: DB, input: { batchId: string; reason: str
     if (batch.status !== "cancelled") throw new OperationError(`${batch.code} isn't marked as not made.`);
     if (run.status === "closed" || run.status === "cancelled")
       throw new OperationError(`Run ${run.code} is ${run.status}, so its batches can't come back. Plan a new run instead.`);
-    await tx.update(t.productionBatches).set({ status: "planned", closedAt: null }).where(eq(t.productionBatches.id, batch.id));
+    await tx.update(t.productionBatches).set({ status: "planned", closedAt: null, notMadeReason: null }).where(eq(t.productionBatches.id, batch.id));
     const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
     for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);
     const pkg = await packagingOfBatchesNotMade(tx, batch.runId);
@@ -1021,6 +1022,7 @@ export async function restoreBatch(db: DB, input: { batchId: string; reason: str
  * run closes and any stock still reserved for it is released.
  */
 export async function closeBatch(db: DB, input: { idempotencyKey: string; batchId: string; leftoverReason?: string | null; notMade?: boolean }) {
+  const notMadeReason = input.notMade ? needReason(input.leftoverReason ?? "", "Say why this batch wasn't made") : null;
   return db.transaction(async (tx) => {
     const { batch, run } = await getBatch(tx, input.batchId);
     if (batch.status === "closed") return { alreadyClosed: true };
@@ -1038,7 +1040,7 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
       if (sessions.length || used.length) throw new OperationError("Something is already recorded for this batch, so it can't be marked as not made.");
       await tx
         .update(t.productionBatches)
-        .set({ status: "cancelled", closedAt: new Date(), note: input.leftoverReason?.trim() || batch.note })
+        .set({ status: "cancelled", closedAt: new Date(), notMadeReason })
         .where(eq(t.productionBatches.id, batch.id));
       // Free the ingredients this batch had reserved.
       const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
@@ -1081,7 +1083,7 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         ["Status", "Open", input.notMade ? "Not made" : "Closed"],
         ...(open.length === 0 ? [["Run", null, `${run.code} closed`] as [string, unknown, unknown]] : []),
       ]),
-      reason: input.notMade ? input.leftoverReason : null,
+      reason: notMadeReason,
       links: batchRefs(batch, run),
     });
     return { alreadyClosed: false, runClosed: open.length === 0 };

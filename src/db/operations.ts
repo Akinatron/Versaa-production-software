@@ -16,7 +16,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, lockNames, isDate } from "./base";
 
 // ---------------------------------------------------------------- stock count
 
@@ -34,6 +34,9 @@ export interface OpeningLine {
 export async function recordOpeningCount(db: DB, input: { idempotencyKey: string; countedOn?: string; lines: OpeningLine[] }) {
   const lines = input.lines.filter((l) => String(l.quantity).trim() !== "");
   if (lines.length === 0) throw new OperationError("Enter at least one quantity.");
+  const on = input.countedOn === undefined ? today() : input.countedOn;
+  if (!isDate(on)) throw new OperationError("Enter the date of the count.");
+  if (lines.some((l) => l.bestBefore && !isDate(l.bestBefore))) throw new OperationError("Best-before isn't a valid date.");
   return db.transaction(async (tx) => {
     const done = await tx.select().from(t.movements).where(sql`${t.movements.idempotencyKey} like ${input.idempotencyKey + ":%"}`);
     if (done.length > 0) return { created: 0, alreadyRecorded: true };
@@ -48,7 +51,6 @@ export async function recordOpeningCount(db: DB, input: { idempotencyKey: string
       throw new OperationError(`Already counted: ${names}. Later changes are recorded as corrections, not opening counts.`);
     }
 
-    const on = input.countedOn ?? today();
     let i = 0;
     for (const line of lines) {
       const item = items.get(line.itemId);
@@ -114,7 +116,7 @@ export {
 // ---------------------------------------------------------------- production runs
 
 export async function createRun(db: DB, input: { idempotencyKey: string; plannedFor: string; targets: Record<string, number> }) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.plannedFor)) throw new OperationError("Choose a production date.");
+  if (!isDate(input.plannedFor)) throw new OperationError("Choose a production date.");
   const targets = Object.entries(input.targets).filter(([, n]) => n > 0);
   if (targets.length === 0) throw new OperationError("Enter at least one jar target.");
   for (const [, n] of targets) if (!Number.isInteger(n)) throw new OperationError("Jar targets must be whole numbers.");
@@ -297,7 +299,7 @@ export async function restoreRun(db: DB, runId: string, reason?: string | null) 
 
 /** Re-plan a draft run's targets. Confirmed runs are frozen. */
 export async function updateDraftRun(db: DB, runId: string, plannedFor: string, targets: Record<string, number>, reason?: string | null) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(plannedFor)) throw new OperationError("Choose a production date.");
+  if (!isDate(plannedFor)) throw new OperationError("Choose a production date.");
   for (const n of Object.values(targets)) if (!Number.isInteger(n) || n < 0) throw new OperationError("Jar targets must be whole numbers, 0 or more.");
   if (!Object.values(targets).some((n) => n > 0)) throw new OperationError("Enter at least one jar target.");
   return db.transaction(async (tx) => {

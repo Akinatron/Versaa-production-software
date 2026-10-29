@@ -462,6 +462,8 @@ export const productionBatches = pgTable(
     /** Old batches only: bulk sauce stock was removed in round 1. */
     bulkLotId: uuid("bulk_lot_id").references(() => lots.id),
     note: text("note"),
+    /** Why the batch wasn't made. Kept apart from the note, which marking and restoring never touch. */
+    notMadeReason: text("not_made_reason"),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
