@@ -16,7 +16,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const area = sp.area && (AREAS as string[]).includes(sp.area) ? sp.area : null;
   const before = sp.before && !Number.isNaN(Date.parse(sp.before)) ? new Date(sp.before) : null;
   const filter = { area, action: sp.action || null, from: sp.from || null, to: sp.to || null, code: sp.code || null };
-  const rows = await listChanges(db(), { ...filter, before, limit: PAGE + 1 });
+  const beforeId = before && sp.beforeId && /^[0-9a-f-]{36}$/i.test(sp.beforeId) ? sp.beforeId : null;
+  const rows = await listChanges(db(), { ...filter, before, beforeId, limit: PAGE + 1 });
   const more = rows.length > PAGE;
   const page = rows.slice(0, PAGE);
   const links = await linksOf(db(), page.map((c) => c.id));
@@ -109,7 +110,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           </ul>
           {more && (
             <p style={{ marginTop: 12 }}>
-              <Link href={href({ before: page[page.length - 1]!.at.toISOString() })} className="btn secondary">
+              <Link href={href({ before: page[page.length - 1]!.at.toISOString(), beforeId: page[page.length - 1]!.id })} className="btn secondary">
                 Show older
               </Link>
             </p>
