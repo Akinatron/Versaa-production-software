@@ -14,6 +14,7 @@ import {
 } from "@/db/operations";
 import { restorePurchaseOrder } from "@/db/purchasing";
 import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 
 const str = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
@@ -74,24 +75,24 @@ export async function markSentAction(form: FormData) {
 }
 
 export async function updateDraftAction(form: FormData) {
-  const id = str(form, "poId");
-  const lines = rows(form, ["line", "qty", "packs", "price"]).map((r) => ({
-    lineId: r.line!,
-    quantity: r.qty,
-    packs: r.packs !== undefined && r.packs !== "" ? Number(r.packs) : null,
-    unitPrice: r.price,
-  }));
-  await attempt(`/orders/${id}`, () =>
-    updateDraftOrder(db(), id, {
+  return keepInput(async () => {
+    const id = str(form, "poId");
+    const lines = rows(form, ["line", "qty", "packs", "price"]).map((r) => ({
+      lineId: r.line!,
+      quantity: r.qty,
+      packs: r.packs !== undefined && r.packs !== "" ? Number(r.packs) : null,
+      unitPrice: r.price,
+    }));
+    await updateDraftOrder(db(), id, {
       expectedOn: str(form, "expectedOn") || null,
       reference: str(form, "reference"),
       note: str(form, "note"),
       reason: str(form, "reason"),
       lines,
-    }),
-  );
-  refresh();
-  redirect(withOk(`/orders/${id}`, str(form, "correcting") ? "Order corrected." : "Draft saved."));
+    });
+    refresh();
+    redirect(withOk(`/orders/${id}`, str(form, "correcting") ? "Order corrected." : "Draft saved."));
+  });
 }
 
 export async function closeOrderAction(form: FormData) {

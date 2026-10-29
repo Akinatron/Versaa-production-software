@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type FormHTMLAttributes } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition, type FormHTMLAttributes, type ReactNode } from "react";
 
 const MESSAGE = "You have changes that aren't saved yet. Leave this page and lose them?";
 
@@ -55,6 +55,8 @@ export function GuardedForm({
   ...rest
 }: Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & { action: (form: FormData) => Promise<FormResult> }) {
   const [dirty, setDirty] = useState(false);
+  const group = useContext(UnsavedContext);
+  useEffect(() => group?.setDirty(dirty), [group, dirty]);
   const [problem, setProblem] = useState<{ text: string; n: number } | null>(null);
   const [saving, startSaving] = useTransition();
   const problemRef = useRef<HTMLUListElement>(null);
@@ -91,6 +93,36 @@ export function GuardedForm({
       )}
       {children}
     </form>
+  );
+}
+
+const UnsavedContext = createContext<{ dirty: boolean; setDirty: (dirty: boolean) => void } | null>(null);
+
+/** Lets `WhenSaved` know when a GuardedForm inside it has unsaved changes. */
+export function UnsavedGroup({ children }: { children: ReactNode }) {
+  const [dirty, setDirty] = useState(false);
+  const value = useMemo(() => ({ dirty, setDirty }), [dirty]);
+  return <UnsavedContext.Provider value={value}>{children}</UnsavedContext.Provider>;
+}
+
+/**
+ * Things that use what is saved (a message built from it, "Mark as sent"):
+ * blocked, with `note` above them, while a form in the same UnsavedGroup has
+ * unsaved changes.
+ */
+export function WhenSaved({ note, children }: { note: string; children: ReactNode }) {
+  const blocked = useContext(UnsavedContext)?.dirty ?? false;
+  return (
+    <>
+      {blocked && (
+        <ul className="issues" role="status" style={{ marginTop: 16 }}>
+          <li className="warn">{note}</li>
+        </ul>
+      )}
+      <div inert={blocked} aria-disabled={blocked || undefined} style={blocked ? { opacity: 0.45 } : undefined}>
+        {children}
+      </div>
+    </>
   );
 }
 
