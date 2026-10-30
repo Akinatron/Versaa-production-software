@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { clampInt, labelPages } from "@/domain/label-sheet";
 import { Barcode } from "./barcode";
 import { PrintButton } from "./print-button";
+import { NumberInput } from "./ui/number-input";
 
 export type SheetFormat = { name: string; cols: number; rows: number; w: number; h: number };
 
@@ -59,11 +60,9 @@ export function LabelSheets({
       <div className="no-print card row" style={{ alignItems: "flex-end", marginBottom: 16 }}>
         <div>
           <label htmlFor="count">Labels</label>
-          <input
+          <NumberInput
+            whole
             id="count"
-            type="number"
-            min={1}
-            max={2000}
             value={countText}
             onChange={(e) => setCountText(e.target.value)}
             onBlur={() => setCountText(String(count))}
@@ -72,11 +71,9 @@ export function LabelSheets({
         </div>
         <div>
           <label htmlFor="start">Start at position</label>
-          <input
+          <NumberInput
+            whole
             id="start"
-            type="number"
-            min={1}
-            max={perSheet}
             value={startText}
             onChange={(e) => setStartText(e.target.value)}
             onBlur={() => setStartText(String(start))}

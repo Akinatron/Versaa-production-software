@@ -19,6 +19,7 @@ import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
 import { fmtDate } from "../../components/ui/format";
 import { dayOf } from "@/domain/dates";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -213,13 +214,9 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
                   <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
                     {p.formatName}
                   </label>
-                  <input
+                  <NumberInput whole
                     id={`t-${p.id}`}
                     name={`t:${p.id}`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    inputMode="numeric"
                     defaultValue={targets[p.id] ?? ""}
                     placeholder="0"
                   />
@@ -235,7 +232,7 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
                 <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
                   {p.name}
                 </label>
-                <input id={`t-${p.id}`} name={`t:${p.id}`} type="number" min={0} step={1} inputMode="numeric" defaultValue={targets[p.id] ?? ""} />
+                <NumberInput whole id={`t-${p.id}`} name={`t:${p.id}`} defaultValue={targets[p.id] ?? ""} />
               </div>
             ))}
           </div>

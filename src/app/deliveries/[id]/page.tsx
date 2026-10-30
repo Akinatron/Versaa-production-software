@@ -15,6 +15,7 @@ import { DeletedNote, EditedMark, History, ReasonField } from "../../components/
 import { GuardedForm } from "../../components/unsaved-guard";
 import { correctDelivery, toggleDelivery } from "../actions";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -180,11 +181,8 @@ export default async function DeliveryPage({
                         </td>
                         <td>
                           <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
-                            <input
+                            <NumberInput
                               name={`qty_${i}`}
-                              type="number"
-                              min={0}
-                              step="any"
                               required
                               defaultValue={line.quantity}
                               aria-label={`${item.name} accepted`}
@@ -194,11 +192,8 @@ export default async function DeliveryPage({
                           </div>
                         </td>
                         <td>
-                          <input
+                          <NumberInput
                             name={`rej_${i}`}
-                            type="number"
-                            min={0}
-                            step="any"
                             defaultValue={line.rejectedQty}
                             aria-label={`${item.name} refused`}
                             style={{ maxWidth: 110 }}

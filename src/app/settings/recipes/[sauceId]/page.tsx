@@ -10,6 +10,7 @@ import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../..
 import { activateRecipe, discardRecipe, saveRecipe, startRecipe } from "../../actions";
 import { PageHeader } from "../../../components/ui/header";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +110,7 @@ export default async function RecipePage({
                 </p>
                 <div style={{ maxWidth: 220, marginBottom: 12 }}>
                   <label htmlFor="ref">Batch size (finished kg, required)</label>
-                  <input id="ref" name="batchReferenceKg" type="number" min="0.1" step="any" defaultValue={draft.batchReferenceKg} required />
+                  <NumberInput id="ref" name="batchReferenceKg" defaultValue={draft.batchReferenceKg} required />
                 </div>
                 <div className="scroll">
                   <table>
@@ -143,12 +144,8 @@ export default async function RecipePage({
                               </select>
                             </td>
                             <td>
-                              <input
+                              <NumberInput
                                 name={`qty_${i}`}
-                                type="number"
-                                min="0"
-                                step="any"
-                                inputMode="decimal"
                                 defaultValue={l?.quantity ?? ""}
                                 aria-label={`Quantity, row ${i + 1}`}
                               />

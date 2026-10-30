@@ -35,6 +35,7 @@ import { attempt, withOk } from "../components/flash";
 import { rows } from "../components/item-select";
 import { isBoughtKind } from "@/domain/item-kinds";
 import { backOr, str } from "../components/form-values";
+import { typedNumber, wholeNumber } from "@/domain/typed-number";
 
 const back = (form: FormData, fallback: string) => backOr(form, fallback, ["/settings"]);
 
@@ -46,12 +47,12 @@ function refresh() {
 
 // ---------------------------------------------------------------- yields and rejects
 
-/** A typed number for zod: "7,5" reads as 7.5, like everywhere else in the app. */
-const typedNumber = () => z.preprocess((v) => (typeof v === "string" ? v.trim().replace(",", ".") : v), z.coerce.number());
+/** A typed number for zod: "7,5" reads as 7.5, like everywhere else in the app; empty or not a number is refused (never 0). */
+const typedNum = () => z.preprocess((v) => (typeof v === "string" ? typedNumber(v) : v), z.number());
 
 const yieldForm = z.object({
   sauceId: z.uuid(),
-  litresPerBatch: typedNumber().pipe(z.number().positive("Litres per batch must be more than 0").max(1000)),
+  litresPerBatch: typedNum().pipe(z.number().positive("Litres per batch must be more than 0").max(1000)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -68,7 +69,7 @@ export async function addYieldEstimate(form: FormData) {
 
 const rejectForm = z.object({
   productId: z.uuid(),
-  percent: typedNumber().pipe(z.number().min(0).max(99)),
+  percent: typedNum().pipe(z.number().min(0).max(99)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -242,7 +243,7 @@ export async function setSauceActiveAction(form: FormData) {
   redirect(withOk("/settings/catalog", active ? "Sauce is back in use." : "Sauce retired. It no longer appears in plans; its history is kept."));
 }
 
-const int = (v: string) => (v === "" ? NaN : Number(v));
+const int = (v: string) => wholeNumber(v);
 
 export async function addFormatAction(form: FormData) {
   const fill = str(form, "fillMl");

@@ -6,6 +6,7 @@ import { db } from "@/db/client";
 import { cancelRun, confirmRun, restoreRun, updateDraftRun } from "@/db/operations";
 import { ensureBatches } from "@/db/production";
 import { attempt, withOk } from "../components/flash";
+import { wholeNumber } from "@/domain/typed-number";
 
 export async function confirm(form: FormData) {
   const id = String(form.get("runId"));
@@ -40,7 +41,7 @@ export async function editDraft(form: FormData) {
   const id = String(form.get("runId"));
   const targets: Record<string, number> = {};
   for (const [k, v] of form.entries()) {
-    if (k.startsWith("t:")) targets[k.slice(2)] = String(v).trim() === "" ? 0 : Number(v);
+    if (k.startsWith("t:")) targets[k.slice(2)] = String(v).trim() === "" ? 0 : wholeNumber(String(v));
   }
   await attempt(`/runs/${id}?edit=1`, () => updateDraftRun(db(), id, String(form.get("plannedFor") ?? ""), targets, String(form.get("reason") ?? "")));
   revalidatePath("/runs");

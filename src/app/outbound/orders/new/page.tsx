@@ -6,6 +6,7 @@ import { saveSalesOrder } from "../../actions";
 import { activeProducts, customerList, todayIso } from "../../data";
 import { PageHeader } from "../../../components/ui/header";
 import { GuardedForm } from "../../../components/unsaved-guard";
+import { NumberInput } from "../../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -82,10 +83,10 @@ export default async function NewSalesOrderPage({ searchParams }: { searchParams
                     </select>
                   </td>
                   <td>
-                    <input name={`jars_${i}`} type="number" min="1" step="1" inputMode="numeric" aria-label="Jars" />
+                    <NumberInput whole name={`jars_${i}`} aria-label="Jars" />
                   </td>
                   <td>
-                    <input name={`price_${i}`} type="number" min="0" step="0.01" inputMode="decimal" aria-label="Price per jar" placeholder="€" />
+                    <NumberInput name={`price_${i}`} aria-label="Price per jar" placeholder="€" />
                   </td>
                 </tr>
               ))}

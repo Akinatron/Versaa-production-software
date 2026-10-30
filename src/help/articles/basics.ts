@@ -141,7 +141,7 @@ export const basics: Article[] = [
       "**Unknown** means the app can't work something out yet, for example an item never counted or a sauce without litres per batch. It is never shown as 0, so you don't buy or plan on a false number.",
       "Rounding: batches round up to whole batches; jars to fill round up; jar targets from batches round down; items counted in units round up; orders round up to whole packs of the chosen supplier.",
       "**Estimate** marks a figure you entered by hand; **measured** marks one worked out from recorded batches.",
-      "Numbers can be typed with a comma or a point: `7,5` and `7.5` are the same. Don't use a thousands separator (write `1250`, not `1.250`). Something that isn't a number is refused with a message under the form.",
+      "Numbers can be typed with a comma or a point in every number box, whatever language Windows is in: `7,5` and `7.5` are the same. Don't use a thousands separator (write `1250`, not `1.250`). Jars, packs, ml and days are whole numbers, so `1.000` or `1,000` there is refused rather than read as 1. Something that isn't a number is refused with a message on the form, and what you typed stays.",
       "Days follow the time in the Netherlands (Europe/Amsterdam): a new day starts at local midnight, also for **Today** and for dates filled in by the app.",
     ],
     related: ["plan-math", "yields", "opening-count"],

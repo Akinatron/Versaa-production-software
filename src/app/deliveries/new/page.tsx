@@ -14,6 +14,7 @@ import { PageHeader } from "../../components/ui/header";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { DocFileInput } from "../../components/doc-upload";
 import { today } from "@/domain/dates";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -131,10 +132,10 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                     <input type="hidden" name={`pol_${i}`} value={l.line.id} />
                   </td>
                   <td>
-                    <input name={`qty_${i}`} type="number" min="0" step="any" defaultValue={l.pending.toString()} aria-label="Quantity accepted" />
+                    <NumberInput name={`qty_${i}`} defaultValue={l.pending.toString()} aria-label="Quantity accepted" />
                   </td>
                   <td>
-                    <input name={`rej_${i}`} type="number" min="0" step="any" aria-label="Quantity refused" />
+                    <NumberInput name={`rej_${i}`} aria-label="Quantity refused" />
                   </td>
                   <td>
                     <input name={`dmg_${i}`} type="text" aria-label="Damage or problem" style={{ minWidth: 140 }} />
@@ -174,10 +175,10 @@ export default async function NewDeliveryPage({ searchParams }: { searchParams: 
                       <input type="hidden" name={`pol_${i}`} value="" />
                     </td>
                     <td>
-                      <input name={`qty_${i}`} type="number" min="0" step="any" aria-label="Quantity accepted" />
+                      <NumberInput name={`qty_${i}`} aria-label="Quantity accepted" />
                     </td>
                     <td>
-                      <input name={`rej_${i}`} type="number" min="0" step="any" aria-label="Quantity refused" />
+                      <NumberInput name={`rej_${i}`} aria-label="Quantity refused" />
                     </td>
                     <td>
                       <input name={`dmg_${i}`} type="text" aria-label="Damage or problem" style={{ minWidth: 140 }} />

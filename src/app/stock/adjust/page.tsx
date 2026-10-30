@@ -13,6 +13,7 @@ import { GuardedForm } from "../../components/unsaved-guard";
 import { SubmitOnChange } from "../../components/submit-on-change";
 import { endOfDay } from "@/db/ledger";
 import { today as todayIso } from "@/domain/dates";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -164,12 +165,8 @@ async function CountForm({ items, item, today, on }: { items: Item[]; item: Item
                       <td>{lot.bestBefore ? fmtDate(lot.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                       <td className="num">{lotQty(balance, unit, item.kind)}</td>
                       <td>
-                        <input
+                        <NumberInput
                           name={`count:${lot.id}`}
-                          type="number"
-                          min="0"
-                          step={unit === "unit" ? 1 : "any"}
-                          inputMode="decimal"
                           aria-label={`Counted in ${lot.code}`}
                         />
                       </td>
@@ -185,7 +182,7 @@ async function CountForm({ items, item, today, on }: { items: Item[]; item: Item
             <div className="row">
               <div>
                 <label htmlFor="found">Quantity ({unitWord})</label>
-                <input id="found" name="found" type="number" min="0" step={unit === "unit" ? 1 : "any"} inputMode="decimal" />
+                <NumberInput id="found" name="found" />
               </div>
               <div>
                 <label htmlFor="foundBestBefore">Best before (if known)</label>
@@ -263,7 +260,7 @@ async function WriteOffForm({ items, item, today }: { items: Item[]; item: Item 
           </div>
           <div>
             <label htmlFor="quantity">Quantity (required, in the lot&apos;s unit shown above)</label>
-            <input id="quantity" name="quantity" type="number" min="0" step="any" inputMode="decimal" required />
+            <NumberInput id="quantity" name="quantity" required />
           </div>
           <div>
             <label htmlFor="type">What happened (required)</label>

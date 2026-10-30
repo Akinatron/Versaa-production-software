@@ -6,6 +6,7 @@ import { saveOpeningCount } from "../actions";
 import { PageHeader, Empty } from "../../components/ui/header";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { today } from "@/domain/dates";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -50,12 +51,8 @@ export default async function CountPage({ searchParams }: { searchParams: Promis
                     <td>{i.name}</td>
                     <td>
                       <div className="row" style={{ alignItems: "center", flexWrap: "nowrap" }}>
-                        <input
+                        <NumberInput
                           name={`q:${i.id}`}
-                          type="number"
-                          min="0"
-                          step={i.stockUnit === "unit" ? 1 : "any"}
-                          inputMode="decimal"
                           aria-label={`${i.name} quantity`}
                         />
                         <span className="muted small">{UNITS[i.stockUnit].label}</span>

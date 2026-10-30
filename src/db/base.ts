@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { DB } from "./client";
 import * as t from "./schema";
+import { numberText } from "@/domain/typed-number";
 
 export class OperationError extends Error {
   constructor(message: string) {
@@ -43,12 +44,10 @@ export { today } from "@/domain/dates";
 export function readNumber(value: Decimal.Value | null | undefined, what: string): Decimal | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string") return new Decimal(value);
-  const raw = value.trim().replace(/\s+/g, "");
-  if (raw === "") return null;
   // One decimal mark, comma or point. "1.250,5" or "1,250.5" are refused rather than guessed.
-  const text = raw.includes(",") && !raw.includes(".") && raw.split(",").length === 2 ? raw.replace(",", ".") : raw;
-  let d: Decimal | null = null;
-  if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(text)) d = new Decimal(text);
+  const text = numberText(value);
+  if (text === "") return null;
+  const d = text === null ? null : new Decimal(text);
   if (!d || d.isNaN() || !d.isFinite()) throw new OperationError(`${what}: "${value}" is not a number. Write it like 7.5 or 7,5.`);
   return d;
 }

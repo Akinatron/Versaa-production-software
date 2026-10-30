@@ -8,6 +8,7 @@ import { ItemSelect } from "../../components/item-select";
 import { saveOrder } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -98,10 +99,10 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                       <ItemSelect name={`item_${i}`} items={items} defaultValue={l.itemId} />
                     </td>
                     <td>
-                      <input name={`qty_${i}`} type="number" min="0" step="any" defaultValue={l.qty} aria-label="Quantity" />
+                      <NumberInput name={`qty_${i}`} defaultValue={l.qty} aria-label="Quantity" />
                     </td>
                     <td>
-                      <input name={`price_${i}`} type="number" min="0" step="any" aria-label="Price per unit" />
+                      <NumberInput name={`price_${i}`} aria-label="Price per unit" />
                     </td>
                   </tr>
                 ))}

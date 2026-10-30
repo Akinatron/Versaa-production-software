@@ -8,6 +8,7 @@ import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../..
 import { activatePackaging, discardPackaging, savePackaging, startPackaging } from "../../actions";
 import { PageHeader } from "../../../components/ui/header";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -141,12 +142,8 @@ export default async function PackagingPage({
                             </select>
                           </td>
                           <td>
-                            <input
+                            <NumberInput whole
                               name={`perJar_${i}`}
-                              type="number"
-                              min="1"
-                              step="1"
-                              inputMode="numeric"
                               defaultValue={l?.perJar ?? ""}
                               aria-label={`Per jar, row ${i + 1}`}
                             />

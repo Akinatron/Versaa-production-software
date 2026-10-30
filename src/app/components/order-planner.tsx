@@ -4,6 +4,8 @@ import type { ItemKind } from "@/domain/planner";
 import { useState } from "react";
 import Decimal from "decimal.js";
 import { OrderItems } from "./order-items";
+import { NumberInput } from "./ui/number-input";
+import { typedNumber, wholeNumber } from "@/domain/typed-number";
 
 export interface PlannerOffer {
   supplierId: string;
@@ -72,10 +74,10 @@ export function OrderPlanner({
     let packs: number | null = null;
     let quantity: Decimal;
     if (packQty && packQty.gt(0)) {
-      packs = c.amount !== "" ? Math.max(0, Math.floor(Number(c.amount) || 0)) : missing.div(packQty).ceil().toNumber();
+      packs = c.amount !== "" ? Math.max(0, wholeNumber(c.amount) || 0) : missing.div(packQty).ceil().toNumber();
       quantity = packQty.mul(packs);
     } else {
-      const typed = c.amount !== "" ? new Decimal(Number(c.amount) || 0) : missing;
+      const typed = c.amount !== "" ? new Decimal(Math.max(0, typedNumber(c.amount) || 0)) : missing;
       quantity = l.wholeUnits ? typed.ceil() : typed;
     }
     const price = offer?.price != null ? new Decimal(offer.price) : null;
@@ -181,10 +183,8 @@ export function OrderPlanner({
                           flexWrap: "nowrap",
                         }}
                       >
-                        <input
-                          type="number"
-                          min={0}
-                          step={c.packQty ? 1 : "any"}
+                        <NumberInput
+                          whole={c.packQty !== null}
                           value={c.packs !== null ? String(c.packs) : choice[l.itemId]!.amount !== "" ? choice[l.itemId]!.amount : c.quantity.toString()}
                           onChange={(e) => set(l.itemId, { amount: e.target.value })}
                           aria-label={`Quantity of ${l.name}`}
