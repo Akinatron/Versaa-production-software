@@ -5,6 +5,7 @@ import * as t from "@/db/schema";
 import { boughtItems } from "@/db/planning";
 import { Flash } from "../../components/flash";
 import { ItemSelect } from "../../components/item-select";
+import { GuardedForm } from "../../components/unsaved-guard";
 import { saveOrder } from "../actions";
 import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
@@ -49,7 +50,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           No suppliers yet. <Link href="/suppliers">Add a supplier</Link> first.
         </p>
       ) : (
-        <form action={saveOrder}>
+        <GuardedForm action={saveOrder}>
           <input type="hidden" name="key" value={crypto.randomUUID()} />
           <div className="card grid">
             <div>
@@ -113,7 +114,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           <div className="form-actions">
             <button type="submit">Save draft order</button>
           </div>
-        </form>
+        </GuardedForm>
       )}
     </>
   );

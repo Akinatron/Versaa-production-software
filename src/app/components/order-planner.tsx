@@ -5,6 +5,7 @@ import { useState } from "react";
 import Decimal from "decimal.js";
 import { OrderItems } from "./order-items";
 import { NumberInput } from "./ui/number-input";
+import { GuardedForm, type FormResult } from "./unsaved-guard";
 import { typedNumber, wholeNumber } from "@/domain/typed-number";
 
 export interface PlannerOffer {
@@ -49,7 +50,7 @@ export function OrderPlanner({
   suppliers: { id: string; name: string }[];
   runId: string | null;
   idempotencyKey: string;
-  action: (form: FormData) => void | Promise<void>;
+  action: (form: FormData) => Promise<FormResult>;
 }) {
   const [choice, setChoice] = useState(() =>
     Object.fromEntries(
@@ -104,7 +105,7 @@ export function OrderPlanner({
     }));
 
   return (
-    <form action={action}>
+    <GuardedForm action={action}>
       <input type="hidden" name="key" value={idempotencyKey} />
       <input type="hidden" name="runId" value={runId ?? ""} />
       <div className="card scroll">
@@ -249,6 +250,6 @@ export function OrderPlanner({
           Create {groups.size === 1 ? "draft order" : `${groups.size} draft orders`}
         </button>
       </div>
-    </form>
+    </GuardedForm>
   );
 }

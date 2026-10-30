@@ -32,6 +32,7 @@ import {
   startRecipeDraft,
 } from "@/db/catalog";
 import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { isBoughtKind } from "@/domain/item-kinds";
 import { backOr, str } from "../components/form-values";
@@ -102,14 +103,14 @@ export async function saveRecipe(form: FormData) {
   const remove = intent.startsWith("remove:") ? Number(intent.slice(7)) : -1;
   const lines = all.filter((_, i) => i !== remove).map((r) => ({ itemId: r.item!, quantity: r.qty!, unit: r.unit! }));
   const extra = Math.min(20, Number(str(form, "extra")) || 2);
-  await attempt(`${path}?extra=${extra}`, () =>
-    saveRecipeDraft(db(), { versionId, batchReferenceKg: str(form, "batchReferenceKg"), note: str(form, "note"), lines }),
-  );
-  refresh();
-  if (intent === "activate") redirect(`${path}?confirm=1#editor`);
-  if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
-  if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
-  redirect(withOk(path, "Draft saved. It is not used for planning until you activate it.") + "#editor");
+  return keepInput(async () => {
+    await saveRecipeDraft(db(), { versionId, batchReferenceKg: str(form, "batchReferenceKg"), note: str(form, "note"), lines });
+    refresh();
+    if (intent === "activate") redirect(`${path}?confirm=1#editor`);
+    if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
+    if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
+    redirect(withOk(path, "Draft saved. It is not used for planning until you activate it.") + "#editor");
+  });
 }
 
 export async function activateRecipe(form: FormData) {
@@ -147,12 +148,14 @@ export async function savePackaging(form: FormData) {
   const remove = intent.startsWith("remove:") ? Number(intent.slice(7)) : -1;
   const lines = all.filter((_, i) => i !== remove).map((r) => ({ itemId: r.item!, perJar: r.perJar! }));
   const extra = Math.min(20, Number(str(form, "extra")) || 2);
-  await attempt(`${path}?extra=${extra}`, () => savePackagingDraft(db(), { versionId, lines }));
-  refresh();
-  if (intent === "activate") redirect(`${path}?confirm=1#editor`);
-  if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
-  if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
-  redirect(withOk(path, "Draft saved. It is not used until you activate it.") + "#editor");
+  return keepInput(async () => {
+    await savePackagingDraft(db(), { versionId, lines });
+    refresh();
+    if (intent === "activate") redirect(`${path}?confirm=1#editor`);
+    if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
+    if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
+    redirect(withOk(path, "Draft saved. It is not used until you activate it.") + "#editor");
+  });
 }
 
 export async function activatePackaging(form: FormData) {

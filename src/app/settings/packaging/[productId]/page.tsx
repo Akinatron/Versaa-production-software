@@ -9,6 +9,7 @@ import { activatePackaging, discardPackaging, savePackaging, startPackaging } fr
 import { PageHeader } from "../../../components/ui/header";
 import { idOrNotFound } from "@/lib/ids";
 import { NumberInput } from "../../../components/ui/number-input";
+import { GuardedForm } from "../../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,7 @@ export default async function PackagingPage({
             />
           ) : (
             <>
-              <form action={savePackaging} className="card">
+              <GuardedForm action={savePackaging} className="card">
                 <DefaultSubmit name="intent" value="save" />
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="versionId" value={draft.id} />
@@ -178,7 +179,7 @@ export default async function PackagingPage({
                   Saving keeps the draft for later; plans and packaging still use {active ? `v${active.versionNo}` : "no list"}. Activating asks you to confirm
                   first.
                 </p>
-              </form>
+              </GuardedForm>
               <form action={discardPackaging} className="row" style={{ alignItems: "center", marginBottom: 16 }}>
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="versionId" value={draft.id} />

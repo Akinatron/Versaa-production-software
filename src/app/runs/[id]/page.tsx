@@ -20,6 +20,7 @@ import { fmtDate } from "../../components/ui/format";
 import { dayOf } from "@/domain/dates";
 import { idOrNotFound } from "@/lib/ids";
 import { NumberInput } from "../../components/ui/number-input";
+import { GuardedForm } from "../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -193,7 +194,7 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
   const missing = Object.keys(targets).filter((id) => !known.has(id));
   const extra = missing.length ? await db().select().from(t.products).where(inArray(t.products.id, missing)) : [];
   return (
-    <form action={editDraft} className="card">
+    <GuardedForm action={editDraft} className="card">
       <input type="hidden" name="runId" value={runId} />
       <div className="card-head">
         <h2 style={{ margin: 0 }}>Edit this draft</h2>
@@ -247,6 +248,6 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
           Cancel
         </Link>
       </div>
-    </form>
+    </GuardedForm>
   );
 }

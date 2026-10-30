@@ -11,6 +11,7 @@ import { activateRecipe, discardRecipe, saveRecipe, startRecipe } from "../../ac
 import { PageHeader } from "../../../components/ui/header";
 import { idOrNotFound } from "@/lib/ids";
 import { NumberInput } from "../../../components/ui/number-input";
+import { GuardedForm } from "../../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export default async function RecipePage({
             />
           ) : (
             <>
-              <form action={saveRecipe} className="card">
+              <GuardedForm action={saveRecipe} className="card">
                 <DefaultSubmit name="intent" value="save" />
                 <input type="hidden" name="sauceId" value={sauce.id} />
                 <input type="hidden" name="versionId" value={draft.id} />
@@ -207,7 +208,7 @@ export default async function RecipePage({
                 <p className="small muted" style={{ marginBottom: 0 }}>
                   Saving keeps the draft for later; planning still uses {active ? `v${active.versionNo}` : "no recipe"}. Activating asks you to confirm first.
                 </p>
-              </form>
+              </GuardedForm>
               <form action={discardRecipe} className="row" style={{ alignItems: "center", marginBottom: 16 }}>
                 <input type="hidden" name="sauceId" value={sauce.id} />
                 <input type="hidden" name="versionId" value={draft.id} />

@@ -33,9 +33,9 @@ export async function saveOrder(form: FormData) {
   const lines = rows(form, ["item", "qty", "price"]).map((r) => ({ itemId: r.item!, quantity: r.qty!, unitPrice: r.price || null }));
   const supplierId = str(form, "supplierId");
   const runId = str(form, "runId") || null;
-  const po = await attempt(`/orders/new${runId ? `?run=${runId}` : ""}`, async () => {
+  return keepInput(async () => {
     if (!supplierId) throw new OperationError("Choose a supplier.");
-    return createPurchaseOrder(db(), {
+    const po = await createPurchaseOrder(db(), {
       idempotencyKey: str(form, "key"),
       supplierId,
       runId,
@@ -43,9 +43,9 @@ export async function saveOrder(form: FormData) {
       reference: str(form, "reference") || null,
       lines,
     });
+    refresh();
+    redirect(withOk(`/orders/${po.id}`, "Draft order saved. Mark it as sent once you've placed it with the supplier."));
   });
-  refresh();
-  redirect(withOk(`/orders/${po.id}`, "Draft order saved. Mark it as sent once you've placed it with the supplier."));
 }
 
 /** From the order planner: one draft order per supplier. */
@@ -58,11 +58,12 @@ export async function createPlannedOrders(form: FormData) {
     quantity: r.qty || null,
     neededQty: r.need || null,
   }));
-  const back = runId ? `/runs/${runId}/order` : "/orders";
-  const orders = await attempt(back, () => createOrdersFromPlan(db(), { idempotencyKey: str(form, "key"), runId, lines }));
-  refresh();
-  const msg = `${orders.length} draft order${orders.length === 1 ? "" : "s"} created (${orders.map((o) => o.code).join(", ")}). Mark each as sent once placed.`;
-  redirect(withOk(runId ? `/runs/${runId}/order` : "/orders", msg));
+  return keepInput(async () => {
+    const orders = await createOrdersFromPlan(db(), { idempotencyKey: str(form, "key"), runId, lines });
+    refresh();
+    const msg = `${orders.length} draft order${orders.length === 1 ? "" : "s"} created (${orders.map((o) => o.code).join(", ")}). Mark each as sent once placed.`;
+    redirect(withOk(runId ? `/runs/${runId}/order` : "/orders", msg));
+  });
 }
 
 export async function markSentAction(form: FormData) {
