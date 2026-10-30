@@ -130,13 +130,13 @@ describe.skipIf(!testDbUrl)("a started run only checks what it still has to use"
     expect(budgetLines.every((l) => l.columns.toBuy?.quantity == null || new Decimal(l.columns.toBuy.quantity).isZero())).toBe(true);
   });
 
-  it("a run that used less than planned keeps the rest set aside and asks for nothing", async () => {
+  it("a batch that used less than planned frees the rest and asks for nothing", async () => {
     const { db, onion, kip700 } = await setup("7");
     const { run, batches } = await confirmedRun(db, "run", { [kip700]: 30 });
-    // Used 5 of the 7 kg so far: 2 kg still to use, 2 kg in stock.
+    // The only batch used 5 of the 7 kg: it is cooked, so the 2 kg left are free.
     await cook(db, batches[0]!.id, "cook-1", { [onion]: "5" });
     const l = line(await planForRun(db, run.id), onion);
-    expect(l.stillToUse!.toString()).toBe("2");
+    expect(l.stillToUse!.toString()).toBe("0");
     expect(l.onHand!.toString()).toBe("2");
     expect(l.toBuy!.toString()).toBe("0");
   });
@@ -150,12 +150,12 @@ describe.skipIf(!testDbUrl)("a run's reservation never grows on its own", () => 
     expect(await reserved(db, run.id, onion)).toBe("7");
     await cook(db, b.id, "cook-1");
     expect(await reserved(db, run.id, onion)).toBe("0");
+    // A cooked batch holds nothing more, whatever it is corrected to.
     await cook(db, b.id, "cook-2", { [onion]: "5" }, "weighed again");
-    expect(await reserved(db, run.id, onion)).toBe("2");
+    expect(await reserved(db, run.id, onion)).toBe("0");
     await cook(db, b.id, "cook-3", { [onion]: "5" }, "record again");
     await cook(db, b.id, "cook-4", { [onion]: "5" }, "record again");
-    expect(await reserved(db, run.id, onion)).toBe("2");
-    // Back up to 7: nothing left reserved.
+    expect(await reserved(db, run.id, onion)).toBe("0");
     await cook(db, b.id, "cook-5", { [onion]: "7" }, "it was 7 after all");
     expect(await reserved(db, run.id, onion)).toBe("0");
   });

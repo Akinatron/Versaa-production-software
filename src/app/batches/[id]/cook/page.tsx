@@ -13,6 +13,7 @@ import { IngredientsForm, type IngredientLine } from "./ingredients-form";
 import { fmtDate } from "../../../components/ui/format";
 import { History } from "../../../components/history";
 import { idOrNotFound } from "@/lib/ids";
+import { today } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,8 @@ const css = `
   .bl td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-size: 0.85rem; display: block; }
 }`;
 
-const lotLabel = (l: LotInfo) => `${l.code}${l.supplierBatch ? ` · ${l.supplierBatch}` : ""} · BB ${l.bestBefore ?? "none"}`;
+const lotLabel = (l: LotInfo, expired: boolean) =>
+  `${l.code}${l.supplierBatch ? ` · ${l.supplierBatch}` : ""} · BB ${l.bestBefore ?? "none"}${expired ? " · PAST BEST-BEFORE" : ""}`;
 
 export default async function ProductionBatchPage({
   params,
@@ -58,12 +60,16 @@ export default async function ProductionBatchPage({
   );
 
   // Lots a line can use: those with stock, plus the ones it already took from (even if now empty).
+  // Lots past best-before on the cooking day go last and say so: they are only used if picked by hand.
+  const on = batch.producedOn ?? today();
+  const expired = (l: LotInfo) => !!l.bestBefore && l.bestBefore < on;
   const optionsFor = (itemId: string, used: Map<string, string>) =>
     lots
       .filter((l) => l.itemId === itemId && (l.balance.gt(0) || used.has(l.id)))
+      .sort((a, b) => Number(expired(a)) - Number(expired(b)))
       .map((l) => ({
         id: l.id,
-        label: lotLabel(l),
+        label: lotLabel(l, expired(l)),
         available: l.balance.plus(used.get(l.id) ?? 0).toString(),
       }));
 
@@ -130,9 +136,10 @@ export default async function ProductionBatchPage({
           </p>
           <details className="small muted" style={{ marginBottom: 16 }}>
             <summary style={{ fontWeight: 500 }}>How lots and corrections work</summary>
-            Each ingredient comes from the lot with the earliest best-before. Use &quot;Split between lots&quot; to take it from several (for example what was
-            left of an old delivery plus the new one). To correct a mistake later, change the quantity here and press Record again: stock moves by the
-            difference.
+            Each ingredient comes from the lot with the earliest best-before that is still in date on the cooking day. Lots past their best-before are
+            never taken on their own: to use one anyway, pick it under &quot;Split between lots&quot;. Use &quot;Split between lots&quot; also to take an
+            ingredient from several lots (for example what was left of an old delivery plus the new one). To correct a mistake later, change the quantity
+            here and press Record again: stock moves by the difference.
           </details>
           <IngredientsForm
             key={crypto.randomUUID()}

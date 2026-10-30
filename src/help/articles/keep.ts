@@ -94,7 +94,7 @@ export const keep: Article[] = [
         ],
       },
       "Only the differences are recorded. The original numbers and the correction both stay in the history. Found stock becomes a lot with a code like `COUNT-20261105-001`.",
-      "Counted on Friday and entering it on Monday? Choose Friday. The count is compared with the stock at the end of Friday, so what was recorded after it (cooking, packing, deliveries, write-offs) is kept. Example: 12 kg on record, you count 10 kg on Friday and cook with 3 kg on Monday; entering Friday's count leaves 7 kg.",
+      "Counted on Friday and entering it on Monday? Choose Friday. The count is compared with the stock at the end of Friday, so what was recorded after it (cooking, packing, deliveries, write-offs) is kept. Example: 12 kg on record, you count 10 kg on Friday and cook with 3 kg on Monday; entering Friday's count leaves 7 kg. Each change is placed on the date of its own record (a delivery on its delivery date, a cooking on its cooking date), even if it was corrected or deleted later. A count can't be dated in the future.",
       { h: "Write-off" },
       {
         ol: [
@@ -141,6 +141,7 @@ export const keep: Article[] = [
       },
       { h: "Use the oldest first" },
       "When ingredients are recorded on a batch and when jars are delivered, the lot with the earliest best-before is used first unless you choose another lot.",
+      "Ingredients and packaging past their best-before on the cooking or packing day are skipped: they are only used if you choose the lot by hand. Plans don't count them as in stock either.",
       { h: "Expiry alerts" },
       "[Today](/) lists every lot of ingredients or jars in stock that is past its best-before (red) or within 30 days of it (amber), with what is left and **Open lot**.",
     ],

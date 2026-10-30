@@ -1,5 +1,5 @@
 import { BOUGHT_KINDS, type BoughtKind } from "@/domain/item-kinds";
-import { sqlList } from "./base";
+import { sqlList, today } from "./base";
 import { PO_ON_THE_WAY } from "@/domain/status";
 import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -119,10 +119,15 @@ export async function loadPlanCatalog(db: DB): Promise<PlanCatalog> {
  *
  * With `arrivingBy` (a run's date), only orders expected by that day, or with
  * no expected date, count as on order; later ones are given as lateOnOrder.
+ *
+ * With `usableOn`, lots whose best-before is before that day can't be used, so
+ * they are left out of onHand and given as `expired`. The stock pages leave it
+ * out: they show what is physically there.
  */
-export async function loadStockPositions(db: DB, opts: { arrivingBy?: string } = {}): Promise<Record<string, StockPosition>> {
+export async function loadStockPositions(db: DB, opts: { arrivingBy?: string; usableOn?: string } = {}): Promise<Record<string, StockPosition>> {
   const by = opts.arrivingBy ?? null;
-  const [onHand, reserved, onOrder] = await Promise.all([
+  const usableOn = opts.usableOn ?? null;
+  const [onHand, reserved, onOrder, expired] = await Promise.all([
     db.select({ itemId: t.movements.itemId, qty: sql<string>`sum(${t.movements.quantity})` }).from(t.movements).groupBy(t.movements.itemId),
     db
       .select({ itemId: t.reservations.itemId, qty: sql<string>`sum(${t.reservations.quantity})` })
@@ -138,6 +143,13 @@ export async function loadStockPositions(db: DB, opts: { arrivingBy?: string } =
       left join (select r.purchase_order_line_id, sum(r.quantity) as received from receipt_lines r join receipts x on x.id = r.receipt_id and x.deleted_at is null group by 1) r
         on r.purchase_order_line_id = l.id
       group by l.item_id`),
+    usableOn
+      ? db.execute<{ item_id: string; qty: string }>(sql`
+          select item_id, sum(balance) as qty from (
+            select l.item_id, sum(m.quantity) as balance from lots l join movements m on m.lot_id = l.id
+            where l.best_before < ${usableOn}::date group by l.id, l.item_id) x
+          where balance > 0 group by item_id`)
+      : Promise.resolve([] as { item_id: string; qty: string }[]),
   ]);
 
   const out: Record<string, StockPosition> = {};
@@ -148,10 +160,17 @@ export async function loadStockPositions(db: DB, opts: { arrivingBy?: string } =
     get(r.item_id).onOrder = new Decimal(r.qty);
     if (new Decimal(r.late).gt(0)) get(r.item_id).lateOnOrder = new Decimal(r.late);
   }
+  for (const r of expired) {
+    const pos = get(r.item_id);
+    const q = new Decimal(r.qty);
+    if (pos.onHand === null || !q.gt(0)) continue;
+    pos.onHand = Decimal.max(0, pos.onHand.minus(q));
+    pos.expired = q;
+  }
   return out;
 }
 
 export async function loadPlanInput(db: DB, targets: Record<string, number>): Promise<PlanInput & { catalog: PlanCatalog }> {
-  const [catalog, stock] = await Promise.all([loadPlanCatalog(db), loadStockPositions(db)]);
+  const [catalog, stock] = await Promise.all([loadPlanCatalog(db), loadStockPositions(db, { usableOn: today() })]);
   return { ...catalog, catalog, stock, targets };
 }

@@ -40,7 +40,7 @@ export const GLOSSARY: Term[] = [
   { term: "Run", def: "One planned production: jar targets, a production date, its batches, orders and budget.", see: "runs" },
   { term: "Sellable jars", def: "Jars you can sell, after rejects. Plans always start from sellable jars.", see: "plan-math" },
   { term: "Shelf life", def: "How long a product or ingredient keeps, in days, weeks or months. Used to fill in best-before dates.", see: "shelf-life" },
-  { term: "Still to use", def: "For a run that has started: what it needs minus what its batches already used. Only this is checked against stock.", see: "runs" },
+  { term: "Still to use", def: "For a run that has started: the ingredients of the batches not cooked yet, plus the packaging it still needs. Only this is checked against stock.", see: "runs" },
   { term: "Supplier batch", def: "The supplier's own lot number, written on their goods, recorded with each delivery line.", see: "record-delivery" },
   { term: "Unknown", def: "A figure the app can't work out yet. Never shown as 0.", see: "units" },
   { term: "Write-off", def: "Stock taken out of a lot because it was thrown away, used by the team or given as a sample.", see: "correct-stock" },

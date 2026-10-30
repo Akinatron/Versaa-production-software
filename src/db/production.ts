@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, checkWholeUnits, itemsById, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, checkWholeUnits, itemsById, nextCode, today, type Tx, isDate, notFuture, zeroOrMore } from "./base";
 import { jarsFree, lotBalance } from "./ledger";
 import { applySplit, autoSplit, checkManualSplit, lotsOf, sameSplit, splitTotal, usedByDocs, type LotSplit } from "./lot-use";
 import { convert, type UnitCode } from "@/domain/quantity";
@@ -126,30 +126,39 @@ export async function ensureBatches(db: DB, runId: string) {
 }
 
 /**
- * Bring a run's reservation of an item in line with what its batches have
- * used so far: reserved = originally reserved − used (never below 0).
- * "Originally reserved" is only what was held at confirmation, minus batches
- * not made; the adjustments this function adds never count towards it.
+ * Bring a run's reservation of an item in line with what it still needs.
+ *
+ * Ingredients: what the run's batches still have to cook, line by line (the
+ * planned quantity of every ingredient line not recorded yet, in batches
+ * that are neither closed nor marked as not made). A batch that used more or
+ * less than planned doesn't change what the next batch needs.
+ *
+ * Packaging: what was held at confirmation, minus the share of batches not
+ * made, minus what has been packed so far (never below 0). The adjustments
+ * this function adds never count towards "held".
  */
 async function syncRunReservation(tx: Tx, runId: string, itemId: string, notMadePackaging?: Map<string, Decimal>) {
-  const [row] = await tx.execute<{ original: string | null; current: string | null; used: string | null }>(sql`
+  const [row] = await tx.execute<{ ingredient: boolean; still: string | null; original: string | null; current: string | null; used: string | null }>(sql`
     select
-      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and kind = 'hold')
-        - (select coalesce(sum(c.planned_qty), 0) from batch_consumption c join production_batches b on b.id = c.batch_id
-           where b.run_id = ${runId} and b.status = 'cancelled' and c.item_id = ${itemId}) as original,
+      (select kind = 'ingredient' from items where id = ${itemId}) as ingredient,
+      (select coalesce(sum(c.planned_qty), 0) from batch_consumption c join production_batches b on b.id = c.batch_id
+         where b.run_id = ${runId} and b.status not in ('cancelled', 'closed') and c.item_id = ${itemId} and c.confirmed_at is null) as still,
+      (select coalesce(sum(quantity), 0) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null and kind = 'hold') as original,
       (select sum(quantity) from reservations where run_id = ${runId} and item_id = ${itemId} and released_at is null) as current,
       (select -sum(m.quantity) from movements m
-         where m.item_id = ${itemId} and (
-           (m.doc_type = 'batch_consumption' and m.doc_id in (
-              select c.id from batch_consumption c join production_batches b on b.id = c.batch_id where b.run_id = ${runId}))
-           or (m.doc_type = 'packaging_session' and m.doc_id in (
-              select s.id from packaging_sessions s join production_batches b on b.id = s.batch_id where b.run_id = ${runId}))
-         )) as used`);
-  const packagingFreed = (notMadePackaging ?? (await packagingOfBatchesNotMade(tx, runId)).freed).get(itemId) ?? D0;
-  const original = Decimal.max(D0, new Decimal(row?.original ?? 0).minus(packagingFreed));
-  if (original.isZero() && new Decimal(row?.current ?? 0).isZero()) return;
-  const target = Decimal.max(D0, original.minus(row?.used ?? 0));
-  const diff = target.minus(row?.current ?? 0);
+         where m.item_id = ${itemId} and m.doc_type = 'packaging_session' and m.doc_id in (
+           select s.id from packaging_sessions s join production_batches b on b.id = s.batch_id where b.run_id = ${runId})) as used`);
+  const current = new Decimal(row?.current ?? 0);
+  let target: Decimal;
+  if (row?.ingredient) {
+    target = Decimal.max(D0, new Decimal(row.still ?? 0));
+  } else {
+    const packagingFreed = (notMadePackaging ?? (await packagingOfBatchesNotMade(tx, runId)).freed).get(itemId) ?? D0;
+    const original = Decimal.max(D0, new Decimal(row?.original ?? 0).minus(packagingFreed));
+    if (original.isZero() && current.isZero()) return;
+    target = Decimal.max(D0, original.minus(row?.used ?? 0));
+  }
+  const diff = target.minus(current);
   if (!diff.isZero()) await tx.insert(t.reservations).values({ runId, itemId, quantity: diff.toString(), kind: "adjust" });
 }
 
@@ -231,6 +240,7 @@ export async function recordIngredients(
   input: { idempotencyKey: string; batchId: string; producedOn?: string | null; lines: IngredientLineInput[]; reason?: string | null },
 ) {
   if (input.producedOn && !isDate(input.producedOn)) throw new OperationError("Enter the production date.");
+  if (input.producedOn) notFuture(input.producedOn, "The production date");
   return db.transaction(async (tx) => {
     const { batch, run } = await getBatch(tx, input.batchId);
     const existing = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
@@ -286,7 +296,7 @@ export async function recordIngredients(
           checkManualSplit(item, current, target, itemLots);
         } else {
           qty = parseQty(item.name, l.quantity);
-          target = autoSplit(item, current, itemLots, qty);
+          target = autoSplit(item, current, itemLots, qty, input.producedOn || batch.producedOn || today());
         }
         checkWholeUnits(item, qty);
         plans.push({ item, line, current, target, qty });
@@ -456,7 +466,7 @@ async function packagingNeeds(tx: Tx, sauce: { id: string; name: string }, lines
 }
 
 /** Plan the material movements for a session going from `used` to `need`. Collects every shortage. */
-async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<string, LotSplit>) {
+async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<string, LotSplit>, usableOn: string) {
   const itemIds = [...new Set([...need.keys(), ...used.keys()])];
   const items = await itemsById(tx, itemIds);
   const lots = await lotsOf(tx, itemIds);
@@ -470,6 +480,7 @@ async function planMaterials(tx: Tx, need: Map<string, Decimal>, used: Map<strin
         current,
         lots.filter((l) => l.itemId === itemId),
         need.get(itemId) ?? D0,
+        usableOn,
       );
       if (!sameSplit(current, target)) plans.push({ itemId, current, target });
     } catch (e) {
@@ -521,6 +532,7 @@ export async function recordPackaging(
   input: { idempotencyKey: string; batchId: string; packedOn: string; bestBefore?: string | null; note?: string | null; lines: PackagingLineInput[] },
 ) {
   if (!isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
+  notFuture(input.packedOn, "The packaging date");
   if (input.bestBefore && !isDate(input.bestBefore)) throw new OperationError("Best-before isn't a valid date.");
   const lines = input.lines.filter((l) => l.filled > 0 || l.rejected > 0);
   if (lines.length === 0) throw new OperationError("Enter the jars filled for at least one size.");
@@ -533,7 +545,7 @@ export async function recordPackaging(
     assertOpen(batch);
 
     const { productRows, versionOf, need } = await packagingNeeds(tx, sauce, lines);
-    const { plans, errors } = await planMaterials(tx, need, new Map());
+    const { plans, errors } = await planMaterials(tx, need, new Map(), input.packedOn);
     if (errors.length) throw new OperationError(errors.join(" "));
 
     const [session] = await tx
@@ -651,6 +663,7 @@ export async function changePackaging(
   const newDates = input.delete || input.restore ? {} : (input.bestBeforeBy ?? {});
   if (!input.delete && !input.restore) {
     if (!input.packedOn || !isDate(input.packedOn)) throw new OperationError("Enter the packaging date.");
+    notFuture(input.packedOn, "The packaging date");
     if (Object.values(newDates).some((d) => d && !isDate(d))) throw new OperationError("Best-before isn't a valid date.");
     checkJarNumbers(input.lines ?? []);
   }
@@ -699,7 +712,7 @@ export async function changePackaging(
     const finishedItems = new Set(productRows.map((r) => r.product.itemId));
     const usedAll = (await usedByDocs(tx, "packaging_session", [session.id])).get(session.id) ?? new Map<string, LotSplit>();
     const used = new Map([...usedAll].filter(([itemId]) => !finishedItems.has(itemId)));
-    const { plans, errors } = await planMaterials(tx, need, used);
+    const { plans, errors } = await planMaterials(tx, need, used, input.packedOn ?? session.packedOn);
 
     // Jars: the finished lot can only give back what is still in it.
     const jarMoves: { lotId: string; productId: string; diff: number }[] = [];
@@ -960,6 +973,7 @@ export async function setIncidentDeleted(db: DB, input: { incidentId: string; de
 export async function updateBatch(db: DB, input: { batchId: string; reason: string; producedOn?: string | null; note?: string | null }) {
   const reason = needReason(input.reason, "Say why the batch is corrected");
   if (input.producedOn && !isDate(input.producedOn)) throw new OperationError("Enter the production date.");
+  if (input.producedOn) notFuture(input.producedOn, "The production date");
   return db.transaction(async (tx) => {
     const { batch, run } = await getBatch(tx, input.batchId);
     const upd = {
@@ -1041,12 +1055,7 @@ export async function closeBatch(db: DB, input: { idempotencyKey: string; batchI
         .where(eq(t.productionBatches.id, batch.id));
       // Free the ingredients this batch had reserved.
       const lines = await tx.select().from(t.batchConsumption).where(eq(t.batchConsumption.batchId, batch.id));
-      for (const l of lines) {
-        const [row] = await tx.execute<{ q: string | null }>(sql`
-          select sum(quantity) as q from reservations where run_id = ${batch.runId} and item_id = ${l.itemId} and released_at is null`);
-        const release = Decimal.min(new Decimal(l.plannedQty), new Decimal(row?.q ?? 0));
-        if (release.gt(0)) await tx.insert(t.reservations).values({ runId: batch.runId, itemId: l.itemId, quantity: release.neg().toString(), kind: "adjust" });
-      }
+      for (const l of lines) await syncRunReservation(tx, batch.runId, l.itemId);
       // And its share of the jars, lids and labels.
       const pkg = await packagingOfBatchesNotMade(tx, batch.runId);
       for (const itemId of pkg.items) await syncRunReservation(tx, batch.runId, itemId, pkg.freed);

@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, type Tx, isDate, notFuture, zeroOrMore } from "./base";
 import { loadOffers, offersByItem } from "./suppliers";
 import { buildBudget, describePrice, favourite, roundToPacks, unitPrice, type BudgetLineInput, type Offer } from "@/domain/pricing";
 import type { PlanResult } from "@/domain/planner";
@@ -420,6 +420,7 @@ export async function recordReceipt(
   },
 ) {
   if (!isDate(input.receivedOn)) throw new OperationError("Enter the delivery date.");
+  notFuture(input.receivedOn, "The delivery date");
   const time = input.receivedTime?.trim() || null;
   if (time && !/^\d{2}:\d{2}$/.test(time)) throw new OperationError("Enter the time as HH:MM, or leave it empty.");
 
@@ -628,6 +629,7 @@ export async function correctReceipt(
 ) {
   const reason = needReason(input.reason, "Say why the delivery is corrected");
   if (!isDate(input.receivedOn)) throw new OperationError("Enter the delivery date.");
+  notFuture(input.receivedOn, "The delivery date");
   const time = input.receivedTime?.trim() || null;
   if (time && !/^\d{2}:\d{2}$/.test(time)) throw new OperationError("Enter the time as HH:MM, or leave it empty.");
   return db.transaction(async (tx) => {

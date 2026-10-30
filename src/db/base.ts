@@ -34,6 +34,7 @@ export const lockNames = (tx: Tx) => lock(tx, "names");
 
 /** Today in the business's time zone (see src/domain/dates.ts). */
 export { today } from "@/domain/dates";
+import { today as todayIso } from "@/domain/dates";
 
 /**
  * Read a number typed in a form. The one reader every form uses, so they all
@@ -71,6 +72,15 @@ export async function itemsById(tx: Tx, ids: string[]) {
   if (ids.length === 0) return new Map<string, typeof t.items.$inferSelect>();
   const rows = await tx.select().from(t.items).where(inArray(t.items.id, ids));
   return new Map(rows.map((r) => [r.id, r]));
+}
+
+/**
+ * Something that already happened (a delivery, an exit, a count, cooking,
+ * packing) can't be dated after today: a date in the future would put its
+ * stock on the wrong side of every count until that day.
+ */
+export function notFuture(day: string, what: string) {
+  if (day > todayIso()) throw new OperationError(`${what} can't be in the future.`);
 }
 
 /** A real calendar date written as YYYY-MM-DD (not 2026-02-31). */
