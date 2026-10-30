@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // The desktop app (desktop/) ships a self-contained server: NEXT_OUTPUT=standalone.
   ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Delivery notes and invoices are uploaded as photos or PDFs (up to MAX_TOTAL_MB at once).
-  experimental: { serverActions: { bodySizeLimit: MAX_REQUEST }, middlewareClientMaxBodySize: MAX_REQUEST },
+  experimental: { serverActions: { bodySizeLimit: MAX_REQUEST }, proxyClientMaxBodySize: MAX_REQUEST },
   // "Sales" was renamed "Outbound": keep old links and bookmarks working.
   async redirects() {
     return [

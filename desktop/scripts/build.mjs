@@ -52,7 +52,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "cjs",
-  target: "node22",
+  target: "node24",
   tsconfig: path.join(root, "tsconfig.json"),
   external: ["electron", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
   define: {
@@ -69,7 +69,7 @@ if (updater) {
     bundle: true,
     platform: "node",
     format: "cjs",
-    target: "node22",
+    target: "node24",
     external: ["electron"],
     logLevel: "warning",
   });

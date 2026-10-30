@@ -13,12 +13,12 @@ import { activeMock } from "@/db/client";
 function root() {
   // While mock data is shown, its files go to its own throw-away folder.
   const mock = activeMock()?.uploadsDir;
-  return path.resolve(mock || uploadsRoot());
+  return path.resolve(/* turbopackIgnore: true */ mock || uploadsRoot());
 }
 
 /** The real uploads folder. */
 export function uploadsRoot() {
-  return path.resolve(process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads"));
+  return path.resolve(/* turbopackIgnore: true */ process.env.UPLOADS_DIR || path.join(/* turbopackIgnore: true */ process.cwd(), "uploads"));
 }
 
 function full(key: string) {
@@ -39,7 +39,7 @@ export async function putFile(data: Uint8Array, ext: string): Promise<string> {
 }
 
 export async function getFile(key: string): Promise<Buffer> {
-  return readFile(full(key));
+  return readFile(/* turbopackIgnore: true */ full(key));
 }
 
 /** Only used to clean up a file whose record could not be saved. */

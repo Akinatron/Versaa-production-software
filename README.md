@@ -45,7 +45,7 @@ Anything that can't be worked out yet is shown as **unknown**, never as 0. Once 
 
 ## Running it
 
-Requires Node 22, pnpm and PostgreSQL 16.
+Requires Node 24, pnpm 12 and PostgreSQL 16. The exact versions live in one place each: `.nvmrc` (Node) and `packageManager` in `package.json` (pnpm, which switches to that version by itself). GitHub reads the same two.
 
 ```sh
 pnpm install
@@ -55,7 +55,7 @@ pnpm db:seed        # load the starting catalog (safe to repeat)
 pnpm dev            # http://localhost:3000
 ```
 
-`pnpm dev` and `pnpm start` only answer on this computer (127.0.0.1). Other devices on the same Wi-Fi can't open the app, because it has no sign-in. The app also turns away any request that doesn't come in as `localhost` or `127.0.0.1` (`src/middleware.ts`), so a web page can't reach it by pointing its own name at this computer.
+`pnpm dev` and `pnpm start` only answer on this computer (127.0.0.1). Other devices on the same Wi-Fi can't open the app, because it has no sign-in. The app also turns away any request that doesn't come in as `localhost` or `127.0.0.1` (`src/proxy.ts`), so a web page can't reach it by pointing its own name at this computer.
 
 Uploaded delivery notes and invoices are saved in an `uploads` folder next to the app (set `UPLOADS_DIR` to keep them elsewhere). That folder is not in git; back it up together with the database.
 
@@ -75,7 +75,7 @@ Tests: `pnpm test` needs `TEST_DATABASE_URL` pointing at an empty PostgreSQL dat
 
 The same app also runs as a normal program for Windows (the main target) and Mac, opened with a double click, with no Terminal, browser or database to install. Its data stays on that computer only, and it is separate from the `pnpm dev` database.
 
-Build it from this folder (needs Node 22 and pnpm, like the web version; the desktop part installs its own tools with npm):
+Build it from this folder (needs Node 24 and pnpm 12, like the web version; the desktop part installs its own tools with npm):
 
 ```sh
 pnpm desktop:win    # on a Windows PC: builds the installer in desktop/dist (Versaa Setup ….exe)
