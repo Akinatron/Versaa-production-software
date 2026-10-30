@@ -10,6 +10,8 @@ import { DefaultSubmit, VERSION_STATUS, VersionHistory, fmtDate } from "../../..
 import { activateRecipe, discardRecipe, saveRecipe, startRecipe } from "../../actions";
 import { PageHeader } from "../../../components/ui/header";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../../components/ui/number-input";
+import { GuardedForm } from "../../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +100,7 @@ export default async function RecipePage({
             />
           ) : (
             <>
-              <form action={saveRecipe} className="card">
+              <GuardedForm action={saveRecipe} className="card">
                 <DefaultSubmit name="intent" value="save" />
                 <input type="hidden" name="sauceId" value={sauce.id} />
                 <input type="hidden" name="versionId" value={draft.id} />
@@ -109,7 +111,7 @@ export default async function RecipePage({
                 </p>
                 <div style={{ maxWidth: 220, marginBottom: 12 }}>
                   <label htmlFor="ref">Batch size (finished kg, required)</label>
-                  <input id="ref" name="batchReferenceKg" type="number" min="0.1" step="any" defaultValue={draft.batchReferenceKg} required />
+                  <NumberInput id="ref" name="batchReferenceKg" defaultValue={draft.batchReferenceKg} required />
                 </div>
                 <div className="scroll">
                   <table>
@@ -143,12 +145,8 @@ export default async function RecipePage({
                               </select>
                             </td>
                             <td>
-                              <input
+                              <NumberInput
                                 name={`qty_${i}`}
-                                type="number"
-                                min="0"
-                                step="any"
-                                inputMode="decimal"
                                 defaultValue={l?.quantity ?? ""}
                                 aria-label={`Quantity, row ${i + 1}`}
                               />
@@ -210,7 +208,7 @@ export default async function RecipePage({
                 <p className="small muted" style={{ marginBottom: 0 }}>
                   Saving keeps the draft for later; planning still uses {active ? `v${active.versionNo}` : "no recipe"}. Activating asks you to confirm first.
                 </p>
-              </form>
+              </GuardedForm>
               <form action={discardRecipe} className="row" style={{ alignItems: "center", marginBottom: 16 }}>
                 <input type="hidden" name="sauceId" value={sauce.id} />
                 <input type="hidden" name="versionId" value={draft.id} />

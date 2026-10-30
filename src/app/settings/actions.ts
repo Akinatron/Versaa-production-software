@@ -32,9 +32,11 @@ import {
   startRecipeDraft,
 } from "@/db/catalog";
 import { attempt, withOk } from "../components/flash";
+import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { isBoughtKind } from "@/domain/item-kinds";
 import { backOr, str } from "../components/form-values";
+import { typedNumber, wholeNumber } from "@/domain/typed-number";
 
 const back = (form: FormData, fallback: string) => backOr(form, fallback, ["/settings"]);
 
@@ -46,12 +48,12 @@ function refresh() {
 
 // ---------------------------------------------------------------- yields and rejects
 
-/** A typed number for zod: "7,5" reads as 7.5, like everywhere else in the app. */
-const typedNumber = () => z.preprocess((v) => (typeof v === "string" ? v.trim().replace(",", ".") : v), z.coerce.number());
+/** A typed number for zod: "7,5" reads as 7.5, like everywhere else in the app; empty or not a number is refused (never 0). */
+const typedNum = () => z.preprocess((v) => (typeof v === "string" ? typedNumber(v) : v), z.number());
 
 const yieldForm = z.object({
   sauceId: z.uuid(),
-  litresPerBatch: typedNumber().pipe(z.number().positive("Litres per batch must be more than 0").max(1000)),
+  litresPerBatch: typedNum().pipe(z.number().positive("Litres per batch must be more than 0").max(1000)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -68,7 +70,7 @@ export async function addYieldEstimate(form: FormData) {
 
 const rejectForm = z.object({
   productId: z.uuid(),
-  percent: typedNumber().pipe(z.number().min(0).max(99)),
+  percent: typedNum().pipe(z.number().min(0).max(99)),
   note: z.string().trim().max(500).optional(),
 });
 
@@ -101,14 +103,14 @@ export async function saveRecipe(form: FormData) {
   const remove = intent.startsWith("remove:") ? Number(intent.slice(7)) : -1;
   const lines = all.filter((_, i) => i !== remove).map((r) => ({ itemId: r.item!, quantity: r.qty!, unit: r.unit! }));
   const extra = Math.min(20, Number(str(form, "extra")) || 2);
-  await attempt(`${path}?extra=${extra}`, () =>
-    saveRecipeDraft(db(), { versionId, batchReferenceKg: str(form, "batchReferenceKg"), note: str(form, "note"), lines }),
-  );
-  refresh();
-  if (intent === "activate") redirect(`${path}?confirm=1#editor`);
-  if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
-  if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
-  redirect(withOk(path, "Draft saved. It is not used for planning until you activate it.") + "#editor");
+  return keepInput(async () => {
+    await saveRecipeDraft(db(), { versionId, batchReferenceKg: str(form, "batchReferenceKg"), note: str(form, "note"), lines });
+    refresh();
+    if (intent === "activate") redirect(`${path}?confirm=1#editor`);
+    if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
+    if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
+    redirect(withOk(path, "Draft saved. It is not used for planning until you activate it.") + "#editor");
+  });
 }
 
 export async function activateRecipe(form: FormData) {
@@ -146,12 +148,14 @@ export async function savePackaging(form: FormData) {
   const remove = intent.startsWith("remove:") ? Number(intent.slice(7)) : -1;
   const lines = all.filter((_, i) => i !== remove).map((r) => ({ itemId: r.item!, perJar: r.perJar! }));
   const extra = Math.min(20, Number(str(form, "extra")) || 2);
-  await attempt(`${path}?extra=${extra}`, () => savePackagingDraft(db(), { versionId, lines }));
-  refresh();
-  if (intent === "activate") redirect(`${path}?confirm=1#editor`);
-  if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
-  if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
-  redirect(withOk(path, "Draft saved. It is not used until you activate it.") + "#editor");
+  return keepInput(async () => {
+    await savePackagingDraft(db(), { versionId, lines });
+    refresh();
+    if (intent === "activate") redirect(`${path}?confirm=1#editor`);
+    if (intent === "addrow") redirect(`${path}?extra=${extra + 1}#editor`);
+    if (remove >= 0) redirect(withOk(`${path}?extra=${extra}`, "Line removed from the draft.") + "#editor");
+    redirect(withOk(path, "Draft saved. It is not used until you activate it.") + "#editor");
+  });
 }
 
 export async function activatePackaging(form: FormData) {
@@ -242,7 +246,7 @@ export async function setSauceActiveAction(form: FormData) {
   redirect(withOk("/settings/catalog", active ? "Sauce is back in use." : "Sauce retired. It no longer appears in plans; its history is kept."));
 }
 
-const int = (v: string) => (v === "" ? NaN : Number(v));
+const int = (v: string) => wholeNumber(v);
 
 export async function addFormatAction(form: FormData) {
   const fill = str(form, "fillMl");

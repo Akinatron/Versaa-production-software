@@ -212,7 +212,7 @@ export async function updateSalesOrder(
     ]);
     const lineText = (ls: { productId: string; jars: number; unitPrice?: Decimal.Value | null }[]) => {
       const m = new Map<string, string>();
-      for (const l of ls) m.set(l.productId, `${l.jars} jars${l.unitPrice != null && String(l.unitPrice) !== "" ? ` at ${new Decimal(l.unitPrice)} €` : ""}`);
+      for (const l of ls) m.set(l.productId, `${l.jars} jars${l.unitPrice != null && String(l.unitPrice) !== "" ? ` at ${price(l.unitPrice)} €` : ""}`);
       return m;
     };
     const before = lineText(old);

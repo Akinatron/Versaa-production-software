@@ -22,11 +22,12 @@ import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { OUTFLOW_REASONS, type OutflowReason } from "../components/labels";
 import { localPath, str } from "../components/form-values";
+import { wholeNumber } from "@/domain/typed-number";
 
 
 function wholeJars(v: string, what: string) {
   if (v === "") return 0;
-  const n = Number(v);
+  const n = wholeNumber(v);
   if (!Number.isInteger(n) || n < 0) throw new OperationError(`${what}: jars must be a whole number, 0 or more.`);
   return n;
 }

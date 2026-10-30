@@ -19,6 +19,8 @@ import { NextStep, RunHeader, loadRun } from "../../components/run-steps";
 import { fmtDate } from "../../components/ui/format";
 import { dayOf } from "@/domain/dates";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../components/ui/number-input";
+import { GuardedForm } from "../../components/unsaved-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -192,7 +194,7 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
   const missing = Object.keys(targets).filter((id) => !known.has(id));
   const extra = missing.length ? await db().select().from(t.products).where(inArray(t.products.id, missing)) : [];
   return (
-    <form action={editDraft} className="card">
+    <GuardedForm action={editDraft} className="card">
       <input type="hidden" name="runId" value={runId} />
       <div className="card-head">
         <h2 style={{ margin: 0 }}>Edit this draft</h2>
@@ -213,13 +215,9 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
                   <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
                     {p.formatName}
                   </label>
-                  <input
+                  <NumberInput whole
                     id={`t-${p.id}`}
                     name={`t:${p.id}`}
-                    type="number"
-                    min={0}
-                    step={1}
-                    inputMode="numeric"
                     defaultValue={targets[p.id] ?? ""}
                     placeholder="0"
                   />
@@ -235,7 +233,7 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
                 <label htmlFor={`t-${p.id}`} style={{ flex: 1, margin: 0 }}>
                   {p.name}
                 </label>
-                <input id={`t-${p.id}`} name={`t:${p.id}`} type="number" min={0} step={1} inputMode="numeric" defaultValue={targets[p.id] ?? ""} />
+                <NumberInput whole id={`t-${p.id}`} name={`t:${p.id}`} defaultValue={targets[p.id] ?? ""} />
               </div>
             ))}
           </div>
@@ -250,6 +248,6 @@ async function EditDraft({ runId, plannedFor }: { runId: string; plannedFor: str
           Cancel
         </Link>
       </div>
-    </form>
+    </GuardedForm>
   );
 }

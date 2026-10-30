@@ -6,6 +6,7 @@ import { fmtDate } from "./ui/format";
 import { ReasonField } from "./history";
 import { ConfirmButton } from "./unsaved-guard";
 import { dayOf } from "@/domain/dates";
+import { NumberInput } from "./ui/number-input";
 
 /** Edit one supplier ↔ item link: pack size, pack name and price. Used on both cards. */
 export function OfferForm({
@@ -33,11 +34,8 @@ export function OfferForm({
         <input type="hidden" name="back" value={back} />
         <div>
           <label className="small">Quantity for that price ({u})</label>
-          <input
+          <NumberInput
             name="packQty"
-            type="number"
-            min="0"
-            step="any"
             defaultValue={offer.packQty?.toString() ?? ""}
             placeholder="e.g. 25"
             style={{ maxWidth: 100 }}
@@ -49,7 +47,7 @@ export function OfferForm({
         </div>
         <div>
           <label className="small">Price (€)</label>
-          <input name="price" type="number" min="0" step="any" defaultValue={offer.price?.toString() ?? ""} style={{ maxWidth: 100 }} autoFocus={open} />
+          <NumberInput name="price" defaultValue={offer.price?.toString() ?? ""} style={{ maxWidth: 100 }} autoFocus={open} />
         </div>
         <div>
           <label className="small">Supplier ref</label>
@@ -175,11 +173,11 @@ export function AddLinkForm({
       {chooser}
       <div>
         <label>Price (€)</label>
-        <input name="price" type="number" min="0" step="any" placeholder="e.g. 12" style={{ maxWidth: 110 }} />
+        <NumberInput name="price" placeholder="e.g. 12" style={{ maxWidth: 110 }} />
       </div>
       <div>
         <label>Quantity for that price ({u})</label>
-        <input name="packQty" type="number" min="0" step="any" placeholder="e.g. 25" style={{ maxWidth: 110 }} />
+        <NumberInput name="packQty" placeholder="e.g. 25" style={{ maxWidth: 110 }} />
       </div>
       <div>
         <label>Pack name (optional)</label>

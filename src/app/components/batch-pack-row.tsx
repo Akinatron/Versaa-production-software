@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { NumberInput } from "./ui/number-input";
+import { wholeNumber } from "@/domain/typed-number";
 
 export interface PackSize {
   productId: string;
@@ -31,7 +33,7 @@ const UNIT_WORD: Record<string, string> = { unit: "units", kg: "kg", L: "L", g: 
  */
 export function PackRows({ sizes, stock }: { sizes: PackSize[]; stock: Record<string, PackStockInfo> }) {
   const [values, setValues] = useState(() => sizes.map((s) => ({ filled: s.initialFilled ?? "", rejected: s.initialRejected ?? "" })));
-  const num = (v: string) => (v === "" ? 0 : Number(v));
+  const num = (v: string) => (v.trim() === "" ? 0 : wholeNumber(v));
 
   // Materials needed by everything typed so far (sizes can share a lid or label).
   const need = new Map<string, number>();
@@ -89,8 +91,8 @@ function Row({
   onChange: (v: { filled?: string; rejected?: string }) => void;
   short: string[];
 }) {
-  const f = filled === "" ? 0 : Number(filled);
-  const r = rejected === "" ? 0 : Number(rejected);
+  const f = filled.trim() === "" ? 0 : wholeNumber(filled);
+  const r = rejected.trim() === "" ? 0 : wholeNumber(rejected);
   const valid = Number.isInteger(f) && Number.isInteger(r) && f >= 0 && r >= 0 && r <= f;
   const accepted = valid ? f - r : null;
   const filledRef = useRef<HTMLInputElement>(null);
@@ -113,14 +115,11 @@ function Row({
       </div>
       <div>
         <label htmlFor={`filled_${index}`}>Filled</label>
-        <input
+        <NumberInput
+          whole
           ref={filledRef}
           id={`filled_${index}`}
           name={`filled_${index}`}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
           value={filled}
           onChange={(e) => onChange({ filled: e.target.value })}
           placeholder="0"
@@ -130,13 +129,10 @@ function Row({
       </div>
       <div>
         <label htmlFor={`rejected_${index}`}>Rejected</label>
-        <input
+        <NumberInput
+          whole
           id={`rejected_${index}`}
           name={`rejected_${index}`}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
           value={rejected}
           onChange={(e) => onChange({ rejected: e.target.value })}
           placeholder="0"

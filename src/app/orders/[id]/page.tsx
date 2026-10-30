@@ -23,6 +23,7 @@ import { SendOrder } from "../../components/send-order";
 import { orderMessageData } from "../message-data";
 import { dayOf } from "@/domain/dates";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function OrderPage({
                         flexWrap: "nowrap",
                       }}
                     >
-                      <input name={`packs_${i}`} type="number" min={0} step={1} required defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
+                      <NumberInput whole name={`packs_${i}`} required defaultValue={l.line.packs ?? ""} aria-label="Packs" style={{ maxWidth: 80 }} />
                       <span className="small">
                         × {l.line.packQty} {u(l.item.stockUnit)}
                       </span>
@@ -110,14 +111,14 @@ export default async function OrderPage({
                         flexWrap: "nowrap",
                       }}
                     >
-                      <input name={`qty_${i}`} type="number" min={0} step="any" required defaultValue={l.line.quantity} aria-label="Quantity" />
+                      <NumberInput name={`qty_${i}`} required defaultValue={l.line.quantity} aria-label="Quantity" />
                       <span className="small">{u(l.item.stockUnit)}</span>
                       <input type="hidden" name={`packs_${i}`} value="" />
                     </div>
                   )}
                 </td>
                 <td>
-                  <input name={`price_${i}`} type="number" min={0} step="any" defaultValue={l.line.unitPrice ?? ""} aria-label="Price per unit" />
+                  <NumberInput name={`price_${i}`} defaultValue={l.line.unitPrice ?? ""} aria-label="Price per unit" />
                 </td>
                 <td className="num">{l.line.unitPrice ? money(new Decimal(l.line.quantity).mul(l.line.unitPrice)) : "no price"}</td>
               </tr>

@@ -11,6 +11,7 @@ import { slug } from "@/domain/seed-catalog";
 import { parseStorage, storageLabel } from "@/domain/storage";
 import { isBoughtKind, KIND_CODE_PREFIX, type BoughtKind } from "@/domain/item-kinds";
 import { parseShelfLife, shelfLifeLabel, shelfLifeOf } from "@/domain/shelf-life";
+import { wholeNumber } from "@/domain/typed-number";
 
 /*
  * Changing the catalog (Settings). Recipes and packaging lists are edited as
@@ -170,7 +171,7 @@ export async function savePackagingDraft(db: DB, input: { versionId: string; lin
       if (!item || item.kind !== "packaging") throw new OperationError("Packaging lines must be packaging items.");
       if (seen.has(item.id)) throw new OperationError(`${item.name} is listed twice.`);
       seen.add(item.id);
-      const n = Number(l.perJar);
+      const n = wholeNumber(String(l.perJar));
       if (!Number.isInteger(n) || n < 1) throw new OperationError(`${item.name}: per jar must be a whole number, 1 or more.`);
       return { packagingVersionId: v.id, itemId: item.id, perJar: n };
     });

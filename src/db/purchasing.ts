@@ -14,6 +14,7 @@ import { lotBalance } from "./ledger";
 import { parseStorage, storageLabel } from "@/domain/storage";
 import { inSentence, isOnTheWay, isPoDone, PO_ON_THE_WAY, PO_STATUS_NAME } from "@/domain/status";
 import { BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
+import { typedNumber } from "@/domain/typed-number";
 
 /*
  * Purchase orders and deliveries.
@@ -143,7 +144,7 @@ export interface PlannedOrderLine extends OrderLine {
  */
 export async function createOrdersFromPlan(db: DB, input: { idempotencyKey: string; runId?: string | null; lines: PlannedOrderLine[] }) {
   const chosen = input.lines.filter(
-    (l) => l.supplierId && ((l.packs ?? 0) > 0 || (l.quantity != null && String(l.quantity).trim() !== "" && Number(l.quantity) > 0)),
+    (l) => l.supplierId && ((l.packs ?? 0) > 0 || (l.quantity != null && typedNumber(String(l.quantity)) > 0)),
   );
   if (chosen.length === 0) throw new OperationError("Nothing to order: choose a supplier and a quantity for at least one item.");
   const bySupplier = new Map<string, PlannedOrderLine[]>();

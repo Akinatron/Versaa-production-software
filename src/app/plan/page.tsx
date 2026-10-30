@@ -9,6 +9,8 @@ import { saveRun } from "./actions";
 import { PageHeader, Empty } from "../components/ui/header";
 import { fmtDate } from "../components/ui/format";
 import { loadOrderDemand } from "@/db/demand";
+import { NumberInput } from "../components/ui/number-input";
+import { typedNumber, wholeNumber } from "@/domain/typed-number";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
   const targets: Record<string, number> = {};
   for (const p of base.products) {
     const raw = params[p.id];
-    if (raw !== undefined && raw.trim() !== "") targets[p.id] = Number(raw);
+    if (raw !== undefined && raw.trim() !== "") targets[p.id] = wholeNumber(raw);
   }
   const hasTargets = Object.values(targets).some((n) => n !== 0);
   const result = hasTargets ? planProduction({ ...base, targets }) : null;
@@ -61,7 +63,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
                   <label htmlFor={p.id} style={{ flex: 1, margin: 0 }}>
                     {p.formatName}
                   </label>
-                  <input id={p.id} name={p.id} type="number" min={0} step={1} inputMode="numeric" defaultValue={params[p.id] ?? ""} placeholder="0" />
+                  <NumberInput whole id={p.id} name={p.id} defaultValue={params[p.id] ?? ""} placeholder="0" />
                 </div>
               ))}
             </div>
@@ -169,9 +171,9 @@ function BatchMode({ params, base }: { params: Record<string, string | undefined
     const split: Record<string, number> = {};
     for (const p of products) {
       const v = params[`s_${p.id}`]?.trim();
-      if (v) split[p.id] = Number(v);
+      if (v) split[p.id] = typedNumber(v);
     }
-    input[sauce.id] = { batches: Number(raw), split };
+    input[sauce.id] = { batches: wholeNumber(raw), split };
   }
   const calculated = Object.keys(input).length > 0;
   const { targets, issues } = calculated ? targetsFromBatches(base, input) : { targets: {}, issues: [] };
@@ -207,13 +209,9 @@ function BatchMode({ params, base }: { params: Record<string, string | undefined
                 <label htmlFor={`b_${sauce.id}`} style={{ flex: 1, margin: 0 }}>
                   Batches
                 </label>
-                <input
+                <NumberInput whole
                   id={`b_${sauce.id}`}
                   name={`b_${sauce.id}`}
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
                   defaultValue={params[`b_${sauce.id}`] ?? ""}
                   placeholder="0"
                 />
@@ -223,14 +221,9 @@ function BatchMode({ params, base }: { params: Record<string, string | undefined
                   <label htmlFor={`s_${p.id}`} style={{ flex: 1, margin: 0 }}>
                     {p.formatName} — % of volume
                   </label>
-                  <input
+                  <NumberInput
                     id={`s_${p.id}`}
                     name={`s_${p.id}`}
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="any"
-                    inputMode="decimal"
                     defaultValue={params[`s_${p.id}`] ?? ""}
                     placeholder="%"
                   />

@@ -175,7 +175,7 @@ input::placeholder, textarea::placeholder { color: var(--faint); }
 input:hover, select:hover, textarea:hover { border-color: var(--faint); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--primary-soft); }
 input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--primary); }
-input[type="number"] { max-width: 120px; }
+input[type="number"], input.num-input { max-width: 120px; }
 input[readonly] { background: var(--surface-2); }
 fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 0 0 16px; }
 legend { font-weight: 650; padding: 0 6px; }
@@ -221,7 +221,7 @@ tbody tr:last-child > td { border-bottom: 0; }
 tbody tr:hover > td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
 .nowrap { white-space: nowrap; }
 td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.stats .v, input[type="number"] { font-variant-numeric: tabular-nums; }
+.stats .v, input[type="number"], input.num-input { font-variant-numeric: tabular-nums; }
 tfoot td { font-weight: 650; border-top: 1px solid var(--border-strong); border-bottom: 0; }
 td input, td select { min-width: 72px; }
 caption { text-align: left; font-weight: 650; padding-bottom: 8px; }

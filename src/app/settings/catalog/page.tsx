@@ -19,6 +19,7 @@ import { SAUCE_COLORS } from "@/domain/sauce-colors";
 import { ItemStorageForm } from "../../components/storage";
 import { ShelfLifeForm } from "../../components/shelf-life";
 import { shelfLifeOf } from "@/domain/shelf-life";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -164,12 +165,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 <td>
                   <form action={setFormatFillAction} className="row" style={{ flexWrap: "nowrap", gap: 6 }}>
                     <input type="hidden" name="formatId" value={f.id} />
-                    <input
+                    <NumberInput whole
                       name="fillMl"
-                      type="number"
-                      min={1}
-                      max={f.capacityMl}
-                      step={1}
                       defaultValue={f.fillMl}
                       required
                       aria-label={`New fill for ${f.name} in ml`}
@@ -195,11 +192,11 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           </div>
           <div>
             <label htmlFor="fcap">Capacity, ml (required)</label>
-            <input id="fcap" name="capacityMl" type="number" min={1} step={1} required />
+            <NumberInput whole id="fcap" name="capacityMl" required />
           </div>
           <div>
             <label htmlFor="ffill">Fill, ml (optional)</label>
-            <input id="ffill" name="fillMl" type="number" min={1} step={1} placeholder="= capacity" />
+            <NumberInput whole id="ffill" name="fillMl" placeholder="= capacity" />
           </div>
           <button type="submit">Add size</button>
         </form>

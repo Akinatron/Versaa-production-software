@@ -15,6 +15,7 @@ import { PageHeader } from "../../../components/ui/header";
 import { fmtDate } from "../../../components/ui/format";
 import { ConfirmButton, GuardedForm } from "../../../components/unsaved-guard";
 import { idOrNotFound } from "@/lib/ids";
+import { NumberInput } from "../../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -259,13 +260,8 @@ export default async function SalesOrderPage({
                               <td>{l.bestBefore ? fmtDate(l.bestBefore, { year: true }) : <span className="muted">not recorded</span>}</td>
                               <td className="num">{l.balance.toString()}</td>
                               <td>
-                                <input
+                                <NumberInput whole
                                   name={`lot_${productId}_${l.id}`}
-                                  type="number"
-                                  min="0"
-                                  max={l.balance.toNumber()}
-                                  step="1"
-                                  inputMode="numeric"
                                   aria-label={`Jars from ${l.code}`}
                                 />
                               </td>
@@ -343,10 +339,10 @@ export default async function SalesOrderPage({
                           </select>
                         </td>
                         <td>
-                          <input name={`jars_${i}`} type="number" min="0" step="1" inputMode="numeric" defaultValue={r.jars} aria-label="Jars" />
+                          <NumberInput whole name={`jars_${i}`} defaultValue={r.jars} aria-label="Jars" />
                         </td>
                         <td>
-                          <input name={`price_${i}`} type="number" min="0" step="0.01" inputMode="decimal" defaultValue={r.price} aria-label="Price per jar" />
+                          <NumberInput name={`price_${i}`} defaultValue={r.price} aria-label="Price per jar" />
                         </td>
                       </tr>
                     ))}

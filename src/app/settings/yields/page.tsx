@@ -9,6 +9,7 @@ import { Flash } from "../../components/flash";
 import { fmtDate } from "../../components/settings-versions";
 import { addRejectEstimate, addYieldEstimate } from "../actions";
 import { PageHeader } from "../../components/ui/header";
+import { NumberInput } from "../../components/ui/number-input";
 
 export const dynamic = "force-dynamic";
 
@@ -127,7 +128,7 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                 <input type="hidden" name="sauceId" value={s.id} />
                 <input type="hidden" name="back" value="/settings/yields" />
                 <label htmlFor={`l-${s.id}`}>New estimate, litres per batch (required)</label>
-                <input id={`l-${s.id}`} name="litresPerBatch" type="number" min="0.1" step="0.1" required />
+                <NumberInput id={`l-${s.id}`} name="litresPerBatch" required />
                 <label htmlFor={`n-${s.id}`} style={{ marginTop: 8 }}>
                   Why this figure (optional)
                 </label>
@@ -194,7 +195,7 @@ export default async function YieldsPage({ searchParams }: { searchParams: Promi
                     >
                       <input type="hidden" name="productId" value={p.id} />
                       <input type="hidden" name="back" value="/settings/yields" />
-                      <input name="percent" type="number" min="0" max="99" step="0.1" required aria-label={`Reject % for ${p.name}`} />
+                      <NumberInput name="percent" required aria-label={`Reject % for ${p.name}`} />
                       <button type="submit" style={{ padding: "6px 12px" }}>
                         Save
                       </button>

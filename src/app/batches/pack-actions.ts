@@ -9,12 +9,13 @@ import { attempt, withOk } from "../components/flash";
 import { keepInput } from "../components/keep-input";
 import { rows } from "../components/item-select";
 import { str } from "../components/form-values";
+import { wholeNumber } from "@/domain/typed-number";
 
 
 function jarLines(form: FormData): PackagingLineInput[] {
   return rows(form, ["product", "filled", "rejected"]).map((l) => {
-    const filled = l.filled === "" ? 0 : Number(l.filled);
-    const rejected = l.rejected === "" ? 0 : Number(l.rejected);
+    const filled = l.filled!.trim() === "" ? 0 : wholeNumber(l.filled);
+    const rejected = l.rejected!.trim() === "" ? 0 : wholeNumber(l.rejected);
     if (Number.isNaN(filled) || Number.isNaN(rejected)) throw new OperationError("Jars must be whole numbers, 0 or more.");
     return { productId: l.product!, filled, rejected };
   });
