@@ -45,7 +45,7 @@ Anything that can't be worked out yet is shown as **unknown**, never as 0. Once 
 
 ## Running it
 
-Requires Node 24, pnpm 12 and PostgreSQL 16. The exact versions live in one place each: `.nvmrc` (Node) and `packageManager` in `package.json` (pnpm, which switches to that version by itself). GitHub reads the same two.
+Requires Node 24, pnpm 12 and PostgreSQL 18 (the same version the desktop app runs inside PGlite). The exact versions live in one place each: `.nvmrc` (Node) and `packageManager` in `package.json` (pnpm, which switches to that version by itself). GitHub reads the same two.
 
 ```sh
 pnpm install
@@ -110,4 +110,4 @@ Commit the SQL, `drizzle/meta/_journal.json` and the new snapshot together, so t
 
 ## Stack
 
-Next.js 15 (TypeScript), PostgreSQL with Drizzle ORM, Vitest. Desktop: Electron with PGlite. Hosting on AWS comes later.
+Next.js 16 (TypeScript), PostgreSQL 18 with Drizzle ORM, Vitest. Desktop: Electron with PGlite. Hosting on AWS comes later.
