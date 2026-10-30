@@ -13,6 +13,7 @@ import { observedRejects, observedYields } from "@/db/history";
 import { activateRecipeDraft, saveRecipeDraft, startRecipeDraft, addItem, setItemActive, addProduct, addFormat } from "@/db/catalog";
 import { planProduction, targetsFromBatches } from "@/domain/planner";
 import { freshDb, testDbUrl } from "./helpers";
+import { today } from "@/domain/dates";
 
 const suite = testDbUrl ? describe : describe.skip;
 
@@ -250,7 +251,7 @@ suite("production, packaging, sales and traceability", () => {
     const [lot] = await db.select().from(t.lots).where(eq(t.lots.code, "OPEN-20261017-001"));
     const before = new Decimal((await db.execute<{ q: string }>(sql`select sum(quantity) as q from movements where lot_id = ${lot!.id}`))[0]!.q);
     await expect(recordStockCount(db, { idempotencyKey: "cnt-0", reason: " ", lines: [{ lotId: lot!.id, counted: "1" }] })).rejects.toThrow(/why/);
-    await recordStockCount(db, { idempotencyKey: "cnt-1", reason: "Monthly count", countedOn: "2026-10-31", lines: [{ lotId: lot!.id, counted: before.minus(1).toString() }] });
+    await recordStockCount(db, { idempotencyKey: "cnt-1", reason: "Monthly count", countedOn: today(), lines: [{ lotId: lot!.id, counted: before.minus(1).toString() }] });
     await recordStockCount(db, { idempotencyKey: "cnt-1", reason: "Monthly count", lines: [{ lotId: lot!.id, counted: "0" }] });
     const moves = await db.select().from(t.movements).where(and(eq(t.movements.lotId, lot!.id), eq(t.movements.type, "count_correction")));
     expect(moves.map((m) => m.quantity)).toEqual(["-1"]);

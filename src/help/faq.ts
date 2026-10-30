@@ -11,6 +11,14 @@ export const FAQ: Faq[] = [
   },
   {
     area: "make",
+    q: "Why does the plan say I'm short when the stock page shows enough?",
+    a: [
+      "Some of it is probably past its best-before by the run's date. Plans leave those lots out and say how much in a warning. The stock pages still show them, because they are physically there. Write them off, or correct the best-before on the lot's page in [Trace](/trace) if it's wrong.",
+    ],
+    related: ["plan-math", "shelf-life"],
+  },
+  {
+    area: "make",
     q: "How many batches do I need for a given number of jars?",
     a: [
       "Enter the jars in [Plan production](/plan) → **By jars** and press **Calculate**: the **Batches** table shows them. In short: jars to fill (with the reject allowance) × fill per jar gives litres, divided by the sauce's litres per batch and rounded up.",

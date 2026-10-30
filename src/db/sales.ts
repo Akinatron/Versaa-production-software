@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
-import { OperationError, lock, lockNames, nextCode, today, type Tx, isDate, zeroOrMore } from "./base";
+import { OperationError, lock, lockNames, nextCode, today, type Tx, isDate, notFuture, zeroOrMore } from "./base";
 import { allocate, jarsFree, lotBalance } from "./ledger";
 import { diff, logChange, needReason, type FieldChange, type Ref } from "./changes";
 import { inSentence, OUTFLOW_NAME, SALES_STATUS_NAME } from "@/domain/status";
@@ -245,6 +245,8 @@ export async function deliverSalesOrder(
   db: DB,
   input: { idempotencyKey: string; salesOrderId: string; deliveredOn?: string; lots?: Record<string, { lotId: string; jars: number }[]> },
 ) {
+  const deliveredOn = input.deliveredOn && isDate(input.deliveredOn) ? input.deliveredOn : today();
+  notFuture(deliveredOn, "The delivery date");
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.outflows).where(eq(t.outflows.idempotencyKey, input.idempotencyKey));
     if (existing) return { outflow: existing, alreadyRecorded: true };
@@ -261,7 +263,7 @@ export async function deliverSalesOrder(
       customerId: o.customerId,
       destination: o.destination,
       reference: o.reference,
-      occurredOn: input.deliveredOn && isDate(input.deliveredOn) ? input.deliveredOn : today(),
+      occurredOn: deliveredOn,
       lines: lines.map((l, i) => ({ productId: l.productId, jars: l.jars, unitPrice: l.unitPrice, lots: lotsByLine[i] })),
       exceptOrderId: o.id,
     });
@@ -296,11 +298,13 @@ export async function recordOutflow(
   },
 ) {
   if (input.type === "waste" && !input.note?.trim()) throw new OperationError("Say why the jars are written off.");
+  const occurredOn = input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today();
+  notFuture(occurredOn, "The date");
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.outflows).where(eq(t.outflows.idempotencyKey, input.idempotencyKey));
     if (existing) return { outflow: existing, alreadyRecorded: true, short: [] as string[] };
     await lock(tx, "jarsOut");
-    const { outflow, short } = await writeOutflow(tx, { ...input, occurredOn: input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today() });
+    const { outflow, short } = await writeOutflow(tx, { ...input, occurredOn });
     await logOutflow(tx, outflow, "create", `${OUTFLOW[outflow.type]} recorded: ${outflow.code}`);
     return { outflow, alreadyRecorded: false, short };
   });
@@ -582,6 +586,7 @@ export async function updateOutflow(
 ) {
   const why = needReason(input.reason, "Say why this is corrected");
   if (!isDate(input.occurredOn)) throw new OperationError("Enter the date.");
+  notFuture(input.occurredOn, "The date");
   return db.transaction(async (tx) => {
     const [o] = await tx.select().from(t.outflows).where(eq(t.outflows.id, input.outflowId));
     if (!o) throw new OperationError("Not found.");

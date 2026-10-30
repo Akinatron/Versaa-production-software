@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { ADJUSTMENT_NAME } from "@/domain/status";
-import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate, readNumber, zeroOrMore } from "./base";
+import { OperationError, checkWholeUnits, itemsById, nextLotCode, today, type Tx, isDate, notFuture, readNumber, zeroOrMore } from "./base";
 import { lotBalance, lotBalanceAt } from "./ledger";
 import { logChange, needReason, type FieldChange, type Ref } from "./changes";
 
@@ -35,6 +35,7 @@ export async function recordStockCount(db: DB, input: { idempotencyKey: string; 
   const lines = input.lines.filter((l) => String(l.counted).trim() !== "");
   if (!lines.length) throw new OperationError("Enter at least one counted quantity.");
   const on = input.countedOn && isDate(input.countedOn) ? input.countedOn : today();
+  notFuture(on, "The count date");
 
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.stockAdjustments).where(eq(t.stockAdjustments.idempotencyKey, input.idempotencyKey));
@@ -104,6 +105,7 @@ export async function recordWriteOff(
   const lines = input.lines.filter((l) => l.lotId && !(readNumber(l.quantity, "Quantity")?.isZero() ?? true));
   if (!lines.length) throw new OperationError("Enter at least one quantity.");
   const on = input.occurredOn && isDate(input.occurredOn) ? input.occurredOn : today();
+  notFuture(on, "The date");
 
   return db.transaction(async (tx) => {
     const [existing] = await tx.select().from(t.stockAdjustments).where(eq(t.stockAdjustments.idempotencyKey, input.idempotencyKey));

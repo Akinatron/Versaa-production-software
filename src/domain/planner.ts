@@ -63,6 +63,8 @@ export interface StockPosition {
   onOrder: Decimal;
   /** Ordered and sent but expected after the run date: not counted in onOrder. */
   lateOnOrder?: Decimal;
+  /** In lots past their best-before by the day it's needed: already left out of onHand. */
+  expired?: Decimal;
 }
 
 export interface PlanInput {
@@ -130,6 +132,8 @@ export interface RequirementLine {
   onOrder: Decimal;
   /** Ordered but expected after the run date, so not counted. */
   lateOnOrder?: Decimal;
+  /** In lots past their best-before by the run date, so not counted in onHand. */
+  expired?: Decimal;
   /**
    * What still has to be bought, or null when it can't be worked out:
    * need − (onHand + onOrder − reservedEarlier), never below 0. Orders count
@@ -300,9 +304,16 @@ export function planProduction(input: PlanInput): PlanResult {
       available,
       onOrder: pos.onOrder,
       ...(pos.lateOnOrder?.gt(0) ? { lateOnOrder: pos.lateOnOrder } : {}),
+      ...(pos.expired?.gt(0) ? { expired: pos.expired } : {}),
       toBuy,
       status,
     });
+    if (pos.expired?.gt(0) && need?.gt(0)) {
+      issues.push({
+        level: "warning",
+        message: `${item.name}: not counting ${formatQty(pos.expired, item.stockUnit)} in lots past best-before by the run date. Write them off, or fix the best-before if it's wrong.`,
+      });
+    }
     if (status === "short" && pos.lateOnOrder?.gt(0)) {
       issues.push({
         level: "warning",

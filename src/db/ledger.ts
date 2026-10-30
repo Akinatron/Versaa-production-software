@@ -1,9 +1,9 @@
 import Decimal from "decimal.js";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import * as t from "./schema";
 import { OperationError, type Tx } from "./base";
 import { unitWord } from "@/domain/quantity";
-import { addDays, localMoment } from "@/domain/dates";
+import { addDays, BUSINESS_TIME_ZONE, localMoment } from "@/domain/dates";
 
 /** Current balance of each lot of the given items (only lots with stock left). */
 export async function lotBalances(tx: Tx, itemIds: string[]) {
@@ -36,12 +36,28 @@ export function endOfDay(day: string) {
   return localMoment(addDays(day, 1), "00:00");
 }
 
-/** What a lot held at the end of a day: every movement dated that day or before. */
+/**
+ * The day a stock movement belongs to (SQL, for a movement aliased `m`): the
+ * date of the record it comes from (delivery, exit, count or write-off,
+ * packaging session, cooked batch), not the moment it was saved. So a
+ * correction, a deletion or a changed date counts on the record's own day,
+ * and "what a lot held on a day" stays right after later fixes. Movements
+ * without a record (opening counts) use their own day.
+ */
+export const MOVEMENT_DAY = sql.raw(`coalesce(
+  case m.doc_type
+    when 'receipt' then (select x.received_on from receipts x where x.id = m.doc_id)
+    when 'outflow' then (select x.occurred_on from outflows x where x.id = m.doc_id)
+    when 'stock_adjustment' then (select x.occurred_on from stock_adjustments x where x.id = m.doc_id)
+    when 'packaging_session' then (select x.packed_on from packaging_sessions x where x.id = m.doc_id)
+    when 'batch_consumption' then (select b.produced_on from batch_consumption c join production_batches b on b.id = c.batch_id where c.id = m.doc_id)
+  end,
+  (m.occurred_at at time zone '${BUSINESS_TIME_ZONE.replaceAll("'", "")}')::date)`);
+
+/** What a lot held at the end of a day: every movement whose record is dated that day or before. */
 export async function lotBalanceAt(tx: Tx, lotId: string, day: string) {
-  const [row] = await tx
-    .select({ balance: sql<string>`coalesce(sum(${t.movements.quantity}), 0)` })
-    .from(t.movements)
-    .where(and(eq(t.movements.lotId, lotId), lt(t.movements.occurredAt, endOfDay(day))));
+  const [row] = await tx.execute<{ balance: string | null }>(sql`
+    select coalesce(sum(m.quantity), 0) as balance from movements m where m.lot_id = ${lotId} and ${MOVEMENT_DAY} <= ${day}::date`);
   return new Decimal(row?.balance ?? 0);
 }
 

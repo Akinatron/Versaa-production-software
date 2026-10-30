@@ -11,7 +11,7 @@ import { PageHeader } from "../../components/ui/header";
 import { fmtDate } from "../../components/ui/format";
 import { GuardedForm } from "../../components/unsaved-guard";
 import { SubmitOnChange } from "../../components/submit-on-change";
-import { endOfDay } from "@/db/ledger";
+import { MOVEMENT_DAY } from "@/db/ledger";
 import { today as todayIso } from "@/domain/dates";
 
 export const dynamic = "force-dynamic";
@@ -46,9 +46,8 @@ function AnyItemSelect({ items, value, kinds }: { items: Item[]; value?: string;
 
 /** Lots with stock now, or (with `on`) at the end of that day; `balance` is then what they held that day. */
 async function lotsOf(itemId: string | null, on?: string) {
-  const until = on ? endOfDay(on) : null;
-  const balance = until
-    ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and m.occurred_at < ${until.toISOString()}), 0)`
+  const balance = on
+    ? sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id} and ${MOVEMENT_DAY} <= ${on}::date), 0)`
     : sql<string>`coalesce((select sum(m.quantity) from movements m where m.lot_id = ${t.lots.id}), 0)`;
   const rows = await db()
     .select({

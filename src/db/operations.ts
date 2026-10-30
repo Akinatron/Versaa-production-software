@@ -17,7 +17,7 @@ import { diff, logChange, needReason } from "./changes";
  */
 
 export { OperationError, today, positive, itemsById, checkWholeUnits, nextLotCode, type Tx } from "./base";
-import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lock, lockNames, isDate, zeroOrMore, type Tx } from "./base";
+import { OperationError, today, positive, itemsById, checkWholeUnits, nextCode, nextLotCode, lock, lockNames, isDate, notFuture, zeroOrMore, type Tx } from "./base";
 import { inSentence, RUN_STATUS_NAME } from "@/domain/status";
 
 // ---------------------------------------------------------------- stock count
@@ -38,6 +38,7 @@ export async function recordOpeningCount(db: DB, input: { idempotencyKey: string
   if (lines.length === 0) throw new OperationError("Enter at least one quantity.");
   const on = input.countedOn === undefined ? today() : input.countedOn;
   if (!isDate(on)) throw new OperationError("Enter the date of the count.");
+  notFuture(on, "The count date");
   if (lines.some((l) => l.bestBefore && !isDate(l.bestBefore))) throw new OperationError("Best-before isn't a valid date.");
   return db.transaction(async (tx) => {
     const done = await tx.select().from(t.movements).where(sql`${t.movements.idempotencyKey} like ${input.idempotencyKey + ":%"}`);
@@ -159,8 +160,9 @@ export async function planForRun(db: DB, runId: string): Promise<PlanResult> {
   if (!run) throw new OperationError("Run not found.");
   const [catalog, stock, targets, held] = await Promise.all([
     loadPlanCatalog(db),
-    // An order that arrives after the run's date doesn't help it.
-    loadStockPositions(db, { arrivingBy: run.plannedFor }),
+    // An order that arrives after the run's date doesn't help it, and a lot
+    // past its best-before by then (or by today, for a late run) can't be used.
+    loadStockPositions(db, { arrivingBy: run.plannedFor, usableOn: run.plannedFor > today() ? run.plannedFor : today() }),
     runTargets(db, runId),
     db
       .select({

@@ -97,25 +97,35 @@ export function sameSplit(a: LotSplit, b: LotSplit) {
  * The split for an automatic quantity. What's already taken stays; more comes
  * from the lots already used first, then the earliest-expiring others; less is
  * given back starting with the latest-expiring lot.
+ *
+ * With `usableOn` (the day it is used), lots past their best-before by then are
+ * never picked automatically. They can still be chosen by hand.
  */
-export function autoSplit(item: { name: string; stockUnit: string }, current: LotSplit, lots: LotInfo[], quantity: Decimal): LotSplit {
+export function autoSplit(item: { name: string; stockUnit: string }, current: LotSplit, lots: LotInfo[], quantity: Decimal, usableOn?: string): LotSplit {
   const target = new Map(current);
   const have = splitTotal(current);
+  const expired = (l: LotInfo) => !!usableOn && !!l.bestBefore && l.bestBefore < usableOn;
   if (quantity.gt(have)) {
     let need = quantity.minus(have);
     const ordered = [...lots.filter((l) => current.has(l.id)), ...lots.filter((l) => !current.has(l.id))];
     for (const lot of ordered) {
       if (need.lte(0)) break;
-      if (lot.balance.lte(0)) continue;
+      if (lot.balance.lte(0) || expired(lot)) continue;
       const take = Decimal.min(need, lot.balance);
       target.set(lot.id, (target.get(lot.id) ?? D0).plus(take));
       need = need.minus(take);
     }
     if (need.gt(0)) {
-      const inStock = lots.reduce((s, l) => s.plus(Decimal.max(D0, l.balance)), D0);
-      throw new OperationError(
-        `Not enough ${item.name}: ${quantity.minus(have)} ${item.stockUnit} more needed, ${inStock} in stock. Record the delivery or correct the stock count first.`,
-      );
+      const usable = lots.filter((l) => !expired(l)).reduce((s, l) => s.plus(Decimal.max(D0, l.balance)), D0);
+      const old = lots.filter((l) => expired(l) && l.balance.gt(0));
+      const more = `${quantity.minus(have)} ${item.stockUnit} more needed`;
+      if (old.length) {
+        const list = old.map((l) => `${l.code} (best before ${l.bestBefore}, ${l.balance} ${item.stockUnit})`).join(", ");
+        throw new OperationError(
+          `Not enough ${item.name} within its best-before: ${more}, ${usable} usable. Past best-before: ${list}. To use it anyway, choose the lots by hand; otherwise write it off or correct the best-before.`,
+        );
+      }
+      throw new OperationError(`Not enough ${item.name}: ${more}, ${usable} in stock. Record the delivery or correct the stock count first.`);
     }
   } else if (quantity.lt(have)) {
     let give = have.minus(quantity);
