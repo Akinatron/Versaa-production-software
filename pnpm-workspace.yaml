@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: true
+# Refuse package versions published less than a day ago (in minutes), so a
+# hijacked release is usually caught before it can be installed.
+minimumReleaseAge: 1440

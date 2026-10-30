@@ -1,0 +1,25 @@
+# Once a week, GitHub proposes new versions of the app's packages in one pull
+# request per folder. It waits a few days after a version comes out, so a
+# broken release has time to be pulled before it reaches Versaa.
+# PGlite and pglite-socket must always move together: grouping keeps them in
+# the same pull request.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      web-app:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      desktop-app:
+        patterns: ["*"]
