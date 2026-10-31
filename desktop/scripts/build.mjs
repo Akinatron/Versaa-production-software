@@ -2,7 +2,7 @@
 //   server/   the Next.js app as a self-contained server (next build, output "standalone")
 //   drizzle/  the database migrations
 //   main.cjs  the desktop shell (src/main.ts and what it imports, bundled)
-//   preload.cjs  the updater's bridge to the Settings page (only with the updater)
+//   preload.cjs  the pages' bridge to the shell (confirm questions; updates with the updater)
 //
 // VERSAA_UPDATER=0 leaves "Check for updates" out completely (see UPDATER.md).
 // VERSAA_DEVTOOLS=0 leaves out developer mode (mock data, delete database).
@@ -11,6 +11,7 @@ import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { flattenNodeModules } from "./flatten-node-modules.mjs";
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const root = path.resolve(desktop, "..");
@@ -24,8 +25,11 @@ execSync("pnpm build", { cwd: root, stdio: "inherit", env: { ...process.env, NEX
 console.log("2/3 Copying the server and migrations…");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-// verbatimSymlinks keeps pnpm's relative links inside node_modules working after the copy.
+// verbatimSymlinks keeps pnpm's relative links working for the copy; then they
+// are removed by making node_modules plain (the Windows installer can't keep them).
 cpSync(path.join(root, dist, "standalone"), path.join(out, "server"), { recursive: true, verbatimSymlinks: true });
+const flat = flattenNodeModules(path.join(out, "server"));
+console.log(`   server node_modules made plain (${flat.packages} packages, no symlinks)`);
 cpSync(path.join(root, dist, "static"), path.join(out, "server", dist, "static"), { recursive: true });
 if (existsSync(path.join(root, "public"))) cpSync(path.join(root, "public"), path.join(out, "server/public"), { recursive: true });
 cpSync(path.join(root, "drizzle"), path.join(out, "drizzle"), { recursive: true });
@@ -62,16 +66,15 @@ await build({
   },
   logLevel: "warning",
 });
-if (updater) {
-  await build({
-    entryPoints: [path.join(desktop, "src/updater/preload.ts")],
-    outfile: path.join(out, "preload.cjs"),
-    bundle: true,
-    platform: "node",
-    format: "cjs",
-    target: "node24",
-    external: ["electron"],
-    logLevel: "warning",
-  });
-}
+await build({
+  entryPoints: [path.join(desktop, "src/preload.ts")],
+  outfile: path.join(out, "preload.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  external: ["electron"],
+  define: { __VERSAA_UPDATER__: String(updater) },
+  logLevel: "warning",
+});
 console.log(`Done: desktop/build (${updater ? `with "Check for updates", build ${buildInfo.number}` : "without updater"})`);

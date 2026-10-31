@@ -42,8 +42,8 @@ For the web version, set `VERSAA_DEVTOOLS=0` in the server's environment.
 
 1. Delete `desktop/src/updater/`, `desktop/scripts/release-manifest.mjs`, `.github/workflows/desktop-release.yml`, `src/app/settings/app-updates.tsx`, `test/desktop-updater.test.ts` and this file.
 2. In `src/app/settings/page.tsx`, remove the `AppUpdates` import and `<AppUpdates />` (in the developer mode section), and the "Check for updates" line of the developer mode notice in `src/app/settings/developer-dialogs.tsx`.
-3. In `desktop/src/main.ts`, remove the lines that mention `updater` (`__VERSAA_UPDATER__`, `preload: updater?.preloadPath`, `setupUpdater`, `markStarted`, `recoverFromFailedStart`).
-4. In `desktop/scripts/build.mjs`, remove the `updater` / `buildInfo` lines, the `define` entry and the preload build. In `desktop/package.json`, remove `build/preload.cjs` from `files`. In `desktop/.gitignore`, remove `release/`.
+3. In `desktop/src/main.ts`, remove the lines that mention `updater` (`__VERSAA_UPDATER__`, `setupUpdater`, `markStarted`, `recoverFromFailedStart`). In `desktop/src/preload.ts`, remove `__VERSAA_UPDATER__` and the `updates` part (keep `confirm`).
+4. In `desktop/scripts/build.mjs`, remove the `updater` / `buildInfo` lines and the `__VERSAA_UPDATER__` / `__VERSAA_BUILD__` `define` entries (keep the preload build: it also carries `confirm`). In `desktop/.gitignore`, remove `release/`.
 5. On GitHub, delete the `desktop-*` releases and tags.
 
 `git grep -i updater` should then find nothing. The downgrade check in `desktop/src/database.ts` is not part of the updater; keep it.

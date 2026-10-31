@@ -5,6 +5,16 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, useTra
 const MESSAGE = "You have changes that aren't saved yet. Leave this page and lose them?";
 
 /**
+ * Asks "are you sure?". In the desktop app the shell asks, so the buttons are
+ * in English on any computer (a plain confirm() gets Windows' own "Aceptar /
+ * Cancelar" on a Spanish Windows). In a browser, the browser asks.
+ */
+export function askToConfirm(message: string): boolean {
+  const desktop = (globalThis as { versaaDesktop?: { confirm?: (text: string) => boolean } }).versaaDesktop;
+  return desktop?.confirm ? desktop.confirm(message) : window.confirm(message);
+}
+
+/**
  * Warn before leaving the page while `dirty`: closing or reloading the tab
  * (browser prompt) and clicking a link inside the app (confirm dialog).
  */
@@ -24,7 +34,7 @@ export function useUnsavedWarning(dirty: boolean) {
       if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
       const to = new URL(a.href, window.location.href);
       if (to.pathname === window.location.pathname && to.search === window.location.search) return;
-      if (!window.confirm(MESSAGE)) {
+      if (!askToConfirm(MESSAGE)) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -135,7 +145,7 @@ export function ConfirmButton({ message, children, ...rest }: React.ButtonHTMLAt
       onClick={(e) => {
         // Missing fields first (the browser points at them), then the question.
         if (e.currentTarget.form && !e.currentTarget.form.checkValidity()) return;
-        if (!window.confirm(message)) e.preventDefault();
+        if (!askToConfirm(message)) e.preventDefault();
       }}
     >
       {children}
