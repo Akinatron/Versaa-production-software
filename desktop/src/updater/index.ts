@@ -251,9 +251,6 @@ export async function setupUpdater(options: Options) {
   ipcMain.handle("versaa-updates:install", guard(install));
 }
 
-/** The preload script that gives the Settings page access to the updater. */
-export const preloadPath = path.join(__dirname, "preload.cjs");
-
 /** Call once the app has started fine: an update under way is then finished. */
 export async function markStarted() {
   const pending = await readJson<Pending>(file("pending.json"));

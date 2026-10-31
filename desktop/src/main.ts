@@ -10,7 +10,7 @@
  *   3. the Next.js server, as a background process on another local port.
  * Nothing listens outside this computer (127.0.0.1 only).
  */
-import { app, BrowserWindow, dialog, Menu, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { randomBytes } from "node:crypto";
@@ -26,6 +26,19 @@ declare const __VERSAA_UPDATER__: boolean;
 // Developer mode (Settings): off in a build made with VERSAA_DEVTOOLS=0.
 declare const __VERSAA_DEVTOOLS__: boolean;
 const updater = __VERSAA_UPDATER__ ? (require("./updater") as typeof import("./updater")) : undefined;
+
+// The app is in English, so what the window draws itself is too: date boxes
+// (day/month/year), "Please fill out this field" and the like. Without this
+// they follow the computer's language (Spanish on a Spanish Windows).
+app.commandLine.appendSwitch("lang", "en-GB");
+// The bridge the pages get as window.versaaDesktop (src/preload.ts).
+const preloadPath = path.join(__dirname, "preload.cjs");
+
+// Windows replaces buttons named OK, Cancel, Yes, No, Retry or Close with its
+// own, in the computer's language. So the shell's questions use other words.
+function errorBox(title: string, text: string) {
+  dialog.showMessageBoxSync({ type: "error", message: title, detail: text, buttons: ["Got it"], noLink: true });
+}
 
 // Everything Versaa keeps: on Windows %APPDATA%\Versaa\data, on a Mac ~/Library/Application Support/Versaa/data.
 const dataDir = path.join(app.getPath("userData"), "data");
@@ -151,10 +164,7 @@ async function startServer(databaseUrl: string): Promise<string> {
     log("server exited with code", code);
     server = undefined;
     if (!quitting) {
-      dialog.showErrorBox(
-        "Versaa stopped",
-        `The app's server stopped unexpectedly (code ${code}). Versaa will close; open it again.\n\nDetails are in ${paths.log}`,
-      );
+      errorBox("Versaa stopped", `The app's server stopped unexpectedly (code ${code}). Versaa will close; open it again.\n\nDetails are in ${paths.log}`);
       app.quit();
     }
   });
@@ -189,6 +199,21 @@ function isAppUrl(target: string) {
   }
 }
 
+// A page's "are you sure?" (window.versaaDesktop.confirm). Answers only the app's own pages.
+ipcMain.on("versaa:confirm", (event, message: unknown) => {
+  if (!isAppUrl(event.senderFrame?.url ?? "")) return (event.returnValue = false);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const options: Electron.MessageBoxSyncOptions = {
+    type: "question",
+    message: String(message),
+    buttons: ["Continue", "Go back"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  };
+  event.returnValue = (win ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options)) === 0;
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1360,
@@ -198,7 +223,7 @@ function createWindow() {
     title: "Versaa",
     backgroundColor: "#f6f4ef",
     show: false,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: updater?.preloadPath },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: preloadPath },
   });
   win.once("ready-to-show", () => win.show());
   // App pages (a delivery note opened in a new tab, for example) open in a new window; anything else in the browser.
@@ -299,12 +324,15 @@ async function backupNow() {
     const { response } = await dialog.showMessageBox({
       message: "Backup saved",
       detail: `The database was copied to:\n${file}\n\nThis copy is kept until you delete it. Uploaded delivery notes and invoices are in the "uploads" folder of the data folder.`,
-      buttons: ["OK", process.platform === "darwin" ? "Show in Finder" : "Show in folder"],
+      buttons: ["Done", process.platform === "darwin" ? "Show in Finder" : "Show in folder"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
     });
     if (response === 1) shell.showItemInFolder(file);
   } catch (err) {
     log("backup failed", err);
-    dialog.showErrorBox("Backup failed", String(err));
+    errorBox("Backup failed", String(err));
   }
 }
 
@@ -402,7 +430,7 @@ if (!app.requestSingleInstanceLock()) {
       }
       // Close whatever did start (the database may be open) before leaving.
       await shutdown();
-      dialog.showErrorBox("Versaa could not start", `${err instanceof Error ? err.message : String(err)}\n\nDetails are in ${paths.log}`);
+      errorBox("Versaa could not start", `${err instanceof Error ? err.message : String(err)}\n\nDetails are in ${paths.log}`);
       app.exit(1);
     }),
   );
