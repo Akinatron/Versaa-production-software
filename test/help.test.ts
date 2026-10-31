@@ -41,6 +41,7 @@ function allText(): string[] {
     ...ARTICLES.flatMap((a) => [
       a.title,
       a.summary,
+      ...(a.keywords ?? []),
       ...(a.before ?? []),
       ...(a.steps ?? []),
       ...(a.changes ?? []),
@@ -99,6 +100,7 @@ describe("help content", () => {
     const text = allText().join("\n");
     expect(text).not.toMatch(/\bmac(os)?\b|numbers app|finder|terminal|pnpm/i);
     expect(text).not.toMatch(/[áéíóúñ¿¡]/i);
+    expect(text).not.toMatch(/\b(albaran|pedidos?|clientes?|caducidad|rendimiento|lotes?|recetas?|tarros?|proveedor(es)?|entregas?|salsas?)\b/i);
   });
 
   it("maps screen addresses to their guide", () => {

@@ -119,7 +119,7 @@ export const settings: Article[] = [
     title: "Yields and reject rates",
     summary: "Litres per batch and reject rates: how they start as estimates and become measured.",
     go: { href: "/settings/yields", label: "Open Yields & rejects" },
-    keywords: ["yield", "litres per batch", "reject rate", "estimate", "measured", "rendimiento"],
+    keywords: ["yield", "litres per batch", "reject rate", "estimate", "measured"],
     more: [
       { h: "Litres per batch" },
       "How many litres of filled product one batch gives. Until a batch of that sauce is closed, the planner uses the last estimate you entered (marked **estimate**). Enter one under **New estimate, litres per batch** and press **Save estimate**; old estimates are kept, never overwritten.",
