@@ -20,12 +20,12 @@ function input(overrides: Partial<PlanInput> & { litres?: Record<string, string>
 const req = (r: ReturnType<typeof planProduction>, id: string) => r.requirements.find((x) => x.itemId === id)!;
 
 describe("seed catalog", () => {
-  it("matches what Pablo gave: 25 ingredients, 20 packaging items, 9 products, 13/14/10 lines", () => {
+  it("matches what Pablo gave: 23 ingredients, 20 packaging items, 9 products, 12/14/10 lines", () => {
     const c = loadSeedCatalog();
-    expect(c.items.filter((i) => i.kind === "ingredient")).toHaveLength(25);
+    expect(c.items.filter((i) => i.kind === "ingredient")).toHaveLength(23);
     expect(c.items.filter((i) => i.kind === "packaging")).toHaveLength(20);
     expect(c.products).toHaveLength(9);
-    expect(c.sauces.map((s) => s.lines.length)).toEqual([13, 14, 10]);
+    expect(c.sauces.map((s) => s.lines.length)).toEqual([12, 14, 10]);
   });
 
   it("keeps recipe quantities exactly as recorded", () => {
@@ -45,17 +45,17 @@ describe("units", () => {
 
 describe("planProduction", () => {
   it("works out batches from litres per batch and reports the surplus", () => {
-    // 40 × 700 ml = 28 L of Tikka. With an estimate of 25 L/batch → 2 batches, 22 L surplus.
-    const r = planProduction(input({ litres: { "indiase-tikka-masala": "25" }, targets: { "indiase-tikka-masala-700": 40 } }));
+    // 40 jars of 950 ml, each filled with 750 ml = 30 L of Tikka. With an estimate of 25 L/batch → 2 batches, 20 L surplus.
+    const r = planProduction(input({ litres: { "indiase-tikka-masala": "25" }, targets: { "indiase-tikka-masala-950": 40 } }));
     const s = r.sauces[0]!;
-    expect(s.litresNeeded.toString()).toBe("28");
+    expect(s.litresNeeded.toString()).toBe("30");
     expect(s.batches).toBe(2);
-    expect(s.surplusLitres!.toString()).toBe("22");
+    expect(s.surplusLitres!.toString()).toBe("20");
     expect(r.issues.some((i) => i.message.includes("estimate"))).toBe(true);
   });
 
   it("scales the recipe by batches and converts g to kg", () => {
-    const r = planProduction(input({ litres: { "indiase-tikka-masala": "25" }, targets: { "indiase-tikka-masala-700": 40 } }));
+    const r = planProduction(input({ litres: { "indiase-tikka-masala": "25" }, targets: { "indiase-tikka-masala-950": 40 } }));
     expect(req(r, "ing-onions").required!.toString()).toBe("11.708");
     expect(req(r, "ing-ground-cumin").required!.toString()).toBe("0.1114");
     expect(req(r, "ing-sunflower-oil").unit).toBe("L");
@@ -66,7 +66,7 @@ describe("planProduction", () => {
     const r = planProduction(
       input({
         litres: { "indiase-tikka-masala": "25", "italiaanse-bolognese": "25", "liberiaanse-kip": "25" },
-        targets: { "indiase-tikka-masala-500": 10, "italiaanse-bolognese-500": 10, "liberiaanse-kip-250": 10 },
+        targets: { "indiase-tikka-masala-450": 10, "italiaanse-bolognese-450": 10, "liberiaanse-kip-250": 10 },
       }),
     );
     // One batch each: 5.854 + 4.337 + 7 kg onions.
@@ -77,17 +77,17 @@ describe("planProduction", () => {
   });
 
   it("without a yield figure, ingredients are unknown (not 0) but packaging is still worked out", () => {
-    const r = planProduction(input({ targets: { "italiaanse-bolognese-700": 12 } }));
+    const r = planProduction(input({ targets: { "italiaanse-bolognese-950": 12 } }));
     expect(r.sauces[0]!.batches).toBeNull();
     expect(req(r, "ing-minced-beef").required).toBeNull();
     expect(req(r, "ing-minced-beef").status).toBe("unknown");
-    expect(req(r, "pkg-700-ml-container").required!.toString()).toBe("12");
+    expect(req(r, "pkg-950-ml-container").required!.toString()).toBe("12");
     expect(r.issues.some((i) => i.level === "blocker" && i.message.includes("litres-per-batch"))).toBe(true);
   });
 
-  it("shares the small lid between 500 ml and 250 ml jars and keeps lid labels per sauce", () => {
+  it("shares the small lid between 450 ml and 250 ml jars and keeps lid labels per sauce", () => {
     const r = planProduction(
-      input({ targets: { "indiase-tikka-masala-500": 30, "indiase-tikka-masala-250": 20, "liberiaanse-kip-250": 5 } }),
+      input({ targets: { "indiase-tikka-masala-450": 30, "indiase-tikka-masala-250": 20, "liberiaanse-kip-250": 5 } }),
     );
     expect(req(r, "pkg-small-lid").required!.toString()).toBe("55");
     expect(req(r, "pkg-tikka-lid-label-small").required!.toString()).toBe("50");
@@ -96,31 +96,31 @@ describe("planProduction", () => {
   });
 
   it("adds jars for expected rejects on top of the sellable target", () => {
-    const cat = input({ targets: { "liberiaanse-kip-700": 95 } });
-    cat.products.find((p) => p.id === "liberiaanse-kip-700")!.reject = { rate: D("0.05"), source: "estimate" };
+    const cat = input({ targets: { "liberiaanse-kip-950": 95 } });
+    cat.products.find((p) => p.id === "liberiaanse-kip-950")!.reject = { rate: D("0.05"), source: "estimate" };
     const r = planProduction(cat);
     expect(r.products[0]!.jarsToFill).toBe(100);
-    expect(req(r, "pkg-liberian-bottle-label-700").required!.toString()).toBe("100");
+    expect(req(r, "pkg-liberian-bottle-label-950").required!.toString()).toBe("100");
   });
 
   it("warns when the reject rate is unknown instead of silently assuming none", () => {
-    const r = planProduction(input({ targets: { "liberiaanse-kip-700": 10 } }));
+    const r = planProduction(input({ targets: { "liberiaanse-kip-950": 10 } }));
     expect(r.issues.some((i) => i.message.includes("reject rate unknown"))).toBe(true);
   });
 
   it("does not offer stock reserved by earlier runs, and counts open orders", () => {
     const stock: Record<string, StockPosition> = {
-      "pkg-700-ml-container": { onHand: D(100), reservedEarlier: D(70), onOrder: D(5) },
+      "pkg-950-ml-container": { onHand: D(100), reservedEarlier: D(70), onOrder: D(5) },
     };
-    const r = planProduction(input({ stock, targets: { "indiase-tikka-masala-700": 50 } }));
-    const c = req(r, "pkg-700-ml-container");
+    const r = planProduction(input({ stock, targets: { "indiase-tikka-masala-950": 50 } }));
+    const c = req(r, "pkg-950-ml-container");
     expect(c.available!.toString()).toBe("30");
     expect(c.toBuy!.toString()).toBe("15");
     expect(c.status).toBe("short");
   });
 
   it("an item never counted has unknown coverage, not zero stock", () => {
-    const r = planProduction(input({ targets: { "indiase-tikka-masala-700": 1 } }));
+    const r = planProduction(input({ targets: { "indiase-tikka-masala-950": 1 } }));
     const c = req(r, "pkg-large-lid");
     expect(c.onHand).toBeNull();
     expect(c.toBuy).toBeNull();

@@ -38,13 +38,13 @@ suite("recording operations", () => {
       countedOn: "2026-10-17",
       lines: [
         { itemId: ids["ing-onions"]!, quantity: "12.5", bestBefore: "2026-11-01" },
-        { itemId: ids["pkg-700-ml-container"]!, quantity: "0" },
+        { itemId: ids["pkg-950-ml-container"]!, quantity: "0" },
         { itemId: ids["pkg-large-lid"]!, quantity: "" }, // left blank = not counted
       ],
     });
     expect(r.created).toBe(2);
     expect(await onHand("ing-onions")).toBe("12.5");
-    expect(await onHand("pkg-700-ml-container")).toBe("0");
+    expect(await onHand("pkg-950-ml-container")).toBe("0");
     expect(await onHand("pkg-large-lid")).toBeNull();
 
     const again = await recordOpeningCount(db, { idempotencyKey: "open-1", lines: [{ itemId: ids["ing-onions"]!, quantity: "12.5" }] });
@@ -129,7 +129,7 @@ suite("recording operations", () => {
   });
 
   it("confirming a run needs a yield figure, then freezes the forecast and reserves stock", async () => {
-    const run = await createRun(db, { idempotencyKey: "run-aaaa", plannedFor: "2026-10-24", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 10 } });
+    const run = await createRun(db, { idempotencyKey: "run-aaaa", plannedFor: "2026-10-24", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 10 } });
     await expect(confirmRun(db, run.id)).rejects.toThrow(/litres-per-batch/);
 
     await db.insert(t.yieldFigures).values({ sauceId: ids["liberiaanse-kip"]!, litresPerBatch: "26", source: "estimate" });

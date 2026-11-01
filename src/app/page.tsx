@@ -6,6 +6,7 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import { loadPlanInput } from "@/db/planning";
 import { finishedAvailability } from "@/db/sales";
+import { loadOffers } from "@/db/suppliers";
 import { formatQty, type UnitCode } from "@/domain/quantity";
 import { RUN_STATUS } from "./components/labels";
 import { PageHeader } from "./components/ui/header";
@@ -140,6 +141,27 @@ export default async function Home() {
       ),
       sub: uncounted.length <= 4 ? uncounted.map((i) => i.name).join(", ") : "Their stock is unknown until they are.",
       action: { href: "/stock/count", label: "Count stock" },
+    });
+  }
+  // Getting started: what still needs a supplier and price (same rule as Help → Set up Versaa).
+  const priced = new Set((await loadOffers(d)).filter((o) => o.price !== null).map((o) => o.itemId));
+  const noPrice = input.items.filter((i) => active.has(i.id) && !priced.has(i.id));
+  if (noPrice.length) {
+    alerts.push({
+      level: "warn",
+      text: <>{plural(noPrice.length, "item")} without a supplier and price</>,
+      sub: (
+        <>
+          Open each one to add who sells it and the price:{" "}
+          {noPrice.map((i, n) => (
+            <span key={i.id}>
+              {n > 0 && ", "}
+              <Link href={`/items/${i.id}?tab=suppliers`}>{i.name}</Link>
+            </span>
+          ))}
+        </>
+      ),
+      action: { href: "/suppliers", label: "Suppliers" },
     });
   }
 

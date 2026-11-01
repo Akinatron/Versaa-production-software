@@ -24,7 +24,7 @@ export const make: Article[] = [
             [
               "**By batches**",
               "Batches of each sauce, and how each batch is split over the sizes in % of its volume (must add up to 100%).",
-              'You think in batches, e.g. "2 batches of Bolognese, half in 500 ml, half in 250 ml".',
+              'You think in batches, e.g. "2 batches of Bolognese, half in 450 ml, half in 250 ml".',
             ],
             [
               "**From sales orders**",

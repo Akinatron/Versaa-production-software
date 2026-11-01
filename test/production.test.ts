@@ -54,7 +54,7 @@ suite("production, packaging, sales and traceability", () => {
   afterAll(async () => db?.$client.end());
 
   it("confirming a run creates its batches, each pinned to the recipe version", async () => {
-    const run = await createRun(db, { idempotencyKey: "run-k1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 30 } });
+    const run = await createRun(db, { idempotencyKey: "run-k1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 30 } });
     runId = run.id;
     await confirmRun(db, run.id);
     const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
@@ -121,7 +121,7 @@ suite("production, packaging, sales and traceability", () => {
   it("packaging uses materials for every filled jar but only stocks accepted ones; litres come from the jars", async () => {
     const [cooked] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.id, batchId));
     expect(cooked!.status).toBe("awaiting_packaging");
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const small = ids["Liberiaanse Kip 250 ml"]!;
 
     await expect(
@@ -145,16 +145,16 @@ suite("production, packaging, sales and traceability", () => {
     expect(avail.find((a) => a.productId === big)!.onHand.toString()).toBe("28");
     expect(avail.find((a) => a.productId === small)!.onHand.toString()).toBe("20");
 
-    // 30 + 20 filled jars used their materials; the large lid only for the 700 ml.
+    // 30 + 20 filled jars used their materials; the large lid only for the 950 ml.
     const stock = await loadStockPositions(db);
     expect(stock[ids["pkg-large-lid"]!]!.onHand!.toString()).toBe("470");
-    expect(stock[ids["pkg-700-ml-container"]!]!.onHand!.toString()).toBe("470");
+    expect(stock[ids["pkg-950-ml-container"]!]!.onHand!.toString()).toBe("470");
     expect(stock[ids["pkg-250-ml-container"]!]!.onHand!.toString()).toBe("480");
 
-    // Litres: 30 × 0.7 + 20 × 0.25 = 26 L, rejects included. No bulk sauce stock.
+    // Litres: 30 × 0.75 + 20 × 0.2 = 26.5 L (what goes in each jar), rejects included. No bulk sauce stock.
     const trace = await traceBatch(db, batchId);
     expect(trace!.bulk).toBeNull();
-    expect(trace!.filledLitres.toString()).toBe("26");
+    expect(trace!.filledLitres.toString()).toBe("26.5");
     expect(trace!.jarsBySize.find((j) => j.productId === big)).toMatchObject({ filled: 30, rejected: 2, accepted: 28 });
   });
 
@@ -172,19 +172,19 @@ suite("production, packaging, sales and traceability", () => {
   it("history: closed batches give an observed yield and reject rate that the planner then uses", async () => {
     const y = (await observedYields(db)).get(ids["liberiaanse-kip"]!)!;
     expect(y.batches).toBe(1);
-    expect(y.avgFilledLitres.toString()).toBe("26");
-    expect(y.avgSellableLitres.toString()).toBe("24.6");
-    const rj = (await observedRejects(db)).get(ids["Liberiaanse Kip 700 ml"]!)!;
+    expect(y.avgFilledLitres.toString()).toBe("26.5");
+    expect(y.avgSellableLitres.toString()).toBe("25");
+    const rj = (await observedRejects(db)).get(ids["Liberiaanse Kip 950 ml"]!)!;
     expect(rj.rate.toString()).toBe("0.0667");
 
     const catalog = await loadPlanCatalog(db);
     const kip = catalog.sauces.find((s) => s.id === ids["liberiaanse-kip"])!;
     expect(kip.yield.source).toBe("observed");
-    expect(kip.yield.litresPerBatch!.toString()).toBe("26");
+    expect(kip.yield.litresPerBatch!.toString()).toBe("26.5");
   });
 
   it("a sales order reserves jars; delivering takes them out once, from the batch lot", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const shop = await addCustomer(db, { name: "Delicatessen De Kaai" });
     const { order } = await createSalesOrder(db, { idempotencyKey: "so-1", customerId: shop.id, orderedOn: "2026-10-22", lines: [{ productId: big, jars: 20, unitPrice: "6.50" }] });
     let a = (await finishedAvailability(db)).find((x) => x.productId === big)!;
@@ -228,7 +228,7 @@ suite("production, packaging, sales and traceability", () => {
   });
 
   it("outbound: own use, tests, gifts and waste take jars out by reason, stay traceable and aren't sales", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const before = (await finishedAvailability(db)).find((x) => x.productId === big)!.onHand;
     const { outflow } = await recordOutflow(db, { idempotencyKey: "test-1", type: "test", note: "Shelf-life check", occurredOn: "2026-10-24", lines: [{ productId: big, jars: 1 }] });
     await recordOutflow(db, { idempotencyKey: "test-1", type: "test", occurredOn: "2026-10-24", lines: [{ productId: big, jars: 1 }] });
@@ -299,21 +299,21 @@ suite("production, packaging, sales and traceability", () => {
 
   it("planning by batches and size split gives jar targets for the same planner", async () => {
     const catalog = await loadPlanCatalog(db);
-    const kip = catalog.sauces.find((s) => s.id === ids["liberiaanse-kip"])!; // 26 L observed
-    const big = ids["Liberiaanse Kip 700 ml"]!;
-    const mid = ids["Liberiaanse Kip 500 ml"]!;
+    const kip = catalog.sauces.find((s) => s.id === ids["liberiaanse-kip"])!; // 26.5 L observed
+    const big = ids["Liberiaanse Kip 950 ml"]!;
+    const mid = ids["Liberiaanse Kip 450 ml"]!;
     const { targets, issues } = targetsFromBatches(catalog, { [kip.id]: { batches: 2, split: { [big]: 50, [mid]: 50 } } });
     expect(issues).toEqual([]);
-    // 52 L: 26 L → 37 large jars filled (6.67% rejects → 34 sellable); 26 L → 52 medium (no reject data → 52).
-    expect(targets[big]).toBe(34);
-    expect(targets[mid]).toBe(52);
+    // 53 L: 26.5 L → 35 large jars of 750 ml filled (6.67% rejects → 32 sellable); 26.5 L → 75 medium of 350 ml (no reject data → 75).
+    expect(targets[big]).toBe(32);
+    expect(targets[mid]).toBe(75);
     const bad = targetsFromBatches(catalog, { [kip.id]: { batches: 1, split: { [big]: 60 } } });
     expect(bad.issues[0]!.message).toMatch(/60%/);
   });
 
   it("an extra ingredient is added to the batch, a not-made batch frees its reservation, incidents record once", async () => {
     await db.insert(t.yieldFigures).values({ sauceId: ids["italiaanse-bolognese"]!, litresPerBatch: "30", source: "estimate" });
-    const run = await createRun(db, { idempotencyKey: "run-b2", plannedFor: "2026-10-27", targets: { [ids["Italiaanse Bolognese 700 ml"]!]: 50 } });
+    const run = await createRun(db, { idempotencyKey: "run-b2", plannedFor: "2026-10-27", targets: { [ids["Italiaanse Bolognese 950 ml"]!]: 50 } });
     await confirmRun(db, run.id);
     const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id)).orderBy(t.productionBatches.code);
     expect(batches).toHaveLength(2);

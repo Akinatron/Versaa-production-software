@@ -27,7 +27,7 @@ afterAll(async () => {
   for (const db of dbs) await db.$client.end();
 });
 
-/** 10 jars of 700 ml in batch 1's lot and 5 in batch 2's. */
+/** 10 jars of 950 ml in batch 1's lot and 5 in batch 2's. */
 async function jarsInTwoLots() {
   const db = await freshDb();
   dbs.push(db);
@@ -43,7 +43,7 @@ async function jarsInTwoLots() {
     countedOn: "2026-10-17",
     lines: [...kip.recipe!.lines.map((l) => ({ itemId: l.itemId, quantity: "1000" })), ...pkg.map((itemId) => ({ itemId, quantity: "500" }))],
   });
-  const big = ids["Liberiaanse Kip 700 ml"]!;
+  const big = ids["Liberiaanse Kip 950 ml"]!;
   const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [big]: 60 } });
   await confirmRun(db, run.id);
   const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));

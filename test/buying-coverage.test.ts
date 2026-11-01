@@ -43,7 +43,7 @@ async function setup(onionKg: string) {
       ...pkg.map((itemId) => ({ itemId, quantity: "500" })),
     ],
   });
-  return { db, ids, onion: ids["ing-onions"]!, kip700: ids["Liberiaanse Kip 700 ml"]! };
+  return { db, ids, onion: ids["ing-onions"]!, kip700: ids["Liberiaanse Kip 950 ml"]! };
 }
 
 const line = (plan: PlanResult, itemId: string) => plan.requirements.find((r) => r.itemId === itemId)!;
@@ -165,7 +165,7 @@ describe.skipIf(!testDbUrl)("a run's reservation never grows on its own", () => 
     const { run, batches } = await confirmedRun(db, "run", { [kip700]: 30 });
     const b = batches[0]!;
     await cook(db, b.id, "cook-1");
-    const container = ids["pkg-700-ml-container"]!;
+    const container = ids["pkg-950-ml-container"]!;
     const held = new Decimal(await reserved(db, run.id, container));
     const { session } = await recordPackaging(db, {
       idempotencyKey: "pack",
@@ -215,7 +215,7 @@ describe.skipIf(!testDbUrl)("suppliers not in use", () => {
     expect(offers[0]!.standIn).toBe(true);
 
     // The budget prices onions at the stand-in, never at the supplier not in use.
-    const kip700 = (await db.select().from(t.products).where(eq(t.products.name, "Liberiaanse Kip 700 ml")))[0]!.id;
+    const kip700 = (await db.select().from(t.products).where(eq(t.products.name, "Liberiaanse Kip 950 ml")))[0]!.id;
     const plan = planProduction(await loadPlanInput(db, { [kip700]: 10 }));
     const budget = await planBudget(db, plan);
     const onionLine = budget.groups.flatMap((g) => g.lines).find((l) => l.itemId === onion);

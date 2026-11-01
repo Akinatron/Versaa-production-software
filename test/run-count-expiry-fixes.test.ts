@@ -53,7 +53,7 @@ async function setup(onionKg: string, opts: { countedOn?: string; onionBestBefor
       ...pkg.map((itemId) => ({ itemId, quantity: opts.pkgQty ?? "500" })),
     ],
   });
-  return { db, ids, onion, pkg, big: ids["Liberiaanse Kip 700 ml"]! };
+  return { db, ids, onion, pkg, big: ids["Liberiaanse Kip 950 ml"]! };
 }
 
 async function runWith(db: DB, key: string, targets: Record<string, number>, plannedFor = day(-10)) {

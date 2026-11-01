@@ -75,7 +75,7 @@ describe("frozen plan", () => {
       countedOn: "2026-10-17",
       lines: kip.recipe!.lines.map((l) => ({ itemId: l.itemId, quantity: "1000" })),
     });
-    const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 60 } });
+    const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 60 } });
     expect(await frozenPlan(db, run.id)).toBeNull();
     const before = await planForRun(db, run.id);
     await confirmRun(db, run.id);

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { DB } from "./client";
 import * as t from "./schema";
 import { loadSeedCatalog } from "@/domain/seed-catalog";
@@ -9,8 +9,10 @@ import { getSetting, setSetting } from "./app-settings";
 /**
  * Load the starting catalog. Safe to run more than once: anything that
  * already exists (by code) is left untouched, so it never rewrites history.
+ * `suppliers: false` leaves out Pablo's suppliers and prices (mock data and
+ * most tests bring their own).
  */
-export async function seedCatalog(db: DB) {
+export async function seedCatalog(db: DB, opts: { suppliers?: boolean } = {}) {
   const c = loadSeedCatalog();
   await db.transaction(async (tx) => {
     const itemIds = new Map<string, string>();
@@ -60,7 +62,7 @@ export async function seedCatalog(db: DB) {
     for (const f of c.formats) {
       await tx
         .insert(t.formats)
-        .values({ code: f.code, name: f.name, capacityMl: f.capacityMl, fillMl: f.capacityMl })
+        .values({ code: f.code, name: f.name, capacityMl: f.capacityMl, fillMl: f.fillMl })
         .onConflictDoNothing({ target: t.formats.code });
       const [row] = await tx.select({ id: t.formats.id }).from(t.formats).where(eq(t.formats.code, f.code));
       formatIds.set(f.code, row!.id);
@@ -82,6 +84,31 @@ export async function seedCatalog(db: DB) {
         await tx.insert(t.packagingLines).values(
           p.packaging.map((x) => ({ packagingVersionId: v!.id, itemId: itemIds.get(x.itemCode)!, perJar: x.perJar })),
         );
+      }
+    }
+
+    // Suppliers, matched by name. A supplier that already exists is left as it
+    // is, with its links and prices, so this never overwrites what was entered.
+    for (const s of opts.suppliers === false ? [] : c.suppliers) {
+      const [found] = await tx.select({ id: t.suppliers.id }).from(t.suppliers).where(eq(t.suppliers.name, s.name));
+      if (found) continue;
+      const [sup] = await tx.insert(t.suppliers).values({ name: s.name, contact: s.contact, notes: s.notes }).returning();
+      for (const o of s.offers) {
+        const itemId = itemIds.get(o.itemCode)!;
+        const [last] = await tx
+          .select({ n: sql<number>`coalesce(max(${t.supplierItems.rank}), 0)::int` })
+          .from(t.supplierItems)
+          .where(and(eq(t.supplierItems.itemId, itemId), eq(t.supplierItems.active, true)));
+        const [link] = await tx
+          .insert(t.supplierItems)
+          .values({ supplierId: sup!.id, itemId, rank: (last?.n ?? 0) + 1 })
+          .returning();
+        await tx.insert(t.supplierItemPrices).values({
+          supplierItemId: link!.id,
+          packQty: o.packQty?.toString() ?? null,
+          packName: o.packName,
+          price: o.price.toString(),
+        });
       }
     }
   });

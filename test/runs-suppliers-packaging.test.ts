@@ -24,7 +24,7 @@ suite("draft run edits, favourite suppliers and the packaging form", () => {
   afterAll(async () => db?.$client.end());
 
   it("a draft run's date and targets can be changed, the code follows the date, and the change is in the history", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const run = await createRun(db, { idempotencyKey: "abcd-draft", plannedFor: "2026-10-20", targets: { [big]: 30 } });
     expect(run.code).toBe("RUN-20261020-01");
 
@@ -63,7 +63,7 @@ suite("draft run edits, favourite suppliers and the packaging form", () => {
   });
 
   it("the packaging form knows the materials per jar, what is in stock, and the jars planned for the batch", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const kip = (await loadPlanCatalog(db)).sauces.find((s) => s.id === ids["liberiaanse-kip"])!;
     const pkg = (await loadPlanCatalog(db)).products.find((p) => p.id === big)!.packaging;
     await recordOpeningCount(db, {

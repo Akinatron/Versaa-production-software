@@ -114,9 +114,9 @@ suite("suppliers, orders and deliveries", () => {
 
   it("a run's missing items become one draft order per supplier, rounded to packs and linked to the run", async () => {
     await db.insert(t.yieldFigures).values({ sauceId: ids["liberiaanse-kip"]!, litresPerBatch: "26", source: "estimate" });
-    await recordOpeningCount(db, { idempotencyKey: "open", countedOn: "2026-10-17", lines: [{ itemId: ids["ing-onions"]!, quantity: "1" }, { itemId: ids["pkg-700-ml-container"]!, quantity: "0" }] });
-    await linkSupplierItem(db, { supplierId: glas, itemId: ids["pkg-700-ml-container"]!, packQty: "100", packName: "box", price: "40" });
-    const run = await createRun(db, { idempotencyKey: "run-po01", plannedFor: "2026-10-24", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 10 } });
+    await recordOpeningCount(db, { idempotencyKey: "open", countedOn: "2026-10-17", lines: [{ itemId: ids["ing-onions"]!, quantity: "1" }, { itemId: ids["pkg-950-ml-container"]!, quantity: "0" }] });
+    await linkSupplierItem(db, { supplierId: glas, itemId: ids["pkg-950-ml-container"]!, packQty: "100", packName: "box", price: "40" });
+    const run = await createRun(db, { idempotencyKey: "run-po01", plannedFor: "2026-10-24", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 10 } });
     const plan = await planForRun(db, run.id);
     const lines = await orderPlan(db, plan, run.id);
     const onions = lines.find((l) => l.itemId === ids["ing-onions"])!;
@@ -134,7 +134,7 @@ suite("suppliers, orders and deliveries", () => {
       runId: run.id,
       lines: [
         { itemId: ids["ing-onions"]!, supplierId: groente, packs: 1, neededQty: "6" },
-        { itemId: ids["pkg-700-ml-container"]!, supplierId: glas, packs: 1, neededQty: "10" },
+        { itemId: ids["pkg-950-ml-container"]!, supplierId: glas, packs: 1, neededQty: "10" },
       ],
     });
     expect(orders).toHaveLength(2);

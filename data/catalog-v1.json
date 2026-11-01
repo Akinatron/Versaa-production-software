@@ -1,5 +1,5 @@
 {
-  "source": "Pablo, from Notion, project thread 2026-10-17. Quantities exactly as recorded; do not rescale.",
+  "source": "Pablo, from Notion, project thread 2026-10-17. Quantities exactly as recorded; do not rescale. Sizes, suppliers and prices from Pablo, project thread 2026-11-01 (Versaa_Proveedores.md): jars named by capacity (950/450/250 ml) with 750/350/200 ml of sauce; Palm sugar dropped; one salt (Sea salt).",
   "batch_reference": {
     "finished_mass_kg": 30,
     "note": "Nominal 30 kg finished sauce. Not 30 L. Ingredient inputs are not meant to sum to 30 kg."
@@ -99,15 +99,7 @@
       "inventory_unit": "kg"
     },
     {
-      "name": "Palm sugar",
-      "inventory_unit": "kg"
-    },
-    {
       "name": "Potatoes",
-      "inventory_unit": "kg"
-    },
-    {
-      "name": "Salt",
       "inventory_unit": "kg"
     },
     {
@@ -174,12 +166,7 @@
           "unit": "g"
         },
         {
-          "ingredient": "Palm sugar",
-          "quantity": "360",
-          "unit": "g"
-        },
-        {
-          "ingredient": "Salt",
+          "ingredient": "Sea salt",
           "quantity": "309",
           "unit": "g"
         },
@@ -337,11 +324,11 @@
   ],
   "packaging_items": [
     {
-      "name": "700 ml Container",
+      "name": "950 ml Container",
       "unit": "unit"
     },
     {
-      "name": "500 ml Container",
+      "name": "450 ml Container",
       "unit": "unit"
     },
     {
@@ -357,11 +344,11 @@
       "unit": "unit"
     },
     {
-      "name": "Tikka Bottle Label 700",
+      "name": "Tikka Bottle Label 950",
       "unit": "unit"
     },
     {
-      "name": "Tikka Bottle Label 500",
+      "name": "Tikka Bottle Label 450",
       "unit": "unit"
     },
     {
@@ -377,11 +364,11 @@
       "unit": "unit"
     },
     {
-      "name": "Bolognese Bottle Label 700",
+      "name": "Bolognese Bottle Label 950",
       "unit": "unit"
     },
     {
-      "name": "Bolognese Bottle Label 500",
+      "name": "Bolognese Bottle Label 450",
       "unit": "unit"
     },
     {
@@ -397,11 +384,11 @@
       "unit": "unit"
     },
     {
-      "name": "Liberian Bottle Label 700",
+      "name": "Liberian Bottle Label 950",
       "unit": "unit"
     },
     {
-      "name": "Liberian Bottle Label 500",
+      "name": "Liberian Bottle Label 450",
       "unit": "unit"
     },
     {
@@ -420,25 +407,27 @@
   "products": [
     {
       "sauce": "Indiase Tikka Masala",
-      "format": "700 ml",
-      "capacity_ml": 700,
+      "format": "950 ml",
+      "capacity_ml": 950,
       "packaging_per_jar": {
-        "700 ml Container": 1,
+        "950 ml Container": 1,
         "Large Lid": 1,
-        "Tikka Bottle Label 700": 1,
+        "Tikka Bottle Label 950": 1,
         "Tikka Lid Label Large": 1
-      }
+      },
+      "fill_ml": 750
     },
     {
       "sauce": "Indiase Tikka Masala",
-      "format": "500 ml",
-      "capacity_ml": 500,
+      "format": "450 ml",
+      "capacity_ml": 450,
       "packaging_per_jar": {
-        "500 ml Container": 1,
+        "450 ml Container": 1,
         "Small Lid": 1,
-        "Tikka Bottle Label 500": 1,
+        "Tikka Bottle Label 450": 1,
         "Tikka Lid Label Small": 1
-      }
+      },
+      "fill_ml": 350
     },
     {
       "sauce": "Indiase Tikka Masala",
@@ -449,29 +438,32 @@
         "Small Lid": 1,
         "Tikka Bottle Label 250": 1,
         "Tikka Lid Label Small": 1
-      }
+      },
+      "fill_ml": 200
     },
     {
       "sauce": "Italiaanse Bolognese",
-      "format": "700 ml",
-      "capacity_ml": 700,
+      "format": "950 ml",
+      "capacity_ml": 950,
       "packaging_per_jar": {
-        "700 ml Container": 1,
+        "950 ml Container": 1,
         "Large Lid": 1,
-        "Bolognese Bottle Label 700": 1,
+        "Bolognese Bottle Label 950": 1,
         "Bolognese Lid Label Large": 1
-      }
+      },
+      "fill_ml": 750
     },
     {
       "sauce": "Italiaanse Bolognese",
-      "format": "500 ml",
-      "capacity_ml": 500,
+      "format": "450 ml",
+      "capacity_ml": 450,
       "packaging_per_jar": {
-        "500 ml Container": 1,
+        "450 ml Container": 1,
         "Small Lid": 1,
-        "Bolognese Bottle Label 500": 1,
+        "Bolognese Bottle Label 450": 1,
         "Bolognese Lid Label Small": 1
-      }
+      },
+      "fill_ml": 350
     },
     {
       "sauce": "Italiaanse Bolognese",
@@ -482,29 +474,32 @@
         "Small Lid": 1,
         "Bolognese Bottle Label 250": 1,
         "Bolognese Lid Label Small": 1
-      }
+      },
+      "fill_ml": 200
     },
     {
       "sauce": "Liberiaanse Kip",
-      "format": "700 ml",
-      "capacity_ml": 700,
+      "format": "950 ml",
+      "capacity_ml": 950,
       "packaging_per_jar": {
-        "700 ml Container": 1,
+        "950 ml Container": 1,
         "Large Lid": 1,
-        "Liberian Bottle Label 700": 1,
+        "Liberian Bottle Label 950": 1,
         "Liberian Lid Label Large": 1
-      }
+      },
+      "fill_ml": 750
     },
     {
       "sauce": "Liberiaanse Kip",
-      "format": "500 ml",
-      "capacity_ml": 500,
+      "format": "450 ml",
+      "capacity_ml": 450,
       "packaging_per_jar": {
-        "500 ml Container": 1,
+        "450 ml Container": 1,
         "Small Lid": 1,
-        "Liberian Bottle Label 500": 1,
+        "Liberian Bottle Label 450": 1,
         "Liberian Lid Label Small": 1
-      }
+      },
+      "fill_ml": 350
     },
     {
       "sauce": "Liberiaanse Kip",
@@ -515,7 +510,145 @@
         "Small Lid": 1,
         "Liberian Bottle Label 250": 1,
         "Liberian Lid Label Small": 1
-      }
+      },
+      "fill_ml": 200
+    }
+  ],
+  "suppliers": [
+    {
+      "name": "Boerschappen",
+      "contact": "Wiske van de Wiel · wiske.vandewiel@boerschappen.nl",
+      "notes": "Orders through the Boerschappen web portal with the Versaa account: https://www.boerschappen.nl/voor-bedrijven/. Prices exclude VAT. Bought by weight, so prices are per kg (worked out from the reference quantities of the cost model).",
+      "items": [
+        {
+          "ingredient": "Chicken thighs",
+          "reference_qty": "25.58",
+          "reference_price": "346.35"
+        },
+        {
+          "ingredient": "Minced beef",
+          "reference_qty": "6.5",
+          "reference_price": "97.11"
+        },
+        {
+          "ingredient": "Onions",
+          "reference_qty": "26",
+          "reference_price": "34.32"
+        },
+        {
+          "ingredient": "Garlic",
+          "reference_qty": "1.8",
+          "reference_price": "35.45"
+        },
+        {
+          "ingredient": "Chilli peppers",
+          "reference_qty": "0.7",
+          "reference_price": "10.50"
+        },
+        {
+          "ingredient": "Potatoes",
+          "reference_qty": "7.5",
+          "reference_price": "10.62"
+        },
+        {
+          "ingredient": "Tomatoes",
+          "reference_qty": "5",
+          "reference_price": "12.45"
+        },
+        {
+          "ingredient": "Mushrooms",
+          "reference_qty": "5",
+          "reference_price": "40.10"
+        },
+        {
+          "ingredient": "Leeks",
+          "reference_qty": "0.5",
+          "reference_price": "3.48"
+        },
+        {
+          "ingredient": "Bell peppers",
+          "reference_qty": "10",
+          "reference_price": "59.50"
+        },
+        {
+          "ingredient": "Fresh basil",
+          "reference_qty": "0.15",
+          "reference_price": "5.30"
+        }
+      ]
+    },
+    {
+      "name": "Jumbo",
+      "contact": null,
+      "notes": "Online orders: https://www.jumbo.com/. Prices exclude 9% VAT, rounded to cents.",
+      "items": [
+        {
+          "ingredient": "Ground cumin",
+          "pack_qty": "0.042",
+          "pack_name": "Euroma 42 g",
+          "price": "2.89"
+        },
+        {
+          "ingredient": "Dry spaghetti seasoning",
+          "pack_qty": "0.035",
+          "pack_name": "Verstegen 35 g",
+          "price": "1.46"
+        },
+        {
+          "ingredient": "Black pepper",
+          "pack_qty": "0.038",
+          "pack_name": "Verstegen 38 g",
+          "price": "3.39"
+        },
+        {
+          "ingredient": "Sea salt",
+          "pack_qty": "1",
+          "pack_name": "La Baleine 1 kg",
+          "price": "2.01"
+        },
+        {
+          "ingredient": "Kerrie / Surinamese masala",
+          "pack_qty": "0.032",
+          "pack_name": "Kerrie kruidig mild 32 g",
+          "price": "1.83"
+        },
+        {
+          "ingredient": "Beans",
+          "pack_qty": "0.5",
+          "pack_name": "Sperziebonen 500 g",
+          "price": "1.83"
+        },
+        {
+          "ingredient": "Diced tomatoes",
+          "pack_qty": "0.4",
+          "pack_name": "Tomatenblokjes 400 g",
+          "price": "0.54"
+        },
+        {
+          "ingredient": "Tomato puree",
+          "pack_qty": "0.14",
+          "pack_name": "Tomatenpuree 140 g",
+          "price": "0.63"
+        },
+        {
+          "ingredient": "Sunflower oil",
+          "pack_qty": "1",
+          "pack_name": "Zonnebloemolie 1 L",
+          "price": "1.18"
+        },
+        {
+          "ingredient": "Olive oil",
+          "pack_qty": "1",
+          "pack_name": "Olijfolie classico 1 L",
+          "price": "7.33"
+        },
+        {
+          "ingredient": "Lemon juice",
+          "pack_qty": "0.2",
+          "pack_name": "200 ml",
+          "price": "0.63"
+        }
+      ]
     }
   ]
 }

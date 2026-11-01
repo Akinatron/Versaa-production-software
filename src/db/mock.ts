@@ -67,7 +67,7 @@ export async function startMock() {
   const mock = createDb(url);
   try {
     await migrate(mock, { migrationsFolder: process.env.MIGRATIONS_DIR || "./drizzle" });
-    await seedCatalog(mock);
+    await seedCatalog(mock, { suppliers: false });
     await rm(mockUploadsDir(), { recursive: true, force: true });
     await mkdir(mockUploadsDir(), { recursive: true });
     setActiveMock({ db: mock, url, uploadsDir: mockUploadsDir(), startedAt: new Date() });

@@ -42,7 +42,7 @@ async function setup() {
 describe.skipIf(!testDbUrl)("tracing a batch", () => {
   it("shows the packaging used net of what a correction gave back", async () => {
     const { db, ids, catalog } = await setup();
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const perJar = catalog.products.find((p) => p.id === big)!.packaging;
     const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [big]: 20 } });
     await confirmRun(db, run.id);

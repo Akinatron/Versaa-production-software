@@ -22,7 +22,7 @@ afterAll(async () => {
   for (const db of dbs) await db.$client.end();
 });
 
-/** 10 jars of 700 ml in batch 1's lot and 5 in batch 2's. */
+/** 10 jars of 950 ml in batch 1's lot and 5 in batch 2's. */
 async function jarsInTwoLots() {
   const db = await freshDb();
   dbs.push(db);
@@ -38,7 +38,7 @@ async function jarsInTwoLots() {
     countedOn: "2026-10-17",
     lines: [...kip.recipe!.lines.map((l) => ({ itemId: l.itemId, quantity: "1000" })), ...pkg.map((itemId) => ({ itemId, quantity: "500" }))],
   });
-  const big = ids["Liberiaanse Kip 700 ml"]!;
+  const big = ids["Liberiaanse Kip 950 ml"]!;
   const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [big]: 60 } });
   await confirmRun(db, run.id);
   const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
@@ -101,7 +101,7 @@ describe.skipIf(!testDbUrl)("writing off jars promised to an order", () => {
     // All 15 are promised: a sale can't take them, but broken jars are broken.
     await expect(recordOutflow(db, { idempotencyKey: "sale", type: "sale", lines: [{ productId: big, jars: 2 }] })).rejects.toThrow(/0 available/);
     const r = await recordOutflow(db, { idempotencyKey: "waste", type: "waste", note: "dropped a tray", lines: [{ productId: big, jars: 2 }] });
-    expect(r.short).toEqual(["Liberiaanse Kip 700 ml: sales orders are now 2 jars short."]);
+    expect(r.short).toEqual(["Liberiaanse Kip 950 ml: sales orders are now 2 jars short."]);
     expect((await finishedAvailability(db)).find((a) => a.productId === big)!.onHand.toString()).toBe("13");
     await expect(recordOutflow(db, { idempotencyKey: "waste2", type: "waste", note: "x", lines: [{ productId: big, jars: 14 }] })).rejects.toThrow(
       /13 in stock/,
@@ -126,7 +126,7 @@ describe.skipIf(!testDbUrl)("lowering or deleting packaging whose jars are promi
     expect(lower.short).toEqual([]);
     // Deleting the rest (3 more) leaves 10 for 12 promised.
     const del = await changePackaging(db, { idempotencyKey: "del", sessionId: session!.id, delete: true, reason: "wrong batch" });
-    expect(del.short).toEqual(["Liberiaanse Kip 700 ml: sales orders are now 2 jars short."]);
+    expect(del.short).toEqual(["Liberiaanse Kip 950 ml: sales orders are now 2 jars short."]);
     expect((await lotBalance(db as never, lotB)).toString()).toBe("0");
   });
 });
