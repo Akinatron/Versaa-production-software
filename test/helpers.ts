@@ -10,6 +10,6 @@ export async function freshDb(): Promise<DB> {
   const db = createDb(testDbUrl);
   await db.execute(sql`drop schema if exists public cascade; drop schema if exists drizzle cascade; create schema public;`);
   await migrate(db, { migrationsFolder: "./drizzle" });
-  await seedCatalog(db);
+  await seedCatalog(db, { suppliers: false });
   return db;
 }

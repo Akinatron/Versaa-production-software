@@ -5,7 +5,8 @@ import type { PlanItem, PlanProduct, PlanSauce } from "./planner";
 
 /**
  * The starting catalog Pablo provided (recipes, ingredients, packaging,
- * products), turned into stable codes. Quantities are kept exactly as given.
+ * products, suppliers and their prices), turned into stable codes.
+ * Quantities are kept exactly as given.
  */
 
 export const slug = (s: string) =>
@@ -23,8 +24,27 @@ function unit(u: string): UnitCode {
 export interface SeedCatalog {
   items: (PlanItem & { kind: "ingredient" | "packaging" })[];
   sauces: { code: string; name: string; batchReferenceKg: Decimal; lines: { itemCode: string; quantity: Decimal; unit: UnitCode }[] }[];
-  formats: { code: string; name: string; capacityMl: number }[];
-  products: { code: string; name: string; sauceCode: string; formatCode: string; capacityMl: number; packaging: { itemCode: string; perJar: number }[] }[];
+  /** A size: the jar's capacity names it, `fillMl` is the sauce put in it (what planning uses). */
+  formats: { code: string; name: string; capacityMl: number; fillMl: number }[];
+  products: {
+    code: string;
+    name: string;
+    sauceCode: string;
+    formatCode: string;
+    capacityMl: number;
+    fillMl: number;
+    packaging: { itemCode: string; perJar: number }[];
+  }[];
+  /**
+   * Suppliers and what they sell. `packQty` null means the price is per stock
+   * unit (bought by weight); otherwise it is the price of one pack of `packQty`.
+   */
+  suppliers: {
+    name: string;
+    contact: string | null;
+    notes: string | null;
+    offers: { itemCode: string; packQty: Decimal | null; packName: string | null; price: Decimal }[];
+  }[];
   /** Planning estimates of litres per batch, labelled as estimates. */
   yieldEstimates: { sauceCode: string; litresPerBatch: Decimal; note: string }[];
 }
@@ -65,6 +85,7 @@ export function loadSeedCatalog(): SeedCatalog {
     code: `f${p.capacity_ml}`,
     name: p.format,
     capacityMl: p.capacity_ml,
+    fillMl: p.fill_ml,
   }));
 
   const products = seed.products.map((p) => ({
@@ -73,6 +94,7 @@ export function loadSeedCatalog(): SeedCatalog {
     sauceCode: slug(p.sauce),
     formatCode: `f${p.capacity_ml}`,
     capacityMl: p.capacity_ml,
+    fillMl: p.fill_ml,
     packaging: Object.entries(p.packaging_per_jar).map(([name, n]) => ({ itemCode: pkgCode(name), perJar: n })),
   }));
 
@@ -81,7 +103,24 @@ export function loadSeedCatalog(): SeedCatalog {
     return { sauceCode: slug(e.sauce), litresPerBatch: new Decimal(e.litres_per_batch), note: seed.yield.note };
   });
 
-  return { items, sauces, formats, products, yieldEstimates };
+  const ingCode = (name: string) => {
+    const code = ingByName.get(name);
+    if (!code) throw new Error(`Unknown ingredient ${name}`);
+    return code;
+  };
+  const suppliers = seed.suppliers.map((s) => ({
+    name: s.name,
+    contact: s.contact,
+    notes: s.notes,
+    offers: s.items.map((o) =>
+      // Bought by weight: the reference amount and its price give a price per stock unit.
+      "reference_qty" in o
+        ? { itemCode: ingCode(o.ingredient), packQty: null, packName: null, price: new Decimal(o.reference_price).div(o.reference_qty).toDecimalPlaces(2) }
+        : { itemCode: ingCode(o.ingredient), packQty: new Decimal(o.pack_qty), packName: o.pack_name, price: new Decimal(o.price) },
+    ),
+  }));
+
+  return { items, sauces, formats, products, suppliers, yieldEstimates };
 }
 
 /** Planner inputs from the seed catalog, with yields and rejects unknown. */
@@ -104,7 +143,7 @@ export function seedPlanCatalog(): { items: PlanItem[]; sauces: PlanSauce[]; pro
       id: p.code,
       sauceId: p.sauceCode,
       name: p.name,
-      fillMl: p.capacityMl,
+      fillMl: p.fillMl,
       packaging: p.packaging.map((x) => ({ itemId: x.itemCode, perJar: x.perJar })),
       reject: { rate: null, source: "missing" },
     })),

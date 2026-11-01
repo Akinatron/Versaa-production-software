@@ -129,9 +129,9 @@ describe.skipIf(!testDbUrl)("two sizes with the same ml", () => {
 describe.skipIf(!testDbUrl)("best-before when editing a packaging session", () => {
   async function packedTwoSizes() {
     const { db, ids } = await setup();
-    await setItemShelfLife(db, ids["fin-liberiaanse-kip-700"]!, "6", "months");
+    await setItemShelfLife(db, ids["fin-liberiaanse-kip-950"]!, "6", "months");
     await setItemShelfLife(db, ids["fin-liberiaanse-kip-250"]!, "12", "months");
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const small = ids["Liberiaanse Kip 250 ml"]!;
     const b = await cookedBatch(db, "run", { [big]: 20, [small]: 20 });
     const { session } = await recordPackaging(db, {
@@ -149,7 +149,7 @@ describe.skipIf(!testDbUrl)("best-before when editing a packaging session", () =
 
   it("each size keeps its own date when only the jars are corrected", async () => {
     const { db, big, small, session, dates } = await packedTwoSizes();
-    expect(await dates()).toEqual({ "700": "2027-04-28", "250": "2027-10-28" });
+    expect(await dates()).toEqual({ "950": "2027-04-28", "250": "2027-10-28" });
     await changePackaging(db, {
       idempotencyKey: "edit",
       sessionId: session.id,
@@ -161,7 +161,7 @@ describe.skipIf(!testDbUrl)("best-before when editing a packaging session", () =
         { productId: small, filled: 20, rejected: 0 },
       ],
     });
-    expect(await dates()).toEqual({ "700": "2027-04-28", "250": "2027-10-28" });
+    expect(await dates()).toEqual({ "950": "2027-04-28", "250": "2027-10-28" });
   });
 
   it("changing one size's date changes only that lot and goes in the history", async () => {
@@ -177,7 +177,7 @@ describe.skipIf(!testDbUrl)("best-before when editing a packaging session", () =
         { productId: small, filled: 20, rejected: 0 },
       ],
     });
-    expect(await dates()).toEqual({ "700": "2027-04-28", "250": "2027-09-30" });
+    expect(await dates()).toEqual({ "950": "2027-04-28", "250": "2027-09-30" });
     const edit = (await changesFor(db, { type: "packaging_session", id: session.id })).find((e) => e.action === "update")!;
     expect(edit.changes).toContainEqual({ label: "Best-before Liberiaanse Kip 250 ml", before: "2027-10-28", after: "2027-09-30" });
   });

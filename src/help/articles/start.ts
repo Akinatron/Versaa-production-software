@@ -63,13 +63,13 @@ export const start: Article[] = [
       "**Recipes.** In [Settings → Recipes](/settings/recipes), each sauce needs one active recipe: the ingredients for one reference batch.",
       "**Packaging lists.** In [Settings → Packaging per product](/settings/packaging), each product needs an active list: jar, lid, labels and anything else used per filled jar.",
       "**Litres per batch.** In [Settings → Yields & rejects](/settings/yields), enter an estimate of litres per batch for each sauce. Without it a sauce can't be planned. Measured figures replace it once batches are closed.",
-      "**Suppliers and prices.** In [Suppliers](/suppliers), add each supplier and the items they sell with their price per pack. The first supplier of an item is its favourite and is used for orders and budgets.",
+      "**Suppliers and prices.** A new install already has Boerschappen and Jumbo with their ingredients and prices. In [Suppliers](/suppliers), add the rest (for example who sells the jars, lids and labels) with the price per pack, or per kg for what you buy by weight. The first supplier of an item is its favourite and is used for orders and budgets.",
       "**Opening stock count.** In [Stock → Record an opening count](/stock/count), count what you have of every item. Until an item is counted its stock is **unknown**.",
       "**First run.** Plan a run and confirm it. See [Your first run, start to finish](help:first-run).",
     ],
     more: [
       "The **Start here** list at the top of [Help](/help) ticks each of these off by itself as soon as the data is there.",
-      { note: "Today also warns you about what is missing: a sauce without litres per batch, a product without a packaging list, items never counted." },
+      { note: "Today also warns you about what is missing: a sauce without litres per batch, a product without a packaging list, items never counted, and items without a supplier and price (each one links to its card)." },
     ],
     related: ["sauces-sizes-products", "items", "recipes", "packaging-lists", "yields", "suppliers", "opening-count"],
   },
@@ -108,7 +108,7 @@ export const start: Article[] = [
       "Everything that needs a hand, with a button to do it. Red dots are urgent, amber dots are to do. It lists:",
       {
         ul: [
-          "Set-up gaps: a sauce with no litres per batch, products without a packaging list, items never counted.",
+          "Set-up gaps: a sauce with no litres per batch, products without a packaging list, items never counted, items without a supplier and price (each name opens the item's Suppliers tab).",
           "Items to buy for confirmed runs, with **Order what's missing**, or items already ordered that are still on the way.",
           "Draft orders that are not sent yet.",
           "Deliveries later than expected.",

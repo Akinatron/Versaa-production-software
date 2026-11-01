@@ -90,7 +90,7 @@ suite("change history, deleting and restoring", () => {
   });
 
   it("ingredient corrections show on the batch, its run and the lot", async () => {
-    const run = await createRun(db, { idempotencyKey: "run-1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 30 } });
+    const run = await createRun(db, { idempotencyKey: "run-1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 30 } });
     runId = run.id;
     await confirmRun(db, run.id);
     batchId = (await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id)))[0]!.id;
@@ -115,7 +115,7 @@ suite("change history, deleting and restoring", () => {
   });
 
   it("a deleted packaging session can be restored with its figures; incidents too", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const { session } = await recordPackaging(db, { idempotencyKey: "pack-1", batchId, packedOn: "2026-10-21", lines: [{ productId: big, filled: 30, rejected: 2 }] });
     await changePackaging(db, { idempotencyKey: "del", sessionId: session.id, delete: true, reason: "Wrong batch" });
     expect((await finishedAvailability(db)).find((a) => a.productId === big)!.onHand.toString()).toBe("0");
@@ -133,7 +133,7 @@ suite("change history, deleting and restoring", () => {
   });
 
   it("a delivered sale can be deleted (jars back, order to deliver again) and restored", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const { order } = await createSalesOrder(db, { idempotencyKey: "so-1", destination: "Shop", lines: [{ productId: big, jars: 10 }] });
     await updateSalesOrder(db, { salesOrderId: order.id, reason: "Customer wants more", destination: "Shop", orderedOn: order.orderedOn, lines: [{ productId: big, jars: 12 }] });
     const { outflow } = await deliverSalesOrder(db, { idempotencyKey: "deliver-1", salesOrderId: order.id });
@@ -172,14 +172,14 @@ suite("change history, deleting and restoring", () => {
   });
 
   it("a batch marked as not made can come back; a discarded draft run too", async () => {
-    const run = await createRun(db, { idempotencyKey: "run-2", plannedFor: "2026-10-25", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 60 } });
+    const run = await createRun(db, { idempotencyKey: "run-2", plannedFor: "2026-10-25", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 60 } });
     await confirmRun(db, run.id);
     const [b1] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
     await closeBatch(db, { idempotencyKey: "nm", batchId: b1!.id, notMade: true, leftoverReason: "No time" });
     await restoreBatch(db, { batchId: b1!.id, reason: "We made it after all" });
     expect((await db.select().from(t.productionBatches).where(eq(t.productionBatches.id, b1!.id)))[0]!.status).toBe("planned");
 
-    const draft = await createRun(db, { idempotencyKey: "run-3", plannedFor: "2026-10-30", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 10 } });
+    const draft = await createRun(db, { idempotencyKey: "run-3", plannedFor: "2026-10-30", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 10 } });
     await cancelRun(db, draft.id);
     await restoreRun(db, draft.id, "Still want it");
     expect((await db.select().from(t.productionRuns).where(eq(t.productionRuns.id, draft.id)))[0]!.status).toBe("draft");

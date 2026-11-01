@@ -88,7 +88,7 @@ suite("batch: record, correct, edit packaging, cost", () => {
     oldOnion = lots.find((l) => l.lot.supplierBatch === "OLD")!.lot.id;
     newOnion = lots.find((l) => l.lot.supplierBatch === "NEW")!.lot.id;
 
-    const run = await createRun(db, { idempotencyKey: "run-1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 30 } });
+    const run = await createRun(db, { idempotencyKey: "run-1", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 30 } });
     await confirmRun(db, run.id);
     const [b] = await db.select({ id: t.productionBatches.id }).from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
     batchId = b!.id;
@@ -173,7 +173,7 @@ suite("batch: record, correct, edit packaging, cost", () => {
   });
 
   it("packaging can be edited: stock moves by the difference", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const { session } = await recordPackaging(db, {
       idempotencyKey: "pack-1",
       batchId,
@@ -181,7 +181,7 @@ suite("batch: record, correct, edit packaging, cost", () => {
       bestBefore: "2027-01-21",
       lines: [{ productId: big, filled: 30, rejected: 2 }],
     });
-    expect(await onHand("pkg-700-ml-container")).toBe("470");
+    expect(await onHand("pkg-950-ml-container")).toBe("470");
 
     // It was 25 filled, 1 rejected.
     await changePackaging(db, {
@@ -198,11 +198,11 @@ suite("batch: record, correct, edit packaging, cost", () => {
       packedOn: "2026-10-21",
       lines: [{ productId: big, filled: 25, rejected: 1 }],
     });
-    expect(await onHand("pkg-700-ml-container")).toBe("475");
+    expect(await onHand("pkg-950-ml-container")).toBe("475");
     const tr = await traceBatch(db, batchId);
     expect(tr!.jarsBySize.find((j) => j.productId === big)).toMatchObject({ filled: 25, rejected: 1, accepted: 24 });
     expect(tr!.jarLots[0]!.balance.toString()).toBe("24");
-    expect(tr!.filledLitres.toString()).toBe("17.5");
+    expect(tr!.filledLitres.toString()).toBe("18.75"); // 25 jars × 750 ml
   });
 
   it("closing works without measured output; the batch cost uses each lot's price", async () => {
@@ -218,11 +218,11 @@ suite("batch: record, correct, edit packaging, cost", () => {
     // Closed: ingredients are locked.
     // A closed batch can still be corrected, but only with a reason.
     await expect(recordIngredients(db, { idempotencyKey: "late", batchId, lines: [{ itemId: ids["ing-garlic"]!, quantity: "1" }] })).rejects.toThrow(/reason/);
-    expect((await observedYields(db)).get(ids["liberiaanse-kip"]!)!.avgFilledLitres.toString()).toBe("17.5");
+    expect((await observedYields(db)).get(ids["liberiaanse-kip"]!)!.avgFilledLitres.toString()).toBe("18.75");
   });
 
   it("deleting packaging is refused when its jars have left stock, and works on a closed batch otherwise", async () => {
-    const big = ids["Liberiaanse Kip 700 ml"]!;
+    const big = ids["Liberiaanse Kip 950 ml"]!;
     const [session] = await db.select().from(t.packagingSessions).where(eq(t.packagingSessions.batchId, batchId));
     await recordOutflow(db, { idempotencyKey: "sample", type: "sample", destination: "Market", lines: [{ productId: big, jars: 20 }] });
     await expect(changePackaging(db, { idempotencyKey: "del-1", sessionId: session!.id, delete: true, reason: "test" })).rejects.toThrow(

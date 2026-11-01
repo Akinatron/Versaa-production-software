@@ -22,7 +22,7 @@ async function setUp() {
   dbs.push(db);
   const ids: Record<string, string> = {};
   for (const p of await db.select().from(t.products)) ids[p.name] = p.id;
-  return { db, big: ids["Liberiaanse Kip 700 ml"]! };
+  return { db, big: ids["Liberiaanse Kip 950 ml"]! };
 }
 
 describe.skipIf(!testDbUrl)("codes", () => {

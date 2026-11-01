@@ -236,7 +236,7 @@ export async function loadMockData(db: DB) {
     idempotencyKey: "mock-po-jars",
     supplierId: packA.id,
     lines: [
-      { itemId: item("pkg-700-ml-container").id, packs: 2 },
+      { itemId: item("pkg-950-ml-container").id, packs: 2 },
       { itemId: item("pkg-250-ml-container").id, packs: 1 },
     ],
   });
@@ -272,7 +272,7 @@ export async function loadMockData(db: DB) {
   const done = await createRun(db, {
     idempotencyKey: "mock-run-done",
     plannedFor: day(-18),
-    targets: { [product(KIP, 700)]: 30, [product(KIP, 250)]: 20, [product(BOL, 700)]: 40 },
+    targets: { [product(KIP, 950)]: 30, [product(KIP, 250)]: 20, [product(BOL, 950)]: 40 },
   });
   await confirmRun(db, done.id);
   for (const b of await batchesOf(done.id)) {
@@ -286,10 +286,10 @@ export async function loadMockData(db: DB) {
       bestBefore: kip ? day(12) : day(90),
       lines: kip
         ? [
-            { productId: product(KIP, 700), filled: 30, rejected: 1 },
+            { productId: product(KIP, 950), filled: 30, rejected: 1 },
             { productId: product(KIP, 250), filled: 22, rejected: 2 },
           ]
-        : [{ productId: product(BOL, 700), filled: 41, rejected: 1 }],
+        : [{ productId: product(BOL, 950), filled: 41, rejected: 1 }],
     });
     if (kip) await recordIncident(db, { batchId: b.id, type: "spill", note: "Knocked over a tray of filled 250 ml jars", occurredOn: day(-17) });
     await closeBatch(db, { idempotencyKey: `mock-close-${b.code}`, batchId: b.id });
@@ -300,7 +300,7 @@ export async function loadMockData(db: DB) {
   const busy = await createRun(db, {
     idempotencyKey: "mock-run-busy",
     plannedFor: day(-2),
-    targets: { [product(BOL, 500)]: 40, [product(KIP, 700)]: 30, [product(TIK, 500)]: 40 },
+    targets: { [product(BOL, 450)]: 40, [product(KIP, 950)]: 30, [product(TIK, 450)]: 40 },
   });
   await confirmRun(db, busy.id);
   for (const b of await batchesOf(busy.id)) {
@@ -313,12 +313,12 @@ export async function loadMockData(db: DB) {
         batchId: b.id,
         packedOn: day(-1),
         bestBefore: day(88),
-        lines: [{ productId: product(BOL, 500), filled: 18, rejected: 0 }],
+        lines: [{ productId: product(BOL, 450), filled: 18, rejected: 0 }],
       });
   }
 
   // ---------------------------------------------------------------- a run waiting for its purchases
-  const next = await createRun(db, { idempotencyKey: "mock-run-next", plannedFor: day(6), targets: { [product(TIK, 700)]: 60, [product(KIP, 500)]: 40 } });
+  const next = await createRun(db, { idempotencyKey: "mock-run-next", plannedFor: day(6), targets: { [product(TIK, 950)]: 60, [product(KIP, 450)]: 40 } });
   await confirmRun(db, next.id);
   // Partly delivered: the chicken came, half the tomatoes are still to come.
   const poPart = await createPurchaseOrder(db, {
@@ -360,8 +360,8 @@ export async function loadMockData(db: DB) {
     supplierId: packB.id,
     runId: next.id,
     lines: [
-      { itemId: item("pkg-700-ml-container").id, packs: 1 },
-      { itemId: item("pkg-tikka-bottle-label-700").id, packs: 1 },
+      { itemId: item("pkg-950-ml-container").id, packs: 1 },
+      { itemId: item("pkg-tikka-bottle-label-950").id, packs: 1 },
     ],
   });
   await markOrderSent(db, poSent.id, { sentOn: day(-1), expectedOn: day(3) });
@@ -378,7 +378,7 @@ export async function loadMockData(db: DB) {
   });
 
   // ---------------------------------------------------------------- a draft run and a cancelled one
-  await createRun(db, { idempotencyKey: "mock-run-draft", plannedFor: day(13), targets: { [product(BOL, 700)]: 50, [product(BOL, 250)]: 24 } });
+  await createRun(db, { idempotencyKey: "mock-run-draft", plannedFor: day(13), targets: { [product(BOL, 950)]: 50, [product(BOL, 250)]: 24 } });
   const dropped = await createRun(db, { idempotencyKey: "mock-run-cancelled", plannedFor: day(9), targets: { [product(TIK, 250)]: 30 } });
   await cancelRun(db, dropped.id, "The shop moved its order to next month");
 
@@ -390,7 +390,7 @@ export async function loadMockData(db: DB) {
     customerId: shop.id,
     orderedOn: day(-14),
     reference: "Order 77",
-    lines: [{ productId: product(KIP, 700), jars: 10, unitPrice: "6.50" }],
+    lines: [{ productId: product(KIP, 950), jars: 10, unitPrice: "6.50" }],
   });
   await deliverSalesOrder(db, { idempotencyKey: "mock-deliver-so1", salesOrderId: soDone.id, deliveredOn: day(-13) });
   await createSalesOrder(db, {
@@ -399,7 +399,7 @@ export async function loadMockData(db: DB) {
     orderedOn: day(-1),
     deliverBy: day(4),
     lines: [
-      { productId: product(BOL, 700), jars: 12, unitPrice: "6.20" },
+      { productId: product(BOL, 950), jars: 12, unitPrice: "6.20" },
       { productId: product(KIP, 250), jars: 6, unitPrice: "3.40" },
     ],
   });
@@ -408,14 +408,14 @@ export async function loadMockData(db: DB) {
     type: "sample",
     destination: "Tasting at the market",
     occurredOn: day(-12),
-    lines: [{ productId: product(KIP, 700), jars: 2 }],
+    lines: [{ productId: product(KIP, 950), jars: 2 }],
   });
   await recordOutflow(db, {
     idempotencyKey: "mock-internal",
     type: "internal_use",
     destination: "Staff lunch",
     occurredOn: day(-10),
-    lines: [{ productId: product(BOL, 700), jars: 1 }],
+    lines: [{ productId: product(BOL, 950), jars: 1 }],
   });
   await recordOutflow(db, {
     idempotencyKey: "mock-waste",

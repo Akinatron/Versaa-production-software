@@ -24,18 +24,53 @@ suite("database", () => {
 
   it("loads the catalog once, even when seeded twice", async () => {
     const items = await db.select().from(t.items);
-    expect(items.filter((i) => i.kind === "ingredient")).toHaveLength(25);
+    expect(items.filter((i) => i.kind === "ingredient")).toHaveLength(23);
     expect(items.filter((i) => i.kind === "packaging")).toHaveLength(20);
     expect(items.filter((i) => i.kind === "finished")).toHaveLength(9);
-    expect(await db.select().from(t.recipeLines)).toHaveLength(37);
+    expect(await db.select().from(t.recipeLines)).toHaveLength(36);
+  });
+
+  it("loads the sizes by jar capacity, with the sauce each one holds", async () => {
+    const formats = await db.select().from(t.formats);
+    expect(formats.map((f) => [f.name, f.capacityMl, f.fillMl]).sort()).toEqual([
+      ["250 ml", 250, 200],
+      ["450 ml", 450, 350],
+      ["950 ml", 950, 750],
+    ]);
+    const items = await db.select().from(t.items);
+    expect(items.some((i) => i.name === "Palm sugar" || i.name === "Salt")).toBe(false);
+  });
+
+  it("loads Pablo's suppliers once: Boerschappen per kg, Jumbo per pack, packaging and celery powder left open", async () => {
+    const sups = await db.select().from(t.suppliers);
+    expect(sups.map((x) => x.name).sort()).toEqual(["Boerschappen", "Jumbo"]);
+    const rows = await db.execute<{ supplier: string; code: string; rank: number; pack_qty: string | null; pack_name: string | null; price: string }>(sql`
+      select s.name as supplier, i.code, si.rank, p.pack_qty::text, p.pack_name, p.price::text
+      from supplier_items si join suppliers s on s.id = si.supplier_id join items i on i.id = si.item_id
+      join supplier_item_prices p on p.supplier_item_id = si.id`);
+    const offer = (code: string) => [...rows].find((r) => r.code === code)!;
+    expect([...rows].filter((r) => r.supplier === "Boerschappen")).toHaveLength(11);
+    expect([...rows].filter((r) => r.supplier === "Jumbo")).toHaveLength(11);
+    expect([...rows].every((r) => r.rank === 1)).toBe(true);
+    // Bought by weight: 346.35 € for 25.58 kg → 13.54 €/kg, no pack size.
+    expect(offer("ing-chicken-thighs")).toMatchObject({ supplier: "Boerschappen", pack_qty: null, price: "13.54" });
+    expect(offer("ing-onions")).toMatchObject({ pack_qty: null, price: "1.32" });
+    // Fixed packs: a 42 g jar of cumin, a 200 ml bottle of lemon juice.
+    expect(offer("ing-ground-cumin")).toMatchObject({ supplier: "Jumbo", pack_qty: "0.042", price: "2.89" });
+    expect(offer("ing-lemon-juice")).toMatchObject({ pack_qty: "0.2", price: "0.63" });
+    expect(offer("ing-sea-salt")).toMatchObject({ supplier: "Jumbo", pack_qty: "1", price: "2.01" });
+    const offered = new Set([...rows].map((r) => r.code));
+    const open = (await db.select().from(t.items)).filter((i) => (i.kind === "ingredient" || i.kind === "packaging") && !offered.has(i.code));
+    expect(open.filter((i) => i.kind === "ingredient").map((i) => i.code)).toEqual(["ing-celery-powder"]);
+    expect(open.filter((i) => i.kind === "packaging")).toHaveLength(20);
   });
 
   it("plans from the database the same way as from the catalog", async () => {
     const input = await loadPlanInput(db, {});
     const tikka = input.sauces.find((s) => s.name === "Indiase Tikka Masala")!;
     await db.insert(t.yieldFigures).values({ sauceId: tikka.id, litresPerBatch: "25", source: "estimate", note: "test" });
-    const tikka700 = input.products.find((p) => p.name === "Indiase Tikka Masala 700 ml")!;
-    const r = planProduction(await loadPlanInput(db, { [tikka700.id]: 40 }));
+    const tikka950 = input.products.find((p) => p.name === "Indiase Tikka Masala 950 ml")!;
+    const r = planProduction(await loadPlanInput(db, { [tikka950.id]: 40 }));
     expect(r.sauces[0]!.batches).toBe(2);
     expect(r.requirements.find((x) => x.name === "Onions")!.required!.toString()).toBe("11.708");
   });

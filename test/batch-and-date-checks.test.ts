@@ -35,7 +35,7 @@ async function setup() {
     countedOn: "2026-10-17",
     lines: [...kip.recipe!.lines.map((l) => ({ itemId: l.itemId, quantity: "1000" })), ...pkg.map((itemId) => ({ itemId, quantity: "500" }))],
   });
-  const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 700 ml"]!]: 60 } }); // 2 batches
+  const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [ids["Liberiaanse Kip 950 ml"]!]: 60 } }); // 2 batches
   await confirmRun(db, run.id);
   const [batch] = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
   return { db, ids, batch: batch! };

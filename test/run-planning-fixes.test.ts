@@ -36,7 +36,7 @@ async function setup(onionKg = "1000") {
   await db.insert(t.yieldFigures).values({ sauceId: ids["liberiaanse-kip"]!, litresPerBatch: "30", source: "estimate" });
   const catalog = await loadPlanCatalog(db);
   const kip = catalog.sauces.find((s) => s.id === ids["liberiaanse-kip"])!;
-  const kip700 = catalog.products.find((p) => p.id === ids["Liberiaanse Kip 700 ml"])!;
+  const kip700 = catalog.products.find((p) => p.id === ids["Liberiaanse Kip 950 ml"])!;
   const pkg = [...new Set(catalog.products.filter((p) => p.sauceId === kip.id).flatMap((p) => p.packaging.map((x) => x.itemId)))];
   await recordOpeningCount(db, {
     idempotencyKey: "open",
@@ -61,7 +61,7 @@ async function reserved(db: DB, runId: string, itemId: string) {
 describe.skipIf(!testDbUrl)("a batch marked as not made", () => {
   it("frees its share of the jars, lids and labels, and Restore holds them again", async () => {
     const { db, onion, kip700, jarPart } = await setup();
-    // 60 jars of 700 ml = 42 L = 2 batches of 30 L.
+    // 60 jars of 950 ml = 42 L = 2 batches of 30 L.
     const run = await createRun(db, { idempotencyKey: "run", plannedFor: "2026-10-20", targets: { [kip700]: 60 } });
     await confirmRun(db, run.id);
     const batches = await db.select().from(t.productionBatches).where(eq(t.productionBatches.runId, run.id));
@@ -108,7 +108,7 @@ describe.skipIf(!testDbUrl)("sizes no longer in use", () => {
     await setProductActive(db, kip700, false);
     const plan = await planForRun(db, run.id);
     expect(plan.issues.filter((i) => i.level === "blocker").map((i) => i.message)).toContain(
-      "Liberiaanse Kip 700 ml is not in use any more. Press Edit and set it to 0, or turn it back on in Settings.",
+      "Liberiaanse Kip 950 ml is not in use any more. Press Edit and set it to 0, or turn it back on in Settings.",
     );
     await expect(confirmRun(db, run.id)).rejects.toThrow(/not in use any more/);
     await setProductActive(db, kip700, true);
