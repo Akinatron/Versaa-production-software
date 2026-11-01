@@ -165,7 +165,7 @@ export const buy: Article[] = [
     stage: "receive",
     title: "Delivery notes and invoices",
     summary: "Keep a photo or PDF of each delivery note with its delivery, and invoices with their order.",
-    keywords: ["documents", "upload", "photo", "pdf", "invoice", "delivery note", "albarán", "files"],
+    keywords: ["documents", "upload", "photo", "pdf", "invoice", "delivery note", "files"],
     steps: [
       "Delivery note: attach it while recording the delivery, or later with **Add delivery note** in [Deliveries](/deliveries), on the order or on the lot.",
       "Invoice: on the order page, under **Paperwork**, press **Add invoice**. One invoice can cover several deliveries, so it goes with the order.",

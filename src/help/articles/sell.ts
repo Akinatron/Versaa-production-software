@@ -45,7 +45,7 @@ export const sell: Article[] = [
     title: "Take a sales order",
     summary: "Record what a customer ordered; the jars are held for them until you deliver.",
     go: { href: "/outbound/orders/new", label: "New sales order" },
-    keywords: ["customer order", "sales order", "reserve jars", "promised", "deliver by", "pedido cliente"],
+    keywords: ["customer order", "sales order", "reserve jars", "promised", "deliver by"],
     steps: [
       "Open [Outbound](/outbound) → **New sales order**.",
       "Choose the **Customer**, or write a **destination**, or both (one is required). **Add a customer** if they are new.",

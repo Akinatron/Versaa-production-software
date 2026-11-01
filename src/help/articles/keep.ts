@@ -127,7 +127,7 @@ export const keep: Article[] = [
     area: "keep",
     title: "Shelf life, best-before and expiry alerts",
     summary: "How best-before dates are filled in, and how Today warns you before they pass.",
-    keywords: ["best before", "expiry", "expiration", "shelf life", "caducidad", "use first", "FEFO"],
+    keywords: ["best before", "expiry", "expiration", "shelf life", "use first", "FEFO"],
     more: [
       { h: "Shelf life" },
       "Set it in days, weeks or months: for each product in [Settings → Sauces, sizes & products](/settings/catalog) (column **Shelf life (from packing)**), and optionally for each ingredient in [Settings → Items](/settings/items) or on its card.",

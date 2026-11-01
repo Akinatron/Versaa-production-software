@@ -63,7 +63,11 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "multiLanguageInstaller": false,
+      "installerLanguages": [
+        "en_US"
+      ]
     },
     "afterPack": "scripts/after-pack.cjs"
   },
